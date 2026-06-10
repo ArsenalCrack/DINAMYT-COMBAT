@@ -1,0 +1,2495 @@
+:root {
+  --hong: #FF0030;
+  --chung: #005AFF;
+  --gold: #FFB800;
+  --fondo: #050507;
+  --panel: #0F0F16;
+  --card: #15151F;
+  --borde: #252535;
+  --texto: #FFFFFF;
+  --gris: #5A5A80;
+  --verde: #00C46A;
+  --naranja: #FF7200;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: 'Barlow Condensed', sans-serif;
+  min-height: 100vh;
+  font-size: 18px;
+  /* Cross-device consistency */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── SELECTOR DE ROL ── */
+#rol-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, #0D0D20 0%, var(--fondo) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rol-logo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(4rem, 13vw, 8rem);
+  letter-spacing: .08em;
+  line-height: 1;
+  text-align: center;
+  margin-top: auto
+}
+
+.rol-logo em {
+  color: var(--gold);
+  font-style: normal
+}
+
+.rol-tagline {
+  font-size: .95rem;
+  letter-spacing: .15em;
+  color: rgba(232, 168, 0, .6);
+  margin-bottom: 4px;
+  font-weight: 600
+}
+
+.rol-sub {
+  font-size: .75rem;
+  letter-spacing: .4em;
+  color: var(--gris);
+  text-transform: uppercase;
+  margin-bottom: 32px
+}
+
+.rol-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: auto;
+  padding-bottom: 40px
+}
+
+.rol-btn {
+  background: var(--card);
+  border: 1.5px solid var(--borde);
+  border-radius: 14px;
+  padding: 18px 12px;
+  cursor: pointer;
+  transition: .15s;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px
+}
+
+.rol-btn:active {
+  transform: scale(.94)
+}
+
+.rol-btn .ico {
+  font-size: 2rem
+}
+
+.rol-btn .nm {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.5rem;
+  letter-spacing: .05em
+}
+
+.rol-btn .ds {
+  font-size: .85rem;
+  color: var(--gris);
+  letter-spacing: .05em
+}
+
+.rol-btn.hong {
+  border-color: var(--hong)
+}
+
+.rol-btn.hong:active,
+.rol-btn.hong:hover {
+  background: rgba(217, 0, 37, .12);
+  box-shadow: 0 0 20px rgba(217, 0, 37, .25)
+}
+
+.rol-btn.chung {
+  border-color: var(--chung)
+}
+
+.rol-btn.chung:active,
+.rol-btn.chung:hover {
+  background: rgba(0, 70, 200, .12);
+  box-shadow: 0 0 20px rgba(0, 70, 200, .25)
+}
+
+.rol-btn.arbitro {
+  border-color: var(--gold);
+  grid-column: 1/-1
+}
+
+.rol-btn.arbitro:active,
+.rol-btn.arbitro:hover {
+  background: rgba(232, 168, 0, .08);
+  box-shadow: 0 0 20px rgba(232, 168, 0, .2)
+}
+
+.rol-btn.pantalla {
+  border-color: #7B4FFF;
+  grid-column: 1/-1
+}
+
+.rol-btn.pantalla:active,
+.rol-btn.pantalla:hover {
+  background: rgba(123, 79, 255, .1);
+  box-shadow: 0 0 20px rgba(123, 79, 255, .2)
+}
+
+
+/* ── VISTAS ── */
+.vista {
+  display: none;
+  flex-direction: column;
+  min-height: 100vh
+}
+
+.vista.activa {
+  display: flex
+}
+
+/* ── HEADER COMPARTIDO ── */
+.hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+  position: sticky;
+  top: 0;
+  z-index: 50
+}
+
+.hdr-titulo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.3rem;
+  letter-spacing: .08em
+}
+
+.hdr-titulo.hong {
+  color: var(--hong)
+}
+
+.hdr-titulo.chung {
+  color: var(--chung)
+}
+
+.hdr-titulo.gold {
+  color: var(--gold)
+}
+
+.live-dot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .85rem;
+  color: var(--gris);
+  letter-spacing: .1em
+}
+
+.hdr-back {
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, .5);
+  padding: 6px 14px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .05em;
+  cursor: pointer;
+  transition: .12s;
+  flex-shrink: 0
+}
+
+.hdr-back:active {
+  background: rgba(255, 255, 255, .12);
+  transform: scale(.95)
+}
+
+.btn-back {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  color: var(--gris);
+  padding: 5px 12px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: .12s;
+  flex-shrink: 0
+}
+
+.btn-back:active {
+  background: rgba(255, 255, 255, .06);
+  transform: scale(.95)
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--verde);
+  animation: pulso 1.5s infinite
+}
+
+@keyframes pulso {
+
+  0%,
+  100% {
+    opacity: 1
+  }
+
+  50% {
+    opacity: .25
+  }
+}
+
+/* ── MARCADOR COMPUESTO (vista global) ── */
+.marcador-compuesto {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin: 12px;
+}
+
+.mc-titulo {
+  font-size: .6rem;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--gris);
+  margin-bottom: 8px;
+  text-align: center
+}
+
+.mc-fila {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px
+}
+
+.mc-bloque {
+  text-align: center
+}
+
+.mc-bloque.r {
+  text-align: left
+}
+
+.mc-bloque.a {
+  text-align: right
+}
+
+.mc-pts {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3.2rem;
+  line-height: 1
+}
+
+.mc-pts.hong {
+  color: var(--hong)
+}
+
+.mc-pts.chung {
+  color: var(--chung)
+}
+
+.mc-label {
+  font-size: .6rem;
+  letter-spacing: .15em;
+  color: var(--gris);
+  text-transform: uppercase
+}
+
+.mc-desglose {
+  font-size: .65rem;
+  color: var(--gris);
+  margin-top: 2px;
+  font-family: 'Share Tech Mono', monospace
+}
+
+.mc-vs {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  color: var(--borde)
+}
+
+/* ── BOTONES JUEZ ESQUINA ── */
+.juez-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0
+}
+
+.sec-label {
+  font-size: .85rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--gris);
+  padding-left: 2px;
+  margin-bottom: 2px
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px
+}
+
+.btn-score {
+  border: none;
+  border-radius: 14px;
+  padding: 20px 10px;
+  cursor: pointer;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.3rem;
+  letter-spacing: .04em;
+  transition: .12s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.btn-score:active {
+  transform: scale(.91)
+}
+
+.btn-score .pts-tag {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .7rem;
+  font-weight: 600;
+  opacity: .75
+}
+
+/* Colores botones Hong */
+.hs1 {
+  background: linear-gradient(145deg, #A8001C, var(--hong));
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(217, 0, 37, .35)
+}
+
+.hs2 {
+  background: linear-gradient(145deg, #800015, #A8001C);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(217, 0, 37, .25)
+}
+
+.hs3 {
+  background: linear-gradient(145deg, #600010, #800015);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(217, 0, 37, .2)
+}
+
+/* Colores botones Chung */
+.cs1 {
+  background: linear-gradient(145deg, #0035A0, var(--chung));
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(0, 70, 200, .35)
+}
+
+.cs2 {
+  background: linear-gradient(145deg, #002880, #0035A0);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 70, 200, .25)
+}
+
+.cs3 {
+  background: linear-gradient(145deg, #001E60, #002880);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 70, 200, .2)
+}
+
+.btn-undo {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  color: var(--gris);
+  padding: 11px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: .12s;
+  font-weight: 600
+}
+
+.btn-undo:active {
+  background: rgba(255, 255, 255, .05);
+  transform: scale(.97)
+}
+
+.puntos-propios {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 10px 14px;
+  text-align: center
+}
+
+.pp-num {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 2.2rem
+}
+
+.pp-sub {
+  font-size: .6rem;
+  letter-spacing: .2em;
+  color: var(--gris);
+  text-transform: uppercase
+}
+
+/* ── ÁRBITRO ── */
+.arb-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+  overflow-y: auto
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 12px 14px
+}
+
+.card-title {
+  font-size: .85rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--gris);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px
+}
+
+.card-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--borde)
+}
+
+/* Cronómetro */
+.crono-display {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(3rem, 16vw, 5.5rem);
+  text-align: center;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(232, 168, 0, .2)
+}
+
+.crono-display.activo {
+  color: var(--texto)
+}
+
+.crono-display.pause {
+  color: var(--gris)
+}
+
+.crono-display.urgente {
+  color: var(--hong);
+  text-shadow: 0 0 30px rgba(217, 0, 37, .4);
+  animation: parpadeo .7s infinite
+}
+
+@keyframes parpadeo {
+
+  0%,
+  100% {
+    opacity: 1
+  }
+
+  50% {
+    opacity: .4
+  }
+}
+
+.crono-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px
+}
+
+.cb {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 6px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1rem;
+  letter-spacing: .05em;
+  cursor: pointer;
+  transition: .12s
+}
+
+.cb:active {
+  transform: scale(.93)
+}
+
+.cb.go {
+  background: #00A855;
+  color: #002010
+}
+
+.cb.stop {
+  background: var(--gold);
+  color: #1A0F00
+}
+
+.cb.rst {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  color: var(--gris)
+}
+
+.dur-btns {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  justify-content: center;
+  flex-wrap: wrap
+}
+
+.db {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--gris);
+  cursor: pointer;
+  transition: .12s;
+  letter-spacing: .08em
+}
+
+.db.on {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(232, 168, 0, .08)
+}
+
+.db:active {
+  transform: scale(.93)
+}
+
+/* Nombres */
+.nombres-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px
+}
+
+.inp {
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--texto);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .95rem;
+  font-weight: 600;
+  width: 100%;
+  outline: none;
+  transition: .2s
+}
+
+.inp:focus {
+  border-color: var(--gold)
+}
+
+.inp.hr {
+  border-left: 3px solid var(--hong)
+}
+
+.inp.hc {
+  border-left: 3px solid var(--chung)
+}
+
+/* Marcador árbitro grande */
+.marc-arb {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px
+}
+
+.ma-bloque {
+  text-align: center
+}
+
+.ma-pts {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(3rem, 14vw, 5rem);
+  line-height: 1
+}
+
+.ma-pts.h {
+  color: var(--hong)
+}
+
+.ma-pts.c {
+  color: var(--chung)
+}
+
+.ma-nombre {
+  font-size: .85rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--gris);
+  margin-bottom: 2px
+}
+
+.ma-desglose {
+  font-size: .85rem;
+  color: var(--gris);
+  font-family: 'Share Tech Mono', monospace;
+  margin-top: 2px
+}
+
+.ma-vs {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.2rem;
+  color: var(--borde)
+}
+
+/* Botones especiales árbitro */
+.btn-esp {
+  border: none;
+  border-radius: 10px;
+  padding: 13px 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: .78rem;
+  letter-spacing: .03em;
+  cursor: pointer;
+  transition: .12s;
+  text-align: center;
+  line-height: 1.3
+}
+
+.btn-esp:active {
+  transform: scale(.92)
+}
+
+.btn-esp .val {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.2rem;
+  display: block;
+  margin-bottom: 2px
+}
+
+.be-hong {
+  background: rgba(217, 0, 37, .12);
+  border: 1px solid rgba(217, 0, 37, .3);
+  color: #FF7090
+}
+
+.be-chung {
+  background: rgba(0, 70, 200, .12);
+  border: 1px solid rgba(0, 70, 200, .3);
+  color: #80B0FF
+}
+
+.be-gold {
+  background: rgba(232, 168, 0, .1);
+  border: 1px solid rgba(232, 168, 0, .3);
+  color: #FFD060
+}
+
+.be-warn-h {
+  background: rgba(255, 114, 0, .1);
+  border: 1px solid rgba(255, 114, 0, .3);
+  color: #FFA060
+}
+
+.be-warn-c {
+  background: rgba(255, 114, 0, .1);
+  border: 1px solid rgba(255, 114, 0, .3);
+  color: #FFA060
+}
+
+.be-dq {
+  background: rgba(180, 0, 0, .15);
+  border: 1px solid rgba(180, 0, 0, .4);
+  color: #FF4060
+}
+
+.btn-control {
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1rem;
+  letter-spacing: .05em;
+  cursor: pointer;
+  transition: .12s;
+  font-weight: 400
+}
+
+.btn-control:active {
+  transform: scale(.93)
+}
+
+.bc-nuevo {
+  background: rgba(0, 196, 106, .1);
+  border: 1px solid rgba(0, 196, 106, .35);
+  color: #60FFAA
+}
+
+.bc-reset {
+  background: rgba(217, 0, 37, .1);
+  border: 1px solid rgba(217, 0, 37, .3);
+  color: #FF7090
+}
+
+/* Indicador de jueces */
+.jueces-status {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 8px
+}
+
+.juez-chip {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center
+}
+
+.juez-chip .jc-nom {
+  font-size: .8rem;
+  letter-spacing: .1em;
+  color: var(--gris);
+  text-transform: uppercase;
+  margin-bottom: 2px
+}
+
+.juez-chip .jc-pts-h {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  color: var(--hong)
+}
+
+.juez-chip .jc-pts-c {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  color: var(--chung)
+}
+
+.juez-chip .jc-sep {
+  color: var(--borde);
+  font-size: .7rem
+}
+
+/* ── PANTALLA PROYECCIÓN ── */
+#vista-pantalla {
+  background: #040407;
+  overflow: hidden
+}
+
+.proy {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden
+}
+
+.proy-bg {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.proy-linea-h {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--hong) 20%, var(--chung) 80%, transparent)
+}
+
+.proy-hdr {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 36px;
+  border-bottom: 1px solid rgba(255, 255, 255, .05)
+}
+
+.proy-hdr-txt {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(.8rem, 1.6vw, 1.3rem);
+  letter-spacing: .3em;
+  color: rgba(255, 255, 255, .3)
+}
+
+.proy-hdr-ronda {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(.8rem, 1.6vw, 1.3rem);
+  letter-spacing: .2em;
+  color: var(--gold)
+}
+
+.proy-centro {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 3vw;
+  gap: 2vw
+}
+
+.proy-comp {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0
+}
+
+.proy-comp.hong {
+  align-items: flex-start
+}
+
+.proy-comp.chung {
+  align-items: flex-end
+}
+
+.proy-color-lbl {
+  font-size: clamp(.65rem, 1.3vw, 1rem);
+  letter-spacing: .4em;
+  text-transform: uppercase;
+  opacity: .5;
+  margin-bottom: 2px
+}
+
+.proy-comp.hong .proy-color-lbl {
+  color: var(--hong)
+}
+
+.proy-comp.chung .proy-color-lbl {
+  color: var(--chung)
+}
+
+.proy-nombre {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1.2rem, 3.5vw, 3rem);
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-bottom: 8px
+}
+
+.proy-score {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(7rem, 20vw, 16rem);
+  line-height: .85;
+  transition: transform .25s;
+  overflow: hidden;
+  text-overflow: clip;
+  max-width: 100%;
+}
+
+.proy-comp.hong .proy-score {
+  color: var(--hong)
+}
+
+.proy-comp.chung .proy-score {
+  color: var(--chung)
+}
+
+.proy-score.boom {
+  animation: boom .45s ease-out
+}
+
+@keyframes boom {
+  0% {
+    transform: scale(1.5)
+  }
+
+  100% {
+    transform: scale(1)
+  }
+}
+
+.proy-desglose {
+  font-size: clamp(.55rem, .9vw, .8rem);
+  color: rgba(255, 255, 255, .25);
+  margin-top: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  line-height: 1.6
+}
+
+.proy-comp.chung .proy-desglose {
+  text-align: right
+}
+
+.proy-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 6px
+}
+
+.proy-comp.chung .proy-badges {
+  justify-content: flex-end
+}
+
+.badge {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: clamp(.5rem, .8vw, .7rem);
+  font-family: 'Share Tech Mono', monospace
+}
+
+.badge-falta {
+  background: rgba(217, 0, 37, .15);
+  color: rgba(255, 100, 120, .9)
+}
+
+.badge-adv {
+  background: rgba(255, 114, 0, .15);
+  color: rgba(255, 160, 80, .9)
+}
+
+.proy-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px
+}
+
+.proy-crono {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(2.5rem, 6.5vw, 6rem);
+  color: #fff;
+  text-shadow: 0 0 30px rgba(255, 255, 255, .15);
+  letter-spacing: .05em;
+  transition: color .3s
+}
+
+.proy-crono.urgente {
+  color: var(--hong);
+  text-shadow: 0 0 40px rgba(217, 0, 37, .5);
+  animation: parpadeo .7s infinite
+}
+
+.proy-crono.pause {
+  color: rgba(255, 255, 255, .3)
+}
+
+.proy-estado {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(.7rem, 1.3vw, 1rem);
+  letter-spacing: .3em;
+  color: rgba(255, 255, 255, .25)
+}
+
+.proy-estado.go {
+  color: var(--verde)
+}
+
+.proy-estado.espera {
+  color: rgba(255, 255, 255, .2)
+}
+
+.proy-sep {
+  width: 1px;
+  height: 35%;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, .08), transparent)
+}
+
+.proy-dinamyt-bg {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(5rem, 18vw, 16rem);
+  line-height: .85;
+  letter-spacing: .06em;
+  color: rgba(255, 255, 255, .04);
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+  margin-bottom: -0.1em;
+}
+
+.proy-dinamyt-bg em {
+  color: rgba(232, 168, 0, .07);
+  font-style: normal;
+}
+
+.proy-ftr {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 36px;
+  border-top: 1px solid rgba(255, 255, 255, .05)
+}
+
+.proy-log {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1
+}
+
+.log-chip {
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: clamp(.55rem, .75vw, .7rem);
+  font-family: 'Share Tech Mono', monospace;
+  animation: aparecer .35s ease-out
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(5px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+.lc-hong {
+  background: rgba(217, 0, 37, .12);
+  color: rgba(255, 100, 120, .85)
+}
+
+.lc-chung {
+  background: rgba(0, 70, 200, .12);
+  color: rgba(100, 160, 255, .85)
+}
+
+.lc-arb {
+  background: rgba(232, 168, 0, .12);
+  color: rgba(255, 210, 80, .85)
+}
+
+.proy-brand {
+  font-family: 'Bebas Neue', cursive;
+  font-size: .9rem;
+  letter-spacing: .3em;
+  color: rgba(255, 255, 255, .1);
+  flex-shrink: 0
+}
+
+.proy-brand em {
+  color: rgba(232, 168, 0, .3);
+  font-style: normal
+}
+
+/* ── ALERTA 12 PUNTOS ── */
+#alerta-12 {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, .85);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#alerta-12.visible {
+  display: flex
+}
+
+.alerta-box {
+  background: var(--card);
+  border: 2px solid var(--gold);
+  border-radius: 20px;
+  padding: 32px 40px;
+  text-align: center;
+  max-width: 380px;
+  width: 90%;
+  animation: shake .4s ease-out
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0)
+  }
+
+  20% {
+    transform: translateX(-8px)
+  }
+
+  40% {
+    transform: translateX(8px)
+  }
+
+  60% {
+    transform: translateX(-5px)
+  }
+
+  80% {
+    transform: translateX(5px)
+  }
+}
+
+.alerta-ico {
+  font-size: 3rem;
+  margin-bottom: 8px
+}
+
+.alerta-titulo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 2rem;
+  letter-spacing: .08em;
+  color: var(--gold)
+}
+
+.alerta-desc {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--gris);
+  margin: 6px 0 20px
+}
+
+.alerta-marcador {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px
+}
+
+.alerta-score {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3.5rem;
+  line-height: 1
+}
+
+.alerta-score.h {
+  color: var(--hong)
+}
+
+.alerta-score.c {
+  color: var(--chung)
+}
+
+.alerta-cerrar {
+  background: var(--gold);
+  border: none;
+  border-radius: 10px;
+  padding: 12px 28px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .08em;
+  color: #1A0F00;
+  cursor: pointer;
+  transition: .12s
+}
+
+.alerta-cerrar:active {
+  transform: scale(.95)
+}
+
+/* ── ALERTA DERROTA (6 adv / 3 gamjeum) ── */
+#alerta-derrota {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, .92);
+  backdrop-filter: blur(12px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#alerta-derrota.visible {
+  display: flex
+}
+
+.derrota-box {
+  background: var(--card);
+  border: 3px solid var(--hong);
+  border-radius: 24px;
+  padding: 36px 44px;
+  text-align: center;
+  max-width: 420px;
+  width: 92%;
+  animation: shake .5s ease-out
+}
+
+.derrota-ico {
+  font-size: 4rem;
+  margin-bottom: 6px
+}
+
+.derrota-titulo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 2.6rem;
+  letter-spacing: .06em;
+  color: var(--hong)
+}
+
+.derrota-perdedor {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3.2rem;
+  line-height: 1.1;
+  margin: 8px 0
+}
+
+.derrota-razon {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--gris);
+  margin-bottom: 22px;
+  line-height: 1.5
+}
+
+.derrota-cerrar {
+  background: var(--hong);
+  border: none;
+  border-radius: 10px;
+  padding: 13px 30px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .08em;
+  color: #fff;
+  cursor: pointer;
+  transition: .12s
+}
+
+.derrota-cerrar:active {
+  transform: scale(.95)
+}
+
+/* ── FLASH FALTA GRANDE en proyección ── */
+#proy-falta-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+#proy-falta-flash.on {
+  opacity: 1
+}
+
+.pff-box {
+  background: rgba(217, 0, 37, .18);
+  border: 3px solid var(--hong);
+  border-radius: 20px;
+  padding: 28px 48px;
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+.pff-ico {
+  font-size: 3.5rem
+}
+
+.pff-titulo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3rem;
+  letter-spacing: .06em;
+  color: var(--hong);
+  line-height: 1
+}
+
+.pff-sub {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, .7);
+  letter-spacing: .1em;
+  margin-top: 4px
+}
+
+/* ── FLASH NOTIF ── */
+#flash {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: rgba(15, 15, 22, .96);
+  border: 1.5px solid var(--gold);
+  border-radius: 16px;
+  padding: 20px 32px;
+  text-align: center;
+  z-index: 5000;
+  pointer-events: none;
+  transition: transform .18s, opacity .18s;
+  opacity: 0;
+  backdrop-filter: blur(12px)
+}
+
+#flash.on {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1
+}
+
+#flash .fi {
+  font-size: 2rem
+}
+
+#flash .ft {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.6rem;
+  margin-top: 3px
+}
+
+/* ── RONDA / MODO en pantalla proyección ── */
+.proy-ronda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(.9rem, 1.8vw, 1.4rem);
+  letter-spacing: .2em;
+  padding: 4px 16px;
+  border-radius: 30px;
+  border: 1.5px solid currentColor;
+}
+
+.proy-ronda-badge.r1 {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(232, 168, 0, .08)
+}
+
+.proy-ronda-badge.r2 {
+  color: #60DDFF;
+  border-color: #60DDFF;
+  background: rgba(96, 221, 255, .08)
+}
+
+.proy-ronda-badge.oro {
+  color: #FFD700;
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, .15);
+  animation: glow-oro 1.2s infinite alternate
+}
+
+@keyframes glow-oro {
+  from {
+    box-shadow: 0 0 6px rgba(255, 215, 0, .3)
+  }
+
+  to {
+    box-shadow: 0 0 22px rgba(255, 215, 0, .7)
+  }
+}
+
+/* Botones de ronda en árbitro */
+.ronda-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 0
+}
+
+.rb {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 6px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: .95rem;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: .12s;
+  background: var(--panel);
+  border: 1.5px solid var(--borde);
+  color: var(--gris)
+}
+
+.rb:active {
+  transform: scale(.93)
+}
+
+.rb.on.r1 {
+  background: rgba(232, 168, 0, .12);
+  border-color: var(--gold);
+  color: var(--gold)
+}
+
+.rb.on.r2 {
+  background: rgba(96, 221, 255, .1);
+  border-color: #60DDFF;
+  color: #60DDFF
+}
+
+.rb.on.oro {
+  background: rgba(255, 215, 0, .12);
+  border-color: #FFD700;
+  color: #FFD700
+}
+
+/* pff-box colores según tipo */
+.pff-box.adv {
+  background: rgba(255, 114, 0, .18);
+  border-color: var(--naranja)
+}
+
+.pff-box.adv .pff-titulo {
+  color: var(--naranja)
+}
+
+.pff-box.falta {
+  background: rgba(217, 0, 37, .18);
+  border-color: var(--hong)
+}
+
+.pff-box.falta .pff-titulo {
+  color: var(--hong)
+}
+
+.pff-box.especial {
+  background: rgba(232, 168, 0, .18);
+  border-color: var(--gold)
+}
+
+.pff-box.especial .pff-titulo {
+  color: var(--gold)
+}
+
+.bc-ganador-h {
+  background: linear-gradient(135deg, #6B0010, var(--hong));
+  border: 2px solid var(--hong);
+  color: #fff;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .06em;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: .12s;
+  text-align: center;
+  line-height: 1.4
+}
+
+.bc-ganador-h:active {
+  transform: scale(.93)
+}
+
+.bc-ganador-c {
+  background: linear-gradient(135deg, #002060, var(--chung));
+  border: 2px solid var(--chung);
+  color: #fff;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .06em;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: .12s;
+  text-align: center;
+  line-height: 1.4
+}
+
+.bc-ganador-c:active {
+  transform: scale(.93)
+}
+
+/* ── OVERLAY GANADOR en pantalla ── */
+#ganador-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .88);
+  backdrop-filter: blur(10px);
+}
+
+#ganador-overlay.visible {
+  display: flex
+}
+
+.ganador-box {
+  text-align: center;
+  animation: ganador-entrada .5s cubic-bezier(.17, .67, .35, 1.4);
+}
+
+@keyframes ganador-entrada {
+  from {
+    opacity: 0;
+    transform: scale(.4)
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1)
+  }
+}
+
+.ganador-trophy {
+  font-size: clamp(4rem, 15vw, 10rem);
+  line-height: 1;
+  margin-bottom: 8px
+}
+
+.ganador-sung {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(2rem, 6vw, 5rem);
+  letter-spacing: .4em;
+  color: var(--gold);
+  text-shadow: 0 0 40px rgba(232, 168, 0, .6);
+  margin-bottom: 4px;
+}
+
+.ganador-nombre {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(4rem, 16vw, 14rem);
+  line-height: .88;
+  text-shadow: 0 0 80px currentColor;
+}
+
+.ganador-nombre.hong {
+  color: var(--hong)
+}
+
+.ganador-nombre.chung {
+  color: var(--chung)
+}
+
+.ganador-sub {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1.2rem, 3vw, 2.5rem);
+  letter-spacing: .3em;
+  color: rgba(255, 255, 255, .4);
+  margin-top: 8px;
+}
+
+.ganador-cerrar {
+  margin-top: 24px;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 10px;
+  padding: 10px 28px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1rem;
+  letter-spacing: .1em;
+  color: rgba(255, 255, 255, .6);
+  cursor: pointer;
+  transition: .12s;
+}
+
+.ganador-cerrar:active {
+  transform: scale(.95)
+}
+
+/* Scores negativos — penalización visible */
+.score-negativo {
+  color: var(--naranja) !important;
+  text-shadow: 0 0 20px rgba(255, 114, 0, .4) !important;
+}
+
+.score-negativo::before {
+  content: '';
+}
+
+/* ── HISTORIAL DETALLADO (árbitro) ── */
+.historial-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+
+.hist-row {
+  display: grid;
+  grid-template-columns: 50px 55px 1fr 45px;
+  gap: 4px;
+  padding: 6px 8px;
+  font-size: .72rem;
+  font-family: 'Share Tech Mono', monospace;
+  border-bottom: 1px solid rgba(255, 255, 255, .04);
+  align-items: center;
+}
+
+.hist-row:nth-child(odd) {
+  background: rgba(255, 255, 255, .02)
+}
+
+.hist-row.lc-hong {
+  border-left: 2px solid var(--hong)
+}
+
+.hist-row.lc-chung {
+  border-left: 2px solid var(--chung)
+}
+
+.hist-tiempo {
+  color: var(--gold);
+  font-weight: 700
+}
+
+.hist-juez {
+  color: var(--gris);
+  text-transform: uppercase;
+  font-size: .65rem
+}
+
+.hist-desc {
+  color: rgba(255, 255, 255, .7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.hist-pts {
+  text-align: right;
+  font-weight: 700;
+  font-size: .78rem
+}
+
+.hist-row.lc-hong .hist-pts {
+  color: var(--hong)
+}
+
+.hist-row.lc-chung .hist-pts {
+  color: var(--chung)
+}
+
+/* ── PANEL JUEZ ESQUINA ── */
+.juez-grid-principal {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  gap: 8px;
+  flex: 1;
+  padding: 0;
+}
+
+.juez-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px
+}
+
+.jc-header {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem;
+  letter-spacing: .1em;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+}
+
+.hong-header {
+  background: rgba(217, 0, 37, .15);
+  color: var(--hong);
+  border: 1px solid rgba(217, 0, 37, .3)
+}
+
+.chung-header {
+  background: rgba(0, 70, 200, .15);
+  color: var(--chung);
+  border: 1px solid rgba(0, 70, 200, .3)
+}
+
+.jbtn {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  transition: .12s;
+  min-height: 80px;
+  -webkit-touch-callout: none;
+}
+
+.jbtn:active {
+  transform: scale(.92)
+}
+
+.jbtn-pts {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(2.2rem, 8vw, 3rem);
+  line-height: 1;
+}
+
+.jbtn-label {
+  font-size: clamp(.6rem, 2.2vw, .75rem);
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: .04em;
+  line-height: 1.3;
+  opacity: .85;
+}
+
+/* Hong buttons */
+.h1 {
+  background: linear-gradient(145deg, #A8001C, var(--hong));
+  color: #fff;
+  box-shadow: 0 3px 14px rgba(217, 0, 37, .35)
+}
+
+.h2 {
+  background: linear-gradient(145deg, #780012, #A8001C);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(217, 0, 37, .28)
+}
+
+.h3 {
+  background: linear-gradient(145deg, #50000C, #780012);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(217, 0, 37, .22)
+}
+
+/* Chung buttons */
+.c1 {
+  background: linear-gradient(145deg, #0035A0, var(--chung));
+  color: #fff;
+  box-shadow: 0 3px 14px rgba(0, 70, 200, .35)
+}
+
+.c2 {
+  background: linear-gradient(145deg, #002880, #0035A0);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(0, 70, 200, .28)
+}
+
+.c3 {
+  background: linear-gradient(145deg, #001A5C, #002880);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0, 70, 200, .22)
+}
+
+/* Centro columna */
+.centro-col {
+  align-items: center;
+  justify-content: space-between
+}
+
+.jc-marcador-mini {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 8px 6px;
+  width: 100%;
+  text-align: center;
+}
+
+.jcm-bloque {
+  text-align: center
+}
+
+.jcm-num {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1.8rem, 7vw, 2.6rem);
+  line-height: 1;
+}
+
+.hong-txt {
+  color: var(--hong)
+}
+
+.chung-txt {
+  color: var(--chung)
+}
+
+.jcm-sep {
+  font-family: 'Bebas Neue', cursive;
+  font-size: .7rem;
+  color: var(--borde);
+  margin: 2px 0
+}
+
+.jc-mis-pts {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .65rem;
+  color: var(--gris);
+  text-align: center;
+  line-height: 1.5
+}
+
+.jc-mis-titulo {
+  font-size: .6rem;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--gris);
+  text-align: center;
+  margin-bottom: 4px
+}
+
+.jc-mis-fila {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+  margin: 1px 0
+}
+
+.jc-mis-label {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1rem, 3.5vw, 1.3rem);
+  font-weight: 400
+}
+
+.jc-mis-label.h {
+  color: var(--hong)
+}
+
+.jc-mis-label.c {
+  color: var(--chung)
+}
+
+.jc-mis-sep {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(.9rem, 3vw, 1.2rem);
+  color: var(--borde)
+}
+
+.jc-mis-num {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1.8rem, 7vw, 2.6rem);
+  line-height: 1
+}
+
+.jc-mis-num.h {
+  color: var(--hong)
+}
+
+.jc-mis-num.c {
+  color: var(--chung)
+}
+
+.jc-des-h {
+  font-size: .6rem;
+  color: rgba(217, 0, 37, .5);
+  font-family: 'Share Tech Mono', monospace;
+  text-align: center
+}
+
+.jc-des-c {
+  font-size: .6rem;
+  color: rgba(0, 70, 200, .5);
+  font-family: 'Share Tech Mono', monospace;
+  text-align: center
+}
+
+.jbtn-undo {
+  background: transparent;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  color: var(--gris);
+  padding: 8px 4px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  cursor: pointer;
+  transition: .12s;
+  width: 100%;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.jbtn-undo:active {
+  background: rgba(255, 255, 255, .05);
+  transform: scale(.95)
+}
+
+/* ── PANTALLA PROYECCIÓN — TEXTOS GRANDES ── */
+.proy-nombre {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(2.5rem, 6vw, 5.5rem) !important;
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-bottom: 8px
+}
+
+.proy-score {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(6rem, 18vmin, 22rem) !important;
+  line-height: .82 !important;
+  overflow: hidden;
+  max-width: 42vw;
+  word-break: break-all;
+}
+
+.proy-crono {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(4rem, 10vw, 9rem) !important;
+  letter-spacing: .05em;
+}
+
+.proy-estado {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1.2rem, 2.4vw, 2rem) !important;
+  letter-spacing: .3em;
+}
+
+.proy-color-lbl {
+  font-size: clamp(.8rem, 1.6vw, 1.3rem) !important;
+  letter-spacing: .4em;
+}
+
+.proy-desglose {
+  font-size: clamp(.9rem, 1.5vw, 1.3rem) !important;
+  color: rgba(255, 255, 255, .3);
+  margin-top: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  line-height: 1.7;
+}
+
+.proy-hdr-txt {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(1rem, 2.2vw, 1.8rem) !important;
+  letter-spacing: .3em;
+  color: rgba(255, 255, 255, .3)
+}
+
+.proy-ronda-badge {
+  font-size: clamp(1rem, 2.2vw, 1.8rem) !important;
+}
+
+.log-chip {
+  padding: 5px 12px !important;
+  font-size: clamp(.7rem, 1.1vw, .9rem) !important;
+}
+
+.badge {
+  padding: 5px 12px !important;
+  font-size: clamp(.65rem, 1vw, .85rem) !important;
+}
+
+/* pff flash más grande en pantalla proyección */
+.pff-titulo {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(4rem, 10vw, 8rem) !important;
+  letter-spacing: .06em;
+  line-height: 1
+}
+
+.pff-sub {
+  font-family: 'Bebas Neue', cursive;
+  font-size: clamp(2rem, 4.5vw, 4rem) !important;
+  color: rgba(255, 255, 255, .85);
+  letter-spacing: .1em;
+  margin-top: 6px
+}
+
+.pff-ico {
+  font-size: clamp(3rem, 7vw, 5rem) !important
+}
+
+/* Responsive */
+@media(min-width:600px) {
+  .rol-grid {
+    max-width: 520px
+  }
+
+  .grid-2,
+  .grid-3 {
+    gap: 10px
+  }
+
+  .jbtn-pts {
+    font-size: clamp(2.5rem, 6vw, 3.5rem)
+  }
+
+  .jbtn-label {
+    font-size: clamp(.65rem, 1.8vw, .8rem)
+  }
+}
+
+/* Landscape / short screens — shrink projection scores */
+@media(max-height:600px) {
+  .proy-score {
+    font-size: clamp(4rem, 16vh, 10rem) !important
+  }
+
+  .proy-crono {
+    font-size: clamp(2.5rem, 8vh, 5rem) !important
+  }
+
+  .proy-nombre {
+    font-size: clamp(1.5rem, 4vh, 3rem) !important
+  }
+
+  .proy-hdr {
+    padding: 6px 20px
+  }
+
+  .proy-ftr {
+    padding: 4px 20px
+  }
+}
+
+/* Large desktop — ensure scores still fit */
+@media(min-width:1600px) {
+  .proy-score {
+    font-size: 20rem !important
+  }
+}
+
+/* ══════════════════════════════════════════
+   DESGLOSE POR RONDA (vista árbitro)
+   ══════════════════════════════════════════ */
+.rondas-desglose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ronda-card {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color .2s;
+}
+
+.ronda-card.ronda-actual {
+  border-color: var(--gold);
+  background: rgba(232, 168, 0, .04);
+}
+
+.ronda-card-header {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1rem;
+  letter-spacing: .12em;
+  color: var(--gris);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ronda-badge-actual {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  background: rgba(232, 168, 0, .15);
+  color: var(--gold);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(232, 168, 0, .3);
+}
+
+.ronda-card-scores {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.ronda-score-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.ronda-lbl-color {
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.ronda-lbl-color.h { color: var(--hong); }
+.ronda-lbl-color.c { color: var(--chung); }
+
+.ronda-score-val {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.ronda-score-val.h { color: var(--hong); }
+.ronda-score-val.c { color: var(--chung); }
+
+.ronda-score-det {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .6rem;
+  color: var(--gris);
+  letter-spacing: .02em;
+}
+
+.ronda-score-vs {
+  font-family: 'Bebas Neue', cursive;
+  font-size: .85rem;
+  color: var(--borde);
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVE: Garantizar que SIEMPRE
+   se vea el layout completo sin zoom
+   ══════════════════════════════════════════ */
+
+/* Pantalla de proyección: forzar todo dentro del viewport */
+#vista-pantalla .proy {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  contain: layout size;
+}
+
+/* Auto-ajuste en pantallas muy pequeñas (tablets/phones) */
+@media (max-width: 480px) {
+  .proy-score {
+    font-size: clamp(3.5rem, 14vw, 8rem) !important;
+  }
+  .proy-crono {
+    font-size: clamp(2rem, 8vw, 4rem) !important;
+  }
+  .proy-nombre {
+    font-size: clamp(1.2rem, 4vw, 2.5rem) !important;
+  }
+  .proy-dinamyt-bg {
+    font-size: clamp(3rem, 12vw, 8rem);
+  }
+  .proy-hdr {
+    padding: 4px 12px;
+  }
+  .proy-ftr {
+    padding: 4px 12px;
+  }
+}
+
+/* Pantallas medianas (laptops 768-1024) */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .proy-score {
+    font-size: clamp(5rem, 16vmin, 14rem) !important;
+  }
+}
+
+/* Pantallas con aspect ratio landscape muy extremo */
+@media (max-height: 400px) {
+  .proy-score {
+    font-size: clamp(3rem, 12vh, 8rem) !important;
+  }
+  .proy-crono {
+    font-size: clamp(1.8rem, 6vh, 4rem) !important;
+  }
+  .proy-nombre {
+    font-size: clamp(1rem, 3vh, 2rem) !important;
+  }
+  .proy-hdr {
+    padding: 2px 12px;
+  }
+  .proy-ftr {
+    padding: 2px 12px;
+  }
+  .proy-dinamyt-bg {
+    font-size: clamp(2rem, 10vh, 6rem);
+  }
+  .proy-desglose {
+    font-size: clamp(.5rem, 1vw, .7rem) !important;
+  }
+  .proy-estado {
+    font-size: clamp(.7rem, 1.5vw, 1rem) !important;
+  }
+}
+
+/* Pantallas muy altas (monitores verticales / TV grandes) */
+@media (min-height: 900px) and (min-width: 1200px) {
+  .proy-score {
+    font-size: clamp(10rem, 18vmin, 24rem) !important;
+  }
+  .proy-crono {
+    font-size: clamp(5rem, 8vmin, 10rem) !important;
+  }
+  .proy-nombre {
+    font-size: clamp(3rem, 5vmin, 6rem) !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   FALLBACK FONTS — si Google Fonts no carga
+   ══════════════════════════════════════════ */
+@font-face {
+  font-family: 'Bebas Neue';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Bebas Neue'), local('BebasNeue-Regular');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Barlow Condensed'), local('BarlowCondensed-Regular');
+}
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Share Tech Mono'), local('ShareTechMono-Regular');
+}
+
+/* ══════════════════════════════════════════
+   NOMBRE DE RÉFERI DE ESQUINA
+   ══════════════════════════════════════════ */
+.juez-nombre-card {
+  background: var(--card);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.juez-nombre-label {
+  font-size: .7rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+.juez-nombre-inp {
+  border-left: 3px solid var(--gold) !important;
+  font-size: .9rem !important;
+  padding: 7px 10px !important;
+}
+
+/* ══════════════════════════════════════════
+   BOTÓN NUEVO COMBATE
+   ══════════════════════════════════════════ */
+.bc-nuevo-combate {
+  background: linear-gradient(135deg, #1A3A00, #2A6A10);
+  border: 2px solid #40A020;
+  color: #fff;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.05rem;
+  letter-spacing: .06em;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: .12s;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.bc-nuevo-combate:active {
+  transform: scale(.93);
+  background: linear-gradient(135deg, #2A5A10, #3A8A20);
+}
+
+/* ══════════════════════════════════════════
+   COMBATES GUARDADOS (vista árbitro)
+   ══════════════════════════════════════════ */
+.combates-scroll {
+  max-height: 500px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cg-card {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color .2s;
+}
+
+.cg-card:hover {
+  border-color: rgba(232, 168, 0, .3);
+}
+
+.cg-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.cg-fecha {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .7rem;
+  color: var(--gris);
+  letter-spacing: .04em;
+}
+
+.cg-ganador-badge {
+  font-family: 'Bebas Neue', cursive;
+  font-size: .8rem;
+  letter-spacing: .08em;
+  padding: 2px 10px;
+  border-radius: 5px;
+}
+
+.cg-ganador-badge.hong {
+  background: rgba(217, 0, 37, .15);
+  color: var(--hong);
+  border: 1px solid rgba(217, 0, 37, .3);
+}
+
+.cg-ganador-badge.chung {
+  background: rgba(0, 70, 200, .15);
+  color: var(--chung);
+  border: 1px solid rgba(0, 70, 200, .3);
+}
+
+.cg-ganador-badge.empate {
+  background: rgba(232, 168, 0, .1);
+  color: var(--gold);
+  border: 1px solid rgba(232, 168, 0, .3);
+}
+
+.cg-scores {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.cg-comp {
+  text-align: center;
+}
+
+.cg-comp-name {
+  font-size: .68rem;
+  letter-spacing: .08em;
+  color: var(--gris);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.cg-comp-score {
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.cg-comp.h .cg-comp-score { color: var(--hong); }
+.cg-comp.c .cg-comp-score { color: var(--chung); }
+
+.cg-comp-det {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .55rem;
+  color: var(--gris);
+}
+
+.cg-vs {
+  font-family: 'Bebas Neue', cursive;
+  font-size: .8rem;
+  color: var(--borde);
+}
+
+.cg-extras {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .58rem;
+  color: var(--gris);
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, .04);
+}
+
+.cg-jueces {
+  font-size: .6rem;
+  color: var(--gris);
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.cg-juez-chip {
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .6rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, .6);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cg-juez-chip small {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .5rem;
+  color: var(--gris);
+}

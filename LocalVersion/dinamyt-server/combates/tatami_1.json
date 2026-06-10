@@ -1,0 +1,63 @@
+[
+  {
+    "id": "1775939046257_w14k",
+    "fecha": "2026-04-11T20:24:06.257Z",
+    "tatami": 1,
+    "nombreHong": "Hong",
+    "nombreChung": "Chung",
+    "marcadorHong": 0.5,
+    "marcadorChung": 0.5,
+    "esqHong": 0.5,
+    "esqChung": 0.5,
+    "arbHong": 0,
+    "arbChung": 0,
+    "kyongHong": 0,
+    "kyongChung": 0,
+    "faltasHong": 0,
+    "faltasChung": 0,
+    "jueces": {
+      "j1": {
+        "hong": 1,
+        "chung": 1
+      },
+      "j2": {
+        "hong": 0,
+        "chung": 0
+      },
+      "j3": {
+        "hong": 0,
+        "chung": 0
+      },
+      "j4": {
+        "hong": 0,
+        "chung": 0
+      }
+    },
+    "nombresJueces": {
+      "j1": "Juan",
+      "j2": "",
+      "j3": "",
+      "j4": ""
+    },
+    "numJueces": 2,
+    "historial": [
+      {
+        "juez": "j1",
+        "color": "hong",
+        "pts": 1,
+        "nombre": "Golpe/Patada cuerpo",
+        "tiempo": 120,
+        "ronda": "r1"
+      },
+      {
+        "juez": "j1",
+        "color": "chung",
+        "pts": 1,
+        "nombre": "Golpe/Patada cuerpo",
+        "tiempo": 120,
+        "ronda": "r2"
+      }
+    ],
+    "duracion": 120
+  }
+]
