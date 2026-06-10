@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import {
   useCombate,
@@ -24,12 +24,19 @@ interface FigurasState {
   tipo: "figuras";
   criterios: Criterio[];
   competidores: Competidor[];
-  puntuaciones: Record<string, Record<string, Record<string, number>>>;
+  puntuaciones: Record<string, Record<string, number>>; // { comp_id: { juez_id: float } }
+  puntuaciones_confirmadas: Record<string, Record<string, boolean>>;
+  competidor_activo_id: number | null;
+  puntuacion_abierta: boolean;
+  nombre_categoria: string;
   num_jueces: number;
   nombres_jueces: Record<string, string>;
+  podio_modo?: "manual" | "automatico";
   finalizado: boolean;
   log: { txt: string; color: string; ts: number }[];
   _categoria?: string;
+  _tatami_activo?: boolean;
+  _nombre_categoria?: string;
 }
 
 type AnyState = (CombateState & { _categoria?: string }) | (FigurasState & { _categoria?: string });
@@ -53,10 +60,55 @@ function combateActivo(state: CombateState): boolean {
   return hayPuntos || cronoMovio;
 }
 
+function formatScoreValue(value: number | string) {
+  const parsed = typeof value === "number"
+    ? value
+    : Number(String(value).replace(",", "."));
+  if (!Number.isFinite(parsed)) return "";
+  return Math.max(0, Math.min(9.99, parsed)).toFixed(2);
+}
+
+function normalizeScoreInput(raw: string) {
+  const cleaned = raw.trim().replace(",", ".");
+  if (!cleaned) return "";
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 9.99) return "";
+  return parsed.toFixed(2);
+}
+
+function isValidScore(raw: string) {
+  if (!/^\d\.\d{2}$/.test(raw)) return false;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 9.99;
+}
+
+const JUECES_FIGURAS = ["j1", "j2", "j3", "j4", "j5", "j6", "j7"];
+
+function juecesActivosFiguras(state: FigurasState) {
+  return JUECES_FIGURAS
+    .slice(0, state.num_jueces || 4)
+    .filter((_, idx) => Boolean(state.criterios[idx]));
+}
+
+function figurasPuntuacionesCompletas(state: FigurasState) {
+  if (!state.competidores.length) return false;
+  const jueces = juecesActivosFiguras(state);
+  if (!jueces.length) return false;
+  return state.competidores.every((comp) => {
+    const compId = String(comp.id);
+    return jueces.every((juezId) => state.puntuaciones_confirmadas?.[compId]?.[juezId]);
+  });
+}
+
 // ─── Category Selector ───────────────────────────────────────────────────────
 function CatSelector({
-  current, onSelect,
-}: { current: string; onSelect: (cat: string) => void }) {
+  current, onSelect, figurasLabel,
+}: { current: string; onSelect: (cat: string) => void; figurasLabel: string }) {
+  const labels: Record<string, string> = {
+    combate: "Combate",
+    figuras: figurasLabel || "Figuras",
+  };
+
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <span style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>CAT:</span>
@@ -73,7 +125,7 @@ function CatSelector({
             padding: "4px 10px", minHeight: 32, fontSize: "0.8rem",
           }}
         >
-          {cat}
+          {labels[cat]}
         </button>
       ))}
     </div>
@@ -111,27 +163,43 @@ function FigurasArbitro({
   const [newComp, setNewComp] = useState({ nombre: "", club: "" });
   const [showAddComp, setShowAddComp] = useState(false);
 
-  function calcPromedio(comp: Competidor) {
+  function calcTotal(comp: Competidor) {
     const puntajes = state.puntuaciones[String(comp.id)] || {};
-    const criterioIds = state.criterios.map((c) => c.id);
     let total = 0;
-    Object.values(puntajes).forEach((criterioVals) => {
-      criterioIds.forEach((cid) => { total += criterioVals[cid] || 0; });
+    Object.values(puntajes).forEach((val) => {
+      total += val || 0;
     });
-    return state.num_jueces > 0 ? total / state.num_jueces : 0;
+    return total;
   }
 
   const ranking = [...state.competidores]
-    .map((c) => ({ ...c, promedio: calcPromedio(c) }))
-    .sort((a, b) => b.promedio - a.promedio);
+    .map((c) => ({ ...c, total: calcTotal(c) }))
+    .sort((a, b) => b.total - a.total);
 
   const MAX_COMPETIDORES = 50;
   const puedeAgregar = state.competidores.length < MAX_COMPETIDORES;
+  const podioModo = state.podio_modo || "manual";
+  const puntuacionesCompletas = figurasPuntuacionesCompletas(state);
 
   return (
     <div style={{ padding: 16, maxWidth: 800, margin: "0 auto" }}>
-      <div className="card-title" style={{ fontSize: "1rem", marginBottom: 16 }}>
-        FIGURAS — Juez Central · Tatami {tatamiId}
+      <div className="card-title" style={{ fontSize: "1rem", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>
+          <input
+            className="input"
+            value={state.nombre_categoria || "Figuras"}
+            onChange={(e) => enviarEvento("cambiar_nombre_categoria", { nombre: e.target.value })}
+            onBlur={(e) => {
+              if (!e.target.value.trim()) enviarEvento("cambiar_nombre_categoria", { nombre: "Figuras" });
+            }}
+            style={{ width: 180, fontWeight: 800, padding: "2px 6px", height: 28 }}
+          /> — Juez Central · Tatami {tatamiId}
+        </span>
+        {state.puntuacion_abierta && state.competidor_activo_id && (
+          <button className="btn btn-sm btn-danger" onClick={() => enviarEvento("cerrar_puntuacion")}>
+            Cerrar Puntuación
+          </button>
+        )}
       </div>
 
       {/* Número de jueces */}
@@ -149,6 +217,33 @@ function FigurasArbitro({
             {n}
           </button>
         ))}
+      </div>
+
+      {/* Podio */}
+      <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Podio</div>
+          <div style={{ color: puntuacionesCompletas ? "var(--green)" : "var(--text-dim)", fontSize: "0.78rem", marginTop: 2 }}>
+            {puntuacionesCompletas ? "Puntuaciones completas" : "Puntuaciones pendientes"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["manual", "automatico"] as const).map((modo) => (
+            <button
+              key={modo}
+              className="btn btn-sm"
+              onClick={() => enviarEvento("set_podio_modo", { modo })}
+              style={{
+                background: podioModo === modo ? "var(--gold-bg)" : undefined,
+                borderColor: podioModo === modo ? "var(--gold-border)" : undefined,
+                color: podioModo === modo ? "var(--gold)" : undefined,
+                padding: "4px 10px",
+              }}
+            >
+              {modo === "manual" ? "Manual" : "Automático"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Competidores */}
@@ -191,34 +286,46 @@ function FigurasArbitro({
           </div>
         )}
 
-        {/* Ranking */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {ranking.map((comp, i) => (
-            <div key={comp.id} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 12px",
-              background: i === 0 ? "rgba(240,184,0,0.06)" : "var(--bg-elevated)",
-              borderRadius: "var(--radius-sm)",
-              border: `1px solid ${i === 0 ? "var(--gold-border)" : "var(--border)"}`,
-            }}>
-              <span style={{
-                fontFamily: "var(--font-display)", fontSize: "1.5rem", minWidth: 32, textAlign: "center",
-                color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
-              }}>{i + 1}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{comp.nombre}</div>
-                {comp.club && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{comp.club}</div>}
+          {ranking.map((comp, i) => {
+            const isActive = state.competidor_activo_id === comp.id;
+            return (
+              <div key={comp.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 12px",
+                background: isActive ? "rgba(240,184,0,0.1)" : (i === 0 ? "rgba(240,184,0,0.04)" : "var(--bg-elevated)"),
+                borderRadius: "var(--radius-sm)",
+                border: `1.5px solid ${isActive ? "var(--gold)" : (i === 0 ? "var(--gold-border)" : "var(--border)")}`,
+              }}>
+                <span style={{
+                  fontFamily: "var(--font-display)", fontSize: "1.5rem", minWidth: 32, textAlign: "center",
+                  color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
+                }}>{i + 1}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: isActive ? "var(--gold)" : "inherit" }}>
+                    {comp.nombre}
+                    {isActive && <span style={{ marginLeft: 8, fontSize: "0.7rem", background: "var(--gold)", color: "#000", padding: "2px 6px", borderRadius: 4 }}>EN TURNO</span>}
+                  </div>
+                  {comp.club && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{comp.club}</div>}
+                </div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: i === 0 || isActive ? "var(--gold)" : "var(--text)" }}>
+                  {comp.total.toFixed(2)}
+                </div>
+                {!isActive && (
+                  <button className="btn btn-sm"
+                    onClick={() => enviarEvento("activar_competidor", { competidor_id: comp.id })}
+                    style={{ padding: "4px 8px", fontSize: "0.7rem", background: "var(--bg-card)", borderColor: "var(--gold)" }}>
+                    ACTIVAR
+                  </button>
+                )}
+                <button className="btn btn-sm btn-danger"
+                  onClick={() => enviarEvento("eliminar_competidor", { competidor_id: comp.id })}
+                  style={{ padding: "3px 8px", minHeight: 30, fontSize: "0.72rem" }}>
+                  ✕
+                </button>
               </div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: i === 0 ? "var(--gold)" : "var(--text)" }}>
-                {comp.promedio.toFixed(2)}
-              </div>
-              <button className="btn btn-sm btn-danger"
-                onClick={() => enviarEvento("eliminar_competidor", { competidor_id: comp.id })}
-                style={{ padding: "3px 8px", minHeight: 30, fontSize: "0.72rem" }}>
-                ✕
-              </button>
-            </div>
-          ))}
+            );
+          })}
           {state.competidores.length === 0 && (
             <p style={{ textAlign: "center", color: "var(--text-dim)", padding: "20px 0", fontSize: "0.88rem" }}>
               Agrega competidores para comenzar
@@ -247,7 +354,7 @@ function FigurasArbitro({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <button className="btn btn-primary"
           onClick={() => enviarEvento("finalizar")}>
-          Finalizar Figuras
+          {state.finalizado ? "Podio Mostrado" : "Mostrar Podio"}
         </button>
         <button className="btn btn-danger"
           onClick={() => enviarEvento("reset_figuras")}>
@@ -275,6 +382,126 @@ function FigurasArbitro({
 // ══════════════════════════════════════════════════════════════════════════════
 // FIGURAS — Juez Normal
 // ══════════════════════════════════════════════════════════════════════════════
+function FigurasScoreCard({
+  state, enviarEvento, juezId, miCriterio, comp,
+}: {
+  state: FigurasState;
+  enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
+  juezId: string;
+  miCriterio: Criterio;
+  comp: Competidor;
+}) {
+  const compId = String(comp.id);
+  const valCommitted = state.puntuaciones[compId]?.[juezId];
+  const isConfirmed = state.puntuaciones_confirmadas?.[compId]?.[juezId];
+  const [nota, setNota] = useState(
+    valCommitted !== undefined ? formatScoreValue(valCommitted) : ""
+  );
+  const [error, setError] = useState("");
+
+  function handleBlur(val: string) {
+    if (!val.trim()) {
+      setError("");
+      return;
+    }
+    const formatted = normalizeScoreInput(val);
+    if (!formatted) {
+      setError("La puntuación debe estar entre 0.00 y 9.99.");
+      return;
+    }
+    setNota(formatted);
+    setError("");
+  }
+
+  function handleGuardar() {
+    if (isConfirmed) return;
+    const formatted = normalizeScoreInput(nota);
+    if (!formatted || !isValidScore(formatted)) {
+      setError("Ingresa la puntuación con dos decimales, por ejemplo 8.75.");
+      return;
+    }
+    setNota(formatted);
+    setError("");
+    enviarEvento("puntuar", {
+      juez_id: juezId, competidor_id: comp.id, valor: formatted,
+    });
+    enviarEvento("confirmar_puntuacion", {
+      juez_id: juezId, competidor_id: comp.id,
+    });
+  }
+
+  const canSave = Boolean(nota && isValidScore(normalizeScoreInput(nota) || nota) && !isConfirmed);
+
+  return (
+    <div style={{ padding: 12, maxWidth: 500, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: 14 }}>
+        <div className="card-title" style={{ fontSize: "1rem" }}>
+          {state.nombre_categoria || "FIGURAS"} — {juezId.toUpperCase()}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 10, textAlign: "center", padding: "20px 10px" }}>
+        <div style={{ fontWeight: 800, fontSize: "1.4rem", marginBottom: 4, color: "var(--gold)" }}>
+          {comp.nombre}
+        </div>
+        <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: 20 }}>
+          {comp.club}
+        </div>
+
+        <label style={{ fontSize: "0.8rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-dim)" }}>
+          CALIFICA:
+        </label>
+        <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--gold)", marginBottom: 16 }}>
+          {miCriterio.nombre} (Max {miCriterio.max_pts})
+        </div>
+
+        <input
+          className="input"
+          type="text"
+          inputMode="decimal"
+          placeholder="0.00"
+          value={nota}
+          disabled={isConfirmed}
+          onChange={(e) => {
+            const next = e.target.value.replace(",", ".");
+            if (/^\d?(\.\d{0,2})?$/.test(next)) {
+              setNota(next);
+              setError("");
+            }
+          }}
+          onBlur={(e) => handleBlur(e.target.value)}
+          style={{
+            fontFamily: "var(--font-mono)", fontSize: "3rem", textAlign: "center", padding: "16px",
+            borderColor: isConfirmed ? "var(--green-border)" : "var(--gold)",
+            background: isConfirmed ? "rgba(0, 212, 114, 0.1)" : "var(--bg-elevated)",
+            color: isConfirmed ? "var(--green)" : "var(--text)",
+            maxWidth: 200, margin: "0 auto", height: 80,
+          }}
+        />
+
+        {error && (
+          <div style={{ marginTop: 10, color: "var(--orange)", fontWeight: 700, fontSize: "0.86rem" }}>
+            {error}
+          </div>
+        )}
+
+        {isConfirmed ? (
+          <div style={{ marginTop: 20, color: "var(--green)", fontWeight: 700, fontSize: "1.1rem" }}>
+            ✓ PUNTUACIÓN GUARDADA: {formatScoreValue(valCommitted ?? 0)}
+          </div>
+        ) : (
+          <button className="btn btn-primary"
+            onClick={handleGuardar}
+            disabled={!canSave}
+            style={{ marginTop: 20, width: "100%", padding: 16, fontSize: "1.1rem", fontWeight: 800 }}>
+            ✓ GUARDAR PUNTUACIÓN
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FigurasJuez({
   state, enviarEvento, juezId,
 }: {
@@ -282,22 +509,9 @@ function FigurasJuez({
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   juezId: string;
 }) {
-  const [inputValues, setInputValues] = useState<Record<string, Record<string, string>>>({});
-
-  function getInput(compId: string, criterioId: string) {
-    return inputValues[compId]?.[criterioId] ??
-      String(state.puntuaciones[compId]?.[juezId]?.[criterioId] ?? "");
-  }
-
-  function handleBlur(compId: string, criterioId: string, val: string) {
-    const num = parseFloat(val);
-    if (!isNaN(num)) {
-      enviarEvento("puntuar", {
-        juez_id: juezId, competidor_id: parseInt(compId),
-        criterio_id: criterioId, valor: num,
-      });
-    }
-  }
+  const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3, j5: 4, j6: 5, j7: 6 };
+  const idxCriterio = MAP_JUEZ[juezId as keyof typeof MAP_JUEZ];
+  const miCriterio = idxCriterio !== undefined ? state.criterios[idxCriterio] : undefined;
 
   if (state.competidores.length === 0) {
     return (
@@ -308,69 +522,60 @@ function FigurasJuez({
     );
   }
 
-  return (
-    <div style={{ padding: 12, maxWidth: 700, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", marginBottom: 14 }}>
-        <div className="card-title" style={{ fontSize: "1rem" }}>FIGURAS — {juezId.toUpperCase()}</div>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
-          Puntuación de 0 a {state.criterios[0]?.max_pts || 10} por criterio
-        </p>
+  if (!state.puntuacion_abierta || !state.competidor_activo_id) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>Esperando autorización...</p>
+        <p style={{ fontSize: "0.85rem" }}>El Juez Central debe activar el turno del competidor.</p>
       </div>
+    );
+  }
 
-      {state.competidores.map((comp) => (
-        <div key={comp.id} className="card" style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 10 }}>
-            {comp.nombre}
-            {comp.club && <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.82rem", fontWeight: 400 }}>{comp.club}</span>}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: 8 }}>
-            {state.criterios.map((crit) => {
-              const compId = String(comp.id);
-              const committed = state.puntuaciones[compId]?.[juezId]?.[crit.id];
-              return (
-                <div key={crit.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--gold)" }}>
-                    {crit.nombre}
-                  </label>
-                  <input
-                    className="input"
-                    type="number" min={0} max={crit.max_pts} step={0.1} placeholder="0.0"
-                    defaultValue={committed !== undefined ? String(committed) : ""}
-                    key={`${compId}-${crit.id}-${committed}`}
-                    onBlur={(e) => handleBlur(compId, crit.id, e.target.value)}
-                    style={{
-                      fontFamily: "var(--font-mono)", fontSize: "1.3rem", textAlign: "center", padding: "8px",
-                      borderColor: committed !== undefined ? "var(--green-border)" : undefined,
-                    }}
-                  />
-                  {committed !== undefined && (
-                    <div style={{ textAlign: "center", fontSize: "0.7rem", color: "var(--green)" }}>✓ {committed}</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
+  if (!miCriterio) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--red-alert)" }}>
+        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>No tienes un criterio asignado.</p>
+        <p style={{ fontSize: "0.85rem" }}>Este rol no está configurado en los criterios actuales.</p>
+      </div>
+    );
+  }
+
+  const compId = String(state.competidor_activo_id);
+  const comp = state.competidores.find((c) => c.id === state.competidor_activo_id);
+  if (!comp) return null;
+
+  const valCommitted = state.puntuaciones[compId]?.[juezId];
+  const isConfirmed = state.puntuaciones_confirmadas?.[compId]?.[juezId];
+
+  return (
+    <FigurasScoreCard
+      key={`${compId}-${juezId}-${isConfirmed ? "ok" : "edit"}-${valCommitted ?? "empty"}`}
+      state={state}
+      enviarEvento={enviarEvento}
+      juezId={juezId}
+      miCriterio={miCriterio}
+      comp={comp}
+    />
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // FIGURAS — Pantalla Pública
 // ══════════════════════════════════════════════════════════════════════════════
-function FigurasPantalla({ state }: { state: FigurasState }) {
-  function calcPromedio(comp: Competidor) {
+function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: string }) {
+  function calcTotal(comp: Competidor) {
     const puntajes = state.puntuaciones[String(comp.id)] || {};
-    const criterioIds = state.criterios.map((c) => c.id);
     let total = 0;
-    Object.values(puntajes).forEach((cv) => criterioIds.forEach((cid) => { total += cv[cid] || 0; }));
-    return state.num_jueces > 0 ? total / state.num_jueces : 0;
+    Object.values(puntajes).forEach((val) => { total += val || 0; });
+    return total;
   }
 
   const ranking = [...state.competidores]
-    .map((c) => ({ ...c, promedio: calcPromedio(c) }))
-    .sort((a, b) => b.promedio - a.promedio);
+    .map((c) => ({ ...c, total: calcTotal(c) }))
+    .sort((a, b) => b.total - a.total);
+  const nombreCategoria = state._nombre_categoria || state.nombre_categoria || "Figuras";
+  const shouldShowPodio = state.finalizado || ((state.podio_modo || "manual") === "automatico" && figurasPuntuacionesCompletas(state));
+  const activeComp = state.competidores.find((c) => c.id === state.competidor_activo_id);
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -381,10 +586,17 @@ function FigurasPantalla({ state }: { state: FigurasState }) {
       }}>
         <div className="logo" style={{ fontSize: "2rem" }}>DINA<em>MYT</em></div>
         <div style={{
+          fontFamily: "var(--font-display)", fontSize: "clamp(2rem,4vw,3.5rem)",
+          color: "var(--gold)", letterSpacing: "0.15em", lineHeight: 1,
+          marginTop: 8,
+        }}>
+          TATAMI {tatamiId}
+        </div>
+        <div style={{
           fontFamily: "var(--font-body)", fontSize: "0.85rem",
           color: "var(--gold)", fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.15em", marginTop: 2,
-        }}>FIGURAS</div>
+        }}>{nombreCategoria}</div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
@@ -392,43 +604,63 @@ function FigurasPantalla({ state }: { state: FigurasState }) {
           <div style={{ textAlign: "center", marginTop: "25%", color: "var(--text-dim)" }}>
             <p style={{ fontSize: "1.6rem" }}>Esperando participantes...</p>
           </div>
+        ) : !shouldShowPodio ? (
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "var(--text-muted)" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2rem,5vw,4rem)", color: "var(--gold)", letterSpacing: "0.08em" }}>
+              Puntuaciones en curso
+            </div>
+            {activeComp && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "var(--text-dim)", fontWeight: 800 }}>
+                  En turno
+                </div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.5rem,6vw,5rem)", color: "var(--text)", lineHeight: 1.05 }}>
+                  {activeComp.nombre}
+                </div>
+                {activeComp.club && <div style={{ marginTop: 6, color: "var(--text-muted)" }}>{activeComp.club}</div>}
+              </div>
+            )}
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 960, margin: "0 auto" }}>
-            {ranking.map((comp, i) => (
-              <div key={comp.id} className="animate-fade" style={{
-                display: "flex", alignItems: "center", gap: 16,
-                padding: "16px 24px",
-                background: i === 0 ? "rgba(240,184,0,0.08)" : "var(--bg-card)",
-                border: `1.5px solid ${i === 0 ? "var(--gold-border)" : "var(--border)"}`,
-                borderRadius: "var(--radius)",
-                boxShadow: i === 0 ? "var(--shadow-gold)" : undefined,
-              }}>
-                <span style={{
-                  fontFamily: "var(--font-display)", fontSize: "clamp(3rem,6vw,5rem)",
-                  color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
-                  minWidth: 80, textAlign: "center", lineHeight: 1,
-                }}>{i + 1}</span>
-                <div style={{ flex: 1 }}>
+            {ranking.map((comp, i) => {
+              const isActive = state.competidor_activo_id === comp.id;
+              return (
+                <div key={comp.id} className="animate-fade" style={{
+                  display: "flex", alignItems: "center", gap: 16,
+                  padding: "16px 24px",
+                  background: isActive ? "rgba(240,184,0,0.12)" : (i === 0 ? "rgba(240,184,0,0.08)" : "var(--bg-card)"),
+                  border: `1.5px solid ${isActive ? "var(--gold)" : (i === 0 ? "var(--gold-border)" : "var(--border)")}`,
+                  borderRadius: "var(--radius)",
+                  boxShadow: i === 0 || isActive ? "var(--shadow-gold)" : undefined,
+                }}>
+                  <span style={{
+                    fontFamily: "var(--font-display)", fontSize: "clamp(3rem,6vw,5rem)",
+                    color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
+                    minWidth: 80, textAlign: "center", lineHeight: 1,
+                  }}>{i + 1}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: "clamp(2rem,4vw,3.5rem)",
+                      letterSpacing: "0.04em", lineHeight: 1,
+                      color: isActive ? "var(--gold)" : (i === 0 ? "var(--gold)" : "var(--text)"),
+                    }}>
+                      {comp.nombre}
+                    </div>
+                    {comp.club && <div style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginTop: 2 }}>{comp.club}</div>}
+                  </div>
                   <div style={{
                     fontFamily: "var(--font-display)",
-                    fontSize: "clamp(2rem,4vw,3.5rem)",
-                    letterSpacing: "0.04em", lineHeight: 1,
-                    color: i === 0 ? "var(--gold)" : "var(--text)",
+                    fontSize: "clamp(3rem,5vw,5rem)",
+                    color: i === 0 || isActive ? "var(--gold)" : "var(--text)",
+                    letterSpacing: "0.04em",
                   }}>
-                    {comp.nombre}
+                    {comp.total.toFixed(2)}
                   </div>
-                  {comp.club && <div style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginTop: 2 }}>{comp.club}</div>}
                 </div>
-                <div style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(3rem,5vw,5rem)",
-                  color: i === 0 ? "var(--gold)" : "var(--text)",
-                  letterSpacing: "0.04em",
-                }}>
-                  {comp.promedio.toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -441,13 +673,8 @@ function FigurasPantalla({ state }: { state: FigurasState }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function CombatePantalla({
   state, tatamiId, connected,
-  alerts, alertHandlers,
 }: {
   state: CombateState; tatamiId: string; connected: boolean;
-  alerts: ReturnType<typeof useAlertSystem>["alerts"];
-  alertHandlers: Pick<ReturnType<typeof useAlertSystem>, "onClearGanador" | "onClearAlerta12" | "onClearDerrota" | "onClearConfirm"> & {
-    onClearGanador: () => void; onClearAlerta12: () => void; onClearDerrota: () => void; onClearConfirm: () => void;
-  };
 }) {
   const totalHong = marcadorDisplay(state, "hong");
   const totalChung = marcadorDisplay(state, "chung");
@@ -459,15 +686,6 @@ function CombatePantalla({
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-      <AlertSystem
-        alerts={alerts}
-        onClearGanador={alertHandlers.onClearGanador}
-        onClearAlerta12={alertHandlers.onClearAlerta12}
-        onClearDerrota={alertHandlers.onClearDerrota}
-        onClearConfirm={alertHandlers.onClearConfirm}
-        isPantalla
-      />
-
       {/* Main scoreboard */}
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" }}>
         {/* HONG */}
@@ -499,6 +717,13 @@ function CombatePantalla({
 
         {/* CENTER */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 20px" }}>
+          <div style={{
+            fontSize: "clamp(2rem,4vw,3.5rem)", fontFamily: "var(--font-display)",
+            color: "var(--gold)", letterSpacing: "0.15em", marginBottom: 12,
+            lineHeight: 1
+          }}>
+            TATAMI {tatamiId}
+          </div>
           <div className={`crono-display ${cronoClass}`} style={{ fontSize: "clamp(2.5rem,7vw,6rem)" }}>
             {formatTime(state.segundos)}
           </div>
@@ -636,8 +861,9 @@ function CombateJuez({
             <button
               key={`h${p.pts}`}
               className="combat-btn hong"
-              style={{ flex: 1 }}
+              style={{ flex: 1, opacity: state.oroResuelto ? 0.5 : 1 }}
               onClick={() => anotar("hong", p.pts, p.label)}
+              disabled={state.oroResuelto}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -645,7 +871,8 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem" }}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto ? 0.5 : 1 }}
+            disabled={state.oroResuelto}
             onClick={() => {
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "hong");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "hong" });
@@ -665,8 +892,9 @@ function CombateJuez({
             <button
               key={`c${p.pts}`}
               className="combat-btn chung"
-              style={{ flex: 1 }}
+              style={{ flex: 1, opacity: state.oroResuelto ? 0.5 : 1 }}
               onClick={() => anotar("chung", p.pts, p.label)}
+              disabled={state.oroResuelto}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -674,7 +902,8 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem" }}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto ? 0.5 : 1 }}
+            disabled={state.oroResuelto}
             onClick={() => {
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "chung");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "chung" });
@@ -701,7 +930,7 @@ function CombateJuez({
 // ══════════════════════════════════════════════════════════════════════════════
 function CombateArbitro({
   state, enviarEvento, tatamiId,
-  onFlash, onFaltaFlash, onShowConfirm,
+  onFlash, onFaltaFlash, onShowConfirm, broadcast
 }: {
   state: CombateState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
@@ -709,6 +938,7 @@ function CombateArbitro({
   onFlash: (ico: string, txt: string) => void;
   onFaltaFlash: (data: FaltaFlashData) => void;
   onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
+  broadcast: (data: Record<string, unknown>) => void;
 }) {
   const totalHong = marcadorDisplay(state, "hong");
   const totalChung = marcadorDisplay(state, "chung");
@@ -748,34 +978,44 @@ function CombateArbitro({
   }
 
   function handleEspecial(color: "hong" | "chung", pts: number, nombre: string) {
-    onFaltaFlash({
+    if (state.oroResuelto) {
+      onFlash("⚠️", "PUNTO DE ORO BLOQUEADO");
+      return;
+    }
+    const data: FaltaFlashData = {
       ico: "⭐",
       titulo: `+${pts} ${nombre.toUpperCase()}`,
       sub: `${color === "hong" ? "🔴 HONG" : "🔵 CHUNG"}`,
       tipo: "especial",
-    });
+    };
+    onFaltaFlash(data);
+    broadcast({ tipo: "falta-flash", ico: data.ico, titulo: data.titulo, sub: data.sub, tipoFalta: data.tipo });
     enviarEvento("especial", { color, pts, nombre });
   }
 
   function handleKyonggo(color: "hong" | "chung") {
     const num = (color === "hong" ? state.kyongHong : state.kyongChung) + 1;
-    onFaltaFlash({
+    const data: FaltaFlashData = {
       ico: "⚠️",
       titulo: "KYONGGO −0.5",
       sub: `${color === "hong" ? "🔴 HONG" : "🔵 CHUNG"} · Advertencia #${num}`,
       tipo: "adv",
-    });
+    };
+    onFaltaFlash(data);
+    broadcast({ tipo: "falta-flash", ico: data.ico, titulo: data.titulo, sub: data.sub, tipoFalta: data.tipo });
     enviarEvento("kyonggo", { color });
   }
 
   function handleGamjeum(color: "hong" | "chung") {
     const num = (color === "hong" ? state.faltasHong : state.faltasChung) + 1;
-    onFaltaFlash({
+    const data: FaltaFlashData = {
       ico: "🚫",
       titulo: "GAMJEUM −1",
       sub: `${color === "hong" ? "🔴 HONG" : "🔵 CHUNG"} · Falta #${num}`,
       tipo: "falta",
-    });
+    };
+    onFaltaFlash(data);
+    broadcast({ tipo: "falta-flash", ico: data.ico, titulo: data.titulo, sub: data.sub, tipoFalta: data.tipo });
     enviarEvento("gamjeum", { color });
   }
 
@@ -804,7 +1044,32 @@ function CombateArbitro({
   }
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: "10px 14px" }}>
+    <div style={{ maxWidth: 780, margin: "0 auto", padding: "10px 14px", position: "relative" }}>
+      {state.oroPendienteAprobacion && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(15,15,25,0.9)", zIndex: 10,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          backdropFilter: "blur(5px)", borderRadius: "var(--radius)"
+        }}>
+          <div style={{ fontSize: "3rem", marginBottom: 12 }}>🏆</div>
+          <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "0.05em", textAlign: "center", padding: "0 20px" }}>
+            PUNTO DE ORO REGISTRADO
+          </div>
+          <div style={{ color: "var(--text)", marginTop: 8, textAlign: "center", maxWidth: 400, fontSize: "0.9rem" }}>
+            Un juez ha marcado un punto de oro para {state.oroGanadorNombre || "el competidor"}. El combate finaliza si lo apruebas.
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 24 }}>
+            <button className="btn btn-primary" onClick={() => enviarEvento("aprobar_oro")} style={{ padding: "12px 24px", fontSize: "1.1rem" }}>
+              ✓ APROBAR Y FINALIZAR
+            </button>
+            <button className="btn btn-danger" onClick={() => enviarEvento("rechazar_oro")} style={{ padding: "12px 24px", fontSize: "1.1rem" }}>
+              ✕ RECHAZAR Y CONTINUAR
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Nombres */}
       <div className="grid-2" style={{ marginBottom: 10 }}>
         <input className="input" placeholder="Nombre Hong (Requerido)" value={state.nombreHong === "Hong" ? "" : state.nombreHong}
@@ -908,11 +1173,21 @@ function CombateArbitro({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
         {PUNTOS_ARB.map((p) => (
           <div key={p.nombre} style={{ display: "contents" }}>
-            <button className="combat-btn hong" onClick={() => handleEspecial("hong", p.pts, p.nombre)}>
+            <button
+              className="combat-btn hong"
+              onClick={() => handleEspecial("hong", p.pts, p.nombre)}
+              disabled={state.oroResuelto}
+              style={{ opacity: state.oroResuelto ? 0.5 : 1 }}
+            >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
             </button>
-            <button className="combat-btn chung" onClick={() => handleEspecial("chung", p.pts, p.nombre)}>
+            <button
+              className="combat-btn chung"
+              onClick={() => handleEspecial("chung", p.pts, p.nombre)}
+              disabled={state.oroResuelto}
+              style={{ opacity: state.oroResuelto ? 0.5 : 1 }}
+            >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
             </button>
@@ -987,7 +1262,7 @@ function TatamiContent() {
   const rol = searchParams.get("rol") || "pantalla";
 
   const token = typeof window !== "undefined" ? localStorage.getItem("dinamyt_token") : null;
-  const { state, connected, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
+  const { state, connected, hasServerState, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
 
   const alertSystem = useAlertSystem();
 
@@ -1028,9 +1303,9 @@ function TatamiContent() {
   const anyState = state as unknown as AnyState;
   const categoria = anyState._categoria || "combate";
   const esFiguras = isFiguras(anyState);
+  const nombreCategoria = anyState._nombre_categoria || (isFiguras(anyState) ? anyState.nombre_categoria : "") || "Figuras";
 
   const isArbitro = rol === "arbitro";
-  const isJuez = ["j1", "j2", "j3", "j4", "j5", "j6", "j7"].includes(rol);
   const isPantalla = rol === "pantalla";
 
   // Auth check
@@ -1072,14 +1347,30 @@ function TatamiContent() {
     enviarEvento("cambiar_categoria", { categoria: cat });
   }
 
+  if (!hasServerState) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
+        <div className="logo animate-fade" style={{ fontSize: "3rem" }}>DINA<em>MYT</em></div>
+      </div>
+    );
+  }
+
   // Pantalla pública — sin auth, renderizar inmediatamente
   if (isPantalla) {
-    const alertHandlers = {
-      onClearGanador: alertSystem.clearGanador,
-      onClearAlerta12: alertSystem.clearAlerta12,
-      onClearDerrota: alertSystem.clearDerrota,
-      onClearConfirm: alertSystem.clearConfirm,
-    };
+    if (anyState._tatami_activo === false) {
+      return (
+        <div style={{ height: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <div className="logo" style={{ fontSize: "4rem", marginBottom: 16 }}>DINA<em>MYT</em></div>
+          <div style={{ fontSize: "2.5rem", color: "var(--text-dim)", fontFamily: "var(--font-display)", letterSpacing: "0.15em", marginBottom: 8 }}>
+            TATAMI {tatamiId}
+          </div>
+          <div style={{ color: "var(--orange)", fontSize: "1.2rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+            ESTE TATAMI SE ENCUENTRA DESACTIVADO
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ position: "relative" }}>
         <AlertSystem
@@ -1091,13 +1382,11 @@ function TatamiContent() {
           isPantalla
         />
         {esFiguras
-          ? <FigurasPantalla state={anyState as FigurasState} />
+          ? <FigurasPantalla state={anyState as FigurasState} tatamiId={tatamiId} />
           : <CombatePantalla
               state={state}
               tatamiId={tatamiId}
               connected={connected}
-              alerts={alertSystem.alerts}
-              alertHandlers={alertHandlers}
             />
         }
       </div>
@@ -1133,7 +1422,7 @@ function TatamiContent() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className={`status-dot ${connected ? "online" : "offline"}`} />
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>T{tatamiId}</span>
-          {isArbitro && <CatSelector current={categoria} onSelect={handleChangeCategoria} />}
+          {isArbitro && <CatSelector current={categoria} onSelect={handleChangeCategoria} figurasLabel={nombreCategoria} />}
           {!isArbitro && (
             <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
               {categoria} · {rol.toUpperCase()}
@@ -1141,36 +1430,75 @@ function TatamiContent() {
           )}
         </div>
 
-        {/* Right: rol label */}
-        <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-          {isArbitro ? "Juez Central" : rol.toUpperCase()}
-        </span>
+        {/* Right: rol label + tatami activo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {isArbitro && (
+            <button
+              className={`btn btn-sm ${anyState._tatami_activo ? "btn-primary" : "btn-danger"}`}
+              onClick={() => {
+                if (anyState._tatami_activo) {
+                  alertSystem.showConfirm({
+                    titulo: "DESACTIVAR TATAMI",
+                    mensaje: "¿Estás seguro? La pantalla pública mostrará 'Desactivado' y los jueces no podrán puntuar.",
+                    tipo: "peligro",
+                    confirmLabel: "Desactivar",
+                    onConfirm: () => enviarEvento("desactivar_tatami"),
+                  });
+                } else {
+                  enviarEvento("activar_tatami");
+                }
+              }}
+              style={{ fontWeight: 800, padding: "4px 10px", fontSize: "0.7rem", height: 28 }}
+            >
+              {anyState._tatami_activo ? "🟢 ACTIVO" : "🔴 DESACTIVADO"}
+            </button>
+          )}
+          <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+            {isArbitro ? "Juez Central" : rol.toUpperCase()}
+          </span>
+        </div>
       </div>
 
       {/* Content */}
-      {esFiguras ? (
-        isArbitro
-          ? <FigurasArbitro state={anyState as FigurasState} enviarEvento={enviarEvento} tatamiId={tatamiId} />
-          : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} />
-      ) : (
-        isArbitro
-          ? <CombateArbitro
-              state={state}
-              enviarEvento={enviarEvento}
-              tatamiId={tatamiId}
-              onFlash={alertSystem.showFlash}
-              onFaltaFlash={alertSystem.showFaltaFlash}
-              onShowConfirm={alertSystem.showConfirm}
-            />
-          : <CombateJuez
-              state={state}
-              rol={rol}
-              enviarEvento={enviarEvento}
-              pendingEvents={pendingEvents}
-              connected={connected}
-              onFlash={alertSystem.showFlash}
-            />
-      )}
+      <div style={{ position: "relative", flex: 1 }}>
+        {anyState._tatami_activo === false && !isArbitro && (
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(15,15,25,0.85)", zIndex: 50,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            backdropFilter: "blur(4px)"
+          }}>
+            <div style={{ fontSize: "2rem", marginBottom: 12 }}>⏸️</div>
+            <div style={{ color: "var(--orange)", fontWeight: 800, fontSize: "1.2rem", letterSpacing: "0.05em" }}>TATAMI DESACTIVADO</div>
+            <div style={{ color: "var(--text-muted)", marginTop: 8 }}>Esperando activación del Juez Central</div>
+          </div>
+        )}
+
+        {esFiguras ? (
+          isArbitro
+            ? <FigurasArbitro state={anyState as FigurasState} enviarEvento={enviarEvento} tatamiId={tatamiId} />
+            : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} />
+        ) : (
+          isArbitro
+            ? <CombateArbitro
+                state={state}
+                enviarEvento={enviarEvento}
+                tatamiId={tatamiId}
+                onFlash={alertSystem.showFlash}
+                onFaltaFlash={alertSystem.showFaltaFlash}
+                onShowConfirm={alertSystem.showConfirm}
+                broadcast={broadcast}
+              />
+            : <CombateJuez
+                state={state}
+                rol={rol}
+                enviarEvento={enviarEvento}
+                pendingEvents={pendingEvents}
+                connected={connected}
+                onFlash={alertSystem.showFlash}
+              />
+        )}
+      </div>
     </div>
   );
 }

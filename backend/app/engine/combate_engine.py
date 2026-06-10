@@ -5,6 +5,7 @@ Fuente de verdad del servidor: aplica eventos delta atómicamente al estado.
 
 import copy
 import time
+from datetime import datetime, timezone
 
 
 def estado_inicial():
@@ -47,6 +48,30 @@ def _agregar_log(estado, txt, color):
         estado["log"] = estado["log"][:15]
 
 
+def _momento_evento():
+    """Timestamp real del evento para reportes y auditoria."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _juez_meta_evento(ev, juez_fallback):
+    """Metadata de juez inyectada por el socket para logs y reportes."""
+    return {
+        "juez_nombre": ev.get("juez_nombre"),
+        "juez_email": ev.get("juez_email"),
+        "juez_asignacion": ev.get("juez_asignacion") or juez_fallback,
+        "juez_rol": ev.get("juez_rol") or juez_fallback,
+        "juez_acceso": ev.get("juez_acceso"),
+    }
+
+
+def _juez_log_label(ev, juez_fallback):
+    nombre = ev.get("juez_nombre") or juez_fallback
+    email = ev.get("juez_email")
+    asignacion = ev.get("juez_asignacion") or juez_fallback
+    base = f"{asignacion}: {nombre}"
+    return f"{base} <{email}>" if email else base
+
+
 def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
     """
     Aplica un evento delta al estado del combate.
@@ -68,6 +93,9 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
         pts = ev.get("pts", 0)
         nombre = ev.get("nombre", "")
 
+        if estado["ronda"] == "oro" and estado.get("oroResuelto"):
+            return estado
+
         if juez in estado["jueces"]:
             estado["jueces"][juez][color] += pts
             estado["historial"].append({
@@ -77,9 +105,11 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
                 "nombre": nombre,
                 "tiempo": estado["segundos"],
                 "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, juez),
             })
             emoji = "🔴" if color == "hong" else "🔵"
-            _agregar_log(estado, f"{emoji} {nombre} +{pts}", color)
+            _agregar_log(estado, f"{emoji} {nombre} +{pts} · {_juez_log_label(ev, juez)}", color)
 
             # Punto de Oro: bloquea puntos y espera aprobación del JC
             if estado["ronda"] == "oro" and not estado["oroResuelto"]:
@@ -108,6 +138,9 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
         pts = ev.get("pts", 0)
         nombre = ev.get("nombre", "")
 
+        if estado["ronda"] == "oro" and estado.get("oroResuelto"):
+            return estado
+
         if color == "hong":
             estado["arbHong"] += pts
         else:
@@ -121,9 +154,11 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
             "esEspecial": True,
             "tiempo": estado["segundos"],
             "ronda": estado["ronda"],
+            "momento": _momento_evento(),
+            **_juez_meta_evento(ev, "arbitro"),
         })
         emoji = "🔴" if color == "hong" else "🔵"
-        _agregar_log(estado, f"{emoji} ⭐ {nombre} +{pts}", color)
+        _agregar_log(estado, f"{emoji} ⭐ {nombre} +{pts} · {_juez_log_label(ev, 'arbitro')}", color)
 
         # Punto de Oro con especiales
         if estado["ronda"] == "oro" and not estado["oroResuelto"]:
@@ -176,8 +211,10 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
                 "esKyongGo": True,
                 "tiempo": estado["segundos"],
                 "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, "arbitro"),
             })
-            _agregar_log(estado, f"🔴 KyongGo #{estado['kyongHong']} −0.5 — Hong", "hong")
+            _agregar_log(estado, f"🔴 KyongGo #{estado['kyongHong']} −0.5 — Hong · {_juez_log_label(ev, 'arbitro')}", "hong")
         else:
             estado["kyongChung"] += 1
             estado["arbChung"] -= 0.5
@@ -189,8 +226,10 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
                 "esKyongGo": True,
                 "tiempo": estado["segundos"],
                 "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, "arbitro"),
             })
-            _agregar_log(estado, f"🔵 KyongGo #{estado['kyongChung']} −0.5 — Chung", "chung")
+            _agregar_log(estado, f"🔵 KyongGo #{estado['kyongChung']} −0.5 — Chung · {_juez_log_label(ev, 'arbitro')}", "chung")
 
     elif accion == "gamjeum":
         color = ev.get("color")
@@ -205,6 +244,8 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
                 "esGamJeum": True,
                 "tiempo": estado["segundos"],
                 "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, "arbitro"),
             })
         else:
             estado["arbChung"] -= 1
@@ -217,9 +258,11 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
                 "esGamJeum": True,
                 "tiempo": estado["segundos"],
                 "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, "arbitro"),
             })
         emoji = "🔴" if color == "hong" else "🔵"
-        _agregar_log(estado, f"{emoji} GamJeum −1", color)
+        _agregar_log(estado, f"{emoji} GamJeum −1 · {_juez_log_label(ev, 'arbitro')}", color)
 
     elif accion == "set_num_jueces":
         estado["numJueces"] = max(2, min(4, ev.get("numJueces", 4)))
@@ -263,6 +306,15 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
             _agregar_log(estado, f"🏆 SUNG — {winner.upper()} GANA (Punto de Oro)", "arb")
             if broadcast_ganador_cb:
                 broadcast_ganador_cb(winner, color)
+
+    elif accion == "rechazar_oro":
+        # Permite continuar si el Juez Central no valida el primer punto marcado.
+        if estado.get("oroPendienteAprobacion"):
+            estado["oroPendienteAprobacion"] = False
+            estado["oroResuelto"] = False
+            estado["oroGanadorNombre"] = ""
+            estado["oroGanadorColor"] = ""
+            _agregar_log(estado, "Punto de Oro rechazado por el Juez Central", "arb")
 
     elif accion == "reset":
         seg_max = estado["segundosMax"]

@@ -17,6 +17,16 @@ interface Combate {
   tatami_numero: number;
   campeonato_nombre: string;
   created_at: string;
+  jueces?: JuezReporte[];
+  jueces_resumen?: string;
+}
+
+interface JuezReporte {
+  rol_tatami: string;
+  asignacion: string;
+  nombre: string;
+  email: string;
+  origen: string;
 }
 
 interface ReportData {
@@ -70,7 +80,13 @@ export default function ReportesPage() {
     }
   }, [filters]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchData();
+    });
+    return () => { cancelled = true; };
+  }, [fetchData]);
 
   async function handleExport(type: "pdf" | "excel") {
     setExporting(type);
@@ -83,7 +99,8 @@ export default function ReportesPage() {
 
       const token = localStorage.getItem("dinamyt_token");
       const queryStr = new URLSearchParams(params).toString();
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/reportes/combates/export/${type}?${queryStr}`;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const url = `${apiUrl}/api/reportes/combates/export/${type}?${queryStr}`;
 
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -214,7 +231,7 @@ export default function ReportesPage() {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ minWidth: 700 }}>
+            <table className="table" style={{ minWidth: 980 }}>
               <thead>
                 <tr>
                   <th>#</th>
@@ -224,6 +241,7 @@ export default function ReportesPage() {
                   <th style={{ color: "var(--chung-light)" }}>Chung (Azul)</th>
                   <th>Marcador</th>
                   <th>Ganador</th>
+                  <th>Jueces</th>
                   <th>Ronda</th>
                   <th>Fecha</th>
                 </tr>
@@ -259,6 +277,20 @@ export default function ReportesPage() {
                       <span className={`badge ${ganadorColor(c.ganador)}`}>
                         {ganadorNombre(c)}
                       </span>
+                    </td>
+                    <td style={{ minWidth: 240 }}>
+                      {c.jueces && c.jueces.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {c.jueces.map((j) => (
+                            <span key={`${c.id}-${j.rol_tatami}`} style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
+                              <strong style={{ color: "var(--text)" }}>{j.asignacion}:</strong> {j.nombre} · {j.email}
+                              {j.origen === "pin" ? " · PIN" : ""}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </td>
                     <td className="text-muted" style={{ fontSize: "0.82rem" }}>
                       {RONDAS[c.ronda_final] || c.ronda_final || "—"}

@@ -3,6 +3,8 @@ API: Autenticación
 Endpoints: login, register, me
 """
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token,
@@ -10,6 +12,7 @@ from flask_jwt_extended import (
     get_jwt_identity,
 )
 from ..extensions import db
+from ..models.asignacion import AsignacionJuez
 from ..models.usuario import Usuario
 
 auth_bp = Blueprint("auth", __name__)
@@ -91,6 +94,7 @@ def register():
         nombre=nombre,
         rol=rol,
         activo=True,
+        creado_por_id=current_user.id,
     )
     new_user.set_password(password)
     db.session.add(new_user)
@@ -136,5 +140,37 @@ def list_users():
     if not current_user or current_user.rol != "admin":
         return jsonify({"error": "Solo administradores"}), 403
 
-    users = Usuario.query.order_by(Usuario.nombre).all()
-    return jsonify([u.to_dict() for u in users]), 200
+    include_inactive = request.args.get("include_inactive") == "1"
+    query = Usuario.query
+    if not include_inactive:
+        query = query.filter_by(activo=True)
+
+    users = query.order_by(Usuario.nombre).all()
+    return jsonify([u.to_dict(include_asignaciones=True) for u in users]), 200
+
+
+@auth_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@jwt_required()
+def delete_user(user_id):
+    """
+    DELETE /api/auth/users/:id (solo Admin)
+    Desactiva el usuario y elimina sus asignaciones activas.
+    """
+    current_user_id = get_jwt_identity()
+    current_user = Usuario.query.get(int(current_user_id))
+    if not current_user or current_user.rol != "admin":
+        return jsonify({"error": "Solo administradores"}), 403
+
+    if int(current_user_id) == user_id:
+        return jsonify({"error": "No puedes quitar tu propio usuario"}), 400
+
+    user = Usuario.query.get(user_id)
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    AsignacionJuez.query.filter_by(usuario_id=user.id).delete()
+    user.activo = False
+    user.eliminado_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({"message": "Usuario quitado de la aplicación"}), 200

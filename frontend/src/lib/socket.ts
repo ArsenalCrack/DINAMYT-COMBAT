@@ -5,6 +5,7 @@ import { io, Socket } from "socket.io-client";
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
 
 let socket: Socket | null = null;
+let socketKey: string | null = null;
 
 export function getSocket(
   tatamiId: number | string,
@@ -12,8 +13,10 @@ export function getSocket(
   token?: string | null,
   nombre?: string
 ): Socket {
-  // Si ya existe una conexión activa con los mismos params, reutilizarla
-  if (socket?.connected) {
+  const nextKey = JSON.stringify({ tatamiId: String(tatamiId), rol, token: token || "", nombre: nombre || "" });
+
+  // Si ya existe una conexión con los mismos params, reutilizarla.
+  if (socket && socketKey === nextKey) {
     return socket;
   }
 
@@ -21,6 +24,7 @@ export function getSocket(
   if (socket) {
     socket.disconnect();
     socket = null;
+    socketKey = null;
   }
 
   const query: Record<string, string> = {
@@ -38,6 +42,7 @@ export function getSocket(
     reconnectionAttempts: Infinity,
     timeout: 10000,
   });
+  socketKey = nextKey;
 
   socket.on("connect", () => {
     console.log("[Socket.IO] Conectado al tatami", tatamiId);
@@ -58,6 +63,7 @@ export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+    socketKey = null;
   }
 }
 

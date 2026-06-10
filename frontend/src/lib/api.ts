@@ -62,6 +62,11 @@ export async function listUsersAPI() {
   return res.data as UserData[];
 }
 
+export async function deleteUserAPI(id: number) {
+  const res = await api.delete(`/auth/users/${id}`);
+  return res.data;
+}
+
 // ── Campeonatos API ──
 export async function listCampeonatosAPI() {
   const res = await api.get("/campeonatos");
@@ -157,8 +162,16 @@ export interface UserData {
   nombre: string;
   rol: "admin" | "juez";
   activo: boolean;
+  creado_por_id?: number | null;
+  creado_por?: {
+    id: number;
+    nombre: string;
+    email: string;
+  } | null;
   created_at: string;
+  eliminado_at?: string | null;
   tatamis_asignados?: TatamiAsignacion[];
+  asignaciones?: TatamiAsignacion[];
 }
 
 export interface TatamiAsignacion {
@@ -167,6 +180,12 @@ export interface TatamiAsignacion {
   usuario_id: number;
   rol_tatami: string;
   nombre_display: string;
+  asignado_at?: string;
+  asignado_por?: {
+    id: number;
+    nombre: string;
+    email: string;
+  } | null;
   campeonato_nombre?: string;
 }
 

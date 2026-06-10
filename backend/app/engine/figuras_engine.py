@@ -10,6 +10,7 @@ Cambios v2:
 - Nombre de categoria personalizable
 """
 import copy
+import re
 import time
 
 
@@ -56,6 +57,8 @@ def estado_inicial_figuras(config=None):
         "num_jueces": 4,
         # Nombre personalizable de la categoría
         "nombre_categoria": "Figuras",
+        "nombres_jueces": {"j1": "", "j2": "", "j3": "", "j4": ""},
+        "podio_modo": "manual",  # manual | automatico
         # Competidores
         "competidores": [],       # [{id, nombre, club}]
         # Puntuaciones: { comp_id: { juez_id: valor_float } }
@@ -68,13 +71,53 @@ def estado_inicial_figuras(config=None):
         # Estado final
         "finalizado": False,
         "log": [],
-    }
+}
 
 
 def _agregar_log_f(estado, txt, color="info"):
     estado["log"].insert(0, {"txt": txt, "color": color, "ts": int(time.time() * 1000)})
     if len(estado["log"]) > 50:
         estado["log"] = estado["log"][:50]
+
+
+def _jueces_activos_figuras(estado):
+    jueces = []
+    for i in range(1, int(estado.get("num_jueces", 4)) + 1):
+        juez_id = f"j{i}"
+        if criterio_para_juez(estado, juez_id):
+            jueces.append(juez_id)
+    return jueces
+
+
+def puntuaciones_completas(estado):
+    if not estado.get("competidores"):
+        return False
+    jueces = _jueces_activos_figuras(estado)
+    if not jueces:
+        return False
+    confirmadas = estado.get("puntuaciones_confirmadas", {})
+    for comp in estado["competidores"]:
+        comp_id = str(comp["id"])
+        for juez_id in jueces:
+            if not confirmadas.get(comp_id, {}).get(juez_id):
+                return False
+    return True
+
+
+def _juez_meta_evento(ev, juez_fallback):
+    return {
+        "nombre": ev.get("juez_nombre") or juez_fallback,
+        "email": ev.get("juez_email") or "",
+        "asignacion": ev.get("juez_asignacion") or juez_fallback,
+        "rol": ev.get("juez_rol") or juez_fallback,
+        "acceso": ev.get("juez_acceso") or "",
+    }
+
+
+def _juez_log_label(ev, juez_fallback):
+    meta = _juez_meta_evento(ev, juez_fallback)
+    base = f"{meta['asignacion']}: {meta['nombre']}"
+    return f"{base} <{meta['email']}>" if meta["email"] else base
 
 
 def calcular_total_competidor(estado, competidor_id):
@@ -101,6 +144,20 @@ def calcular_ranking(estado):
     return ranking
 
 
+def _parse_puntuacion(valor):
+    """
+    Valida puntuaciones con dos decimales obligatorios: 0.00 a 9.99.
+    El valor puede llegar como string desde el cliente o como numero legacy.
+    """
+    raw = str(valor).strip().replace(",", ".")
+    if not re.fullmatch(r"\d\.\d{2}", raw):
+        return None
+    numero = float(raw)
+    if numero < 0 or numero > 9.99:
+        return None
+    return round(numero, 2)
+
+
 def aplicar_evento_figuras(estado, ev):
     """Aplica un evento al estado de Figuras v2."""
     accion = ev.get("accion")
@@ -113,6 +170,14 @@ def aplicar_evento_figuras(estado, ev):
     # ── Número de jueces ─────────────────────────────────────────────────────
     elif accion == "set_num_jueces":
         estado["num_jueces"] = max(2, min(7, int(ev.get("num_jueces", 4))))
+
+    elif accion == "set_podio_modo":
+        modo = ev.get("modo", "manual")
+        estado["podio_modo"] = "automatico" if modo == "automatico" else "manual"
+        _agregar_log_f(estado, f"[PODIO] Modo {estado['podio_modo']}", "arb")
+        if estado["podio_modo"] == "automatico" and puntuaciones_completas(estado):
+            estado["finalizado"] = True
+            estado["puntuacion_abierta"] = False
 
     # ── Competidores ─────────────────────────────────────────────────────────
     elif accion == "agregar_competidor":
@@ -135,10 +200,12 @@ def aplicar_evento_figuras(estado, ev):
 
     elif accion == "eliminar_competidor":
         cid = ev.get("competidor_id")
-        estado["competidores"] = [c for c in estado["competidores"] if c["id"] != cid]
+        estado["competidores"] = [
+            c for c in estado["competidores"] if str(c["id"]) != str(cid)
+        ]
         estado["puntuaciones"].pop(str(cid), None)
         estado["puntuaciones_confirmadas"].pop(str(cid), None)
-        if estado.get("competidor_activo_id") == cid:
+        if str(estado.get("competidor_activo_id")) == str(cid):
             estado["competidor_activo_id"] = None
             estado["puntuacion_abierta"] = False
         _agregar_log_f(estado, f"[-] Competidor eliminado", "info")
@@ -147,9 +214,12 @@ def aplicar_evento_figuras(estado, ev):
     elif accion == "activar_competidor":
         comp_id = ev.get("competidor_id")
         # Verificar que existe
-        comp = next((c for c in estado["competidores"] if c["id"] == comp_id), None)
+        comp = next(
+            (c for c in estado["competidores"] if str(c["id"]) == str(comp_id)),
+            None
+        )
         if comp:
-            estado["competidor_activo_id"] = comp_id
+            estado["competidor_activo_id"] = comp["id"]
             estado["puntuacion_abierta"] = True
             _agregar_log_f(estado, f"[TURNO] {comp['nombre']}", "arb")
 
@@ -161,7 +231,7 @@ def aplicar_evento_figuras(estado, ev):
     elif accion == "puntuar":
         juez_id = ev.get("juez_id")
         comp_id = str(ev.get("competidor_id", ""))
-        valor = ev.get("valor", 0)
+        valor = ev.get("valor", "")
 
         # Validar apertura
         if not estado.get("puntuacion_abierta"):
@@ -176,13 +246,13 @@ def aplicar_evento_figuras(estado, ev):
         if confirmadas.get(comp_id, {}).get(juez_id):
             return estado
 
-        # Validar y formatear valor (0.00 - 9.99, 2 decimales)
-        try:
-            valor = float(valor)
-        except (ValueError, TypeError):
+        if not criterio_para_juez(estado, juez_id):
             return estado
-        valor = max(0.0, min(9.99, valor))
-        valor = round(valor, 2)
+
+        # Validar y formatear valor (0.00 - 9.99, 2 decimales obligatorios)
+        valor = _parse_puntuacion(valor)
+        if valor is None:
+            return estado
 
         if comp_id not in estado["puntuaciones"]:
             estado["puntuaciones"][comp_id] = {}
@@ -195,12 +265,22 @@ def aplicar_evento_figuras(estado, ev):
         )
         criterio = criterio_para_juez(estado, juez_id)
         crit_nombre = criterio["nombre"] if criterio else juez_id
-        _agregar_log_f(estado, f"[{juez_id}] {comp_nombre}: {valor:.2f} ({crit_nombre})", "info")
+        _agregar_log_f(
+            estado,
+            f"[{juez_id}] {comp_nombre}: {valor:.2f} ({crit_nombre}) · {_juez_log_label(ev, juez_id)}",
+            "info",
+        )
 
     # ── Confirmar puntuación (inmutable después de esto) ─────────────────────
     elif accion == "confirmar_puntuacion":
         juez_id = ev.get("juez_id")
         comp_id = str(ev.get("competidor_id", ""))
+
+        # Solo se confirma durante la ventana abierta para el competidor activo.
+        if not estado.get("puntuacion_abierta"):
+            return estado
+        if str(estado.get("competidor_activo_id", "")) != comp_id:
+            return estado
 
         # Solo si tiene puntuación registrada
         if estado["puntuaciones"].get(comp_id, {}).get(juez_id) is None:
@@ -215,7 +295,15 @@ def aplicar_evento_figuras(estado, ev):
             (c["nombre"] for c in estado["competidores"] if str(c["id"]) == comp_id),
             comp_id
         )
-        _agregar_log_f(estado, f"[✓] {juez_id}: {comp_nombre} = {valor:.2f} CONFIRMADO", "info")
+        _agregar_log_f(
+            estado,
+            f"[✓] {comp_nombre} = {valor:.2f} CONFIRMADO · {_juez_log_label(ev, juez_id)}",
+            "info",
+        )
+        if estado.get("podio_modo") == "automatico" and puntuaciones_completas(estado):
+            estado["finalizado"] = True
+            estado["puntuacion_abierta"] = False
+            _agregar_log_f(estado, "[PODIO] Puntuaciones completas", "arb")
 
     # ── Nombre de juez ───────────────────────────────────────────────────────
     elif accion == "set_nombre_juez":
@@ -243,9 +331,11 @@ def aplicar_evento_figuras(estado, ev):
         nombre_cat = estado.get("nombre_categoria", "Figuras")
         num_j = estado.get("num_jueces", 4)
         criterios = estado.get("criterios", CRITERIOS_DEFAULT)
+        podio_modo = estado.get("podio_modo", "manual")
         nuevo = estado_inicial_figuras(config)
         nuevo["nombre_categoria"] = nombre_cat
         nuevo["num_jueces"] = num_j
+        nuevo["podio_modo"] = podio_modo
         if not config:
             nuevo["criterios"] = criterios
         estado.update(nuevo)
@@ -267,5 +357,8 @@ def guardar_figuras_snapshot(estado):
         ),
         "ranking": ranking,
         "num_jueces": estado["num_jueces"],
+        "podio_modo": estado.get("podio_modo", "manual"),
+        "puntuaciones_completas": puntuaciones_completas(estado),
         "finalizado": estado["finalizado"],
+        "log": copy.deepcopy(estado.get("log", [])),
     }

@@ -44,7 +44,7 @@ export default function LoginPage() {
         <div className="login-logo">
           <div className="logo" style={{ fontSize: "3.5rem" }}>DINA<em>MYT</em></div>
           <p className="login-tagline">Sistema Oficial de Competencias Hapkido</p>
-          <p className="login-sub">Global Hapkido Alliance · GHA</p>
+          <p className="login-sub">Global Hapkido Association · GHA</p>
         </div>
 
         {/* GRID: Pantalla Publica | Separator | Login */}
@@ -162,7 +162,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <p className="login-footer">DINAMYT v4.0 · Global Hapkido Alliance · Competencias en tiempo real</p>
+      <p className="login-footer">DINAMYT v4.0 · Global Hapkido ASSOCIATION · Competencias en tiempo real</p>
 
       <style>{`
         .login-page {

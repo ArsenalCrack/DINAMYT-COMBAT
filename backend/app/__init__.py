@@ -72,6 +72,8 @@ def register_cli_commands(app):
     def init_db_command():
         """Crea todas las tablas y ejecuta seeds."""
         db.create_all()
+        from .schema_compat import ensure_optional_columns
+        ensure_optional_columns()
         print("[OK] Tablas creadas.")
 
         from .seeds.seed_categorias import seed_categorias

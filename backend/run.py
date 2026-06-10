@@ -16,6 +16,8 @@ app = create_app()
 # Crear tablas y ejecutar seeds al iniciar (solo desarrollo)
 with app.app_context():
     db.create_all()
+    from app.schema_compat import ensure_optional_columns
+    ensure_optional_columns()
 
     # Seeds automáticos en desarrollo
     if os.getenv("FLASK_ENV") == "development":

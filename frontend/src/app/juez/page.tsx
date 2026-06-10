@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { misTatamisAPI, verificarPinAPI, type UserData } from "@/lib/api";
 
@@ -19,27 +19,32 @@ export default function JuezPage() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
 
-  useEffect(() => {
-    const saved = localStorage.getItem("dinamyt_user");
-    if (!saved) { router.replace("/login"); return; }
-    const u = JSON.parse(saved);
-    setUser(u);
-    loadTatamis();
-  }, [router]);
-
-  async function loadTatamis() {
+  const loadTatamis = useCallback(async () => {
     try {
       const data = await misTatamisAPI();
       setTatamis(data);
     } catch { /* */ }
-  }
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("dinamyt_user");
+    if (!saved) { router.replace("/login"); return; }
+    const u = JSON.parse(saved);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setUser(u);
+      void loadTatamis();
+    });
+    return () => { cancelled = true; };
+  }, [loadTatamis, router]);
 
   async function handlePinAccess(e: React.FormEvent) {
     e.preventDefault();
     setPinError("");
     try {
       const data = await verificarPinAPI(pin);
-      router.push(`/tatami/${data.tatami.id}?rol=j1`);
+      router.push(`/tatami/${data.tatami.id}?rol=${data.rol_sugerido || "j1"}`);
     } catch {
       setPinError("PIN invalido o tatami inactivo");
     }
@@ -145,7 +150,7 @@ export default function JuezPage() {
       {/* Quick role selection if coming via PIN */}
       <div style={{ textAlign: "center", marginTop: 16 }}>
         <p style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>
-          DINAMYT v4.0 &middot; Global Hapkido Alliance
+          DINAMYT v4.0 &middot; Global Hapkido Association
         </p>
       </div>
     </div>

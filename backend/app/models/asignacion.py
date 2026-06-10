@@ -20,10 +20,13 @@ class AsignacionJuez(db.Model):
         db.Integer, db.ForeignKey("tatamis.id"), nullable=False, index=True
     )
     rol_tatami = db.Column(
-        db.Enum("arbitro", "j1", "j2", "j3", "j4", name="rol_tatami"),
+        db.Enum("arbitro", "j1", "j2", "j3", "j4", "j5", "j6", "j7", name="rol_tatami"),
         nullable=False,
     )
     nombre_display = db.Column(db.String(150), nullable=True)
+    asignado_por_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id"), nullable=True, index=True
+    )
     asignado_at = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
@@ -35,15 +38,26 @@ class AsignacionJuez(db.Model):
         ),
     )
 
-    def to_dict(self):
+    def to_dict(self, include_usuario=True):
         return {
             "id": self.id,
             "usuario_id": self.usuario_id,
             "tatami_id": self.tatami_id,
             "rol_tatami": self.rol_tatami,
             "nombre_display": self.nombre_display,
+            "asignado_por_id": self.asignado_por_id,
             "asignado_at": self.asignado_at.isoformat() if self.asignado_at else None,
-            "usuario": self.usuario.to_dict() if self.usuario else None,
+            "usuario": (
+                self.usuario.to_dict() if include_usuario and self.usuario else None
+            ),
+            "asignado_por": (
+                {
+                    "id": self.asignado_por.id,
+                    "nombre": self.asignado_por.nombre,
+                    "email": self.asignado_por.email,
+                }
+                if self.asignado_por else None
+            ),
         }
 
     def __repr__(self):
@@ -72,6 +86,14 @@ class AccesoTatami(db.Model):
             "id": self.id,
             "tatami_id": self.tatami_id,
             "usuario_id": self.usuario_id,
+            "usuario": (
+                {
+                    "id": self.usuario.id,
+                    "nombre": self.usuario.nombre,
+                    "email": self.usuario.email,
+                }
+                if self.usuario else None
+            ),
             "nombre_visitante": self.nombre_visitante,
             "rol_seleccionado": self.rol_seleccionado,
             "ip_address": self.ip_address,

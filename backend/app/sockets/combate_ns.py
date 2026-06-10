@@ -32,7 +32,7 @@ from ..engine.figuras_engine import (
 from ..extensions import db, socketio
 from ..models.combate import Combate, EventoCombate
 from ..models.tatami import SesionTatami
-from ..models.asignacion import AccesoTatami
+from ..models.asignacion import AccesoTatami, AsignacionJuez
 
 
 # ══════════════════════════════════════════
@@ -51,6 +51,17 @@ ACCIONES_SIN_ACTIVACION = {
     "cambiar_nombre_categoria",
 }
 
+ROL_LABELS = {
+    "arbitro": "Juez Central",
+    "j1": "Juez 1",
+    "j2": "Juez 2",
+    "j3": "Juez 3",
+    "j4": "Juez 4",
+    "j5": "Juez 5",
+    "j6": "Juez 6",
+    "j7": "Juez 7",
+}
+
 
 def _get_tatami_state(tatami_id):
     """Obtiene o crea el estado de un tatami."""
@@ -66,6 +77,7 @@ def _get_tatami_state(tatami_id):
             "crono_thread": None,
             "crono_activo": False,
             "sesion_id": None,
+            "jueces_meta": {},
         }
     return tatami_states[tid]
 
@@ -83,6 +95,44 @@ def _build_estado_broadcast(ts):
     return estado_copy
 
 
+def _rol_label(rol):
+    return ROL_LABELS.get(rol, rol or "-")
+
+
+def _meta_desde_asignacion(asig):
+    usuario = asig.usuario if asig else None
+    return {
+        "usuario_id": usuario.id if usuario else None,
+        "nombre": (asig.nombre_display or usuario.nombre) if usuario else None,
+        "email": usuario.email if usuario else "",
+        "rol_tatami": asig.rol_tatami if asig else None,
+        "asignacion": _rol_label(asig.rol_tatami) if asig else None,
+        "origen": "asignacion",
+        "asignado_at": asig.asignado_at.isoformat() if asig and asig.asignado_at else None,
+        "asignado_por": (
+            {
+                "id": asig.asignado_por.id,
+                "nombre": asig.asignado_por.nombre,
+                "email": asig.asignado_por.email,
+            }
+            if asig and asig.asignado_por else None
+        ),
+    }
+
+
+def _meta_desde_conexion(rol, user_id=None, nombre=None, email=None, origen="pin"):
+    return {
+        "usuario_id": int(user_id) if user_id else None,
+        "nombre": nombre or _rol_label(rol),
+        "email": email or "",
+        "rol_tatami": rol,
+        "asignacion": _rol_label(rol),
+        "origen": origen,
+        "asignado_at": None,
+        "asignado_por": None,
+    }
+
+
 class CombateNamespace(Namespace):
     """Namespace Socket.IO para combates en tiempo real."""
 
@@ -98,11 +148,13 @@ class CombateNamespace(Namespace):
         # Autenticación opcional
         user_id = None
         user_nombre = None
+        user_email = None
         if token:
             try:
                 decoded = decode_token(token)
                 user_id = decoded.get("sub")
                 user_nombre = decoded.get("nombre", "")
+                user_email = decoded.get("email", "")
             except Exception:
                 pass
 
@@ -124,6 +176,24 @@ class CombateNamespace(Namespace):
 
         # Enviar estado completo CON metadatos desde el primer momento
         ts = _get_tatami_state(tatami_id)
+        try:
+            asignacion = (
+                AsignacionJuez.query.filter_by(
+                    tatami_id=int(tatami_id), usuario_id=int(user_id)
+                ).first()
+                if user_id else None
+            )
+            if asignacion and asignacion.rol_tatami == rol:
+                ts["jueces_meta"][rol] = _meta_desde_asignacion(asignacion)
+            elif rol != "pantalla":
+                ts["jueces_meta"][rol] = _meta_desde_conexion(
+                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="pin"
+                )
+        except Exception:
+            if rol != "pantalla":
+                ts["jueces_meta"][rol] = _meta_desde_conexion(
+                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="pin"
+                )
         emit("estado", {"datos": _build_estado_broadcast(ts)})
 
         print(f"  [CONN] [{_room_name(tatami_id)}] {rol} conectado (sid={request.sid})")
@@ -254,6 +324,7 @@ class CombateNamespace(Namespace):
 
             # ── Aplicar evento al estado ───────────────────────────────────
             categoria = ts.get("categoria_activa", "combate")
+            self._inyectar_meta_juez(ts, ev, rol)
             if categoria == "figuras":
                 aplicar_evento_figuras(ts["estado"], ev)
             else:
@@ -283,10 +354,19 @@ class CombateNamespace(Namespace):
         tatami_id = request.args.get("tatami_id")
         if not tatami_id:
             return
+        ts = _get_tatami_state(tatami_id)
+        if not ts.get("tatami_activo", False):
+            return
+
         room = _room_name(tatami_id)
         tipo = data.get("tipo")
         if tipo in ("alerta12", "derrota", "falta-flash", "ganador-flash"):
-            emit(tipo, data, to=room)
+            payload = data.get("data") if isinstance(data.get("data"), dict) else {
+                k: v for k, v in data.items() if k != "tipo"
+            }
+            if tipo == "falta-flash" and "tipo" not in payload:
+                payload["tipo"] = payload.get("tipoFalta", "adv")
+            emit(tipo, payload, to=room)
 
     def on_pedir_combates(self, data=None):
         """Cliente solicita lista de combates guardados."""
@@ -320,6 +400,32 @@ class CombateNamespace(Namespace):
         emit("estado", {"datos": estado_copy}, to=room)
         emit("estado_confirmado", {"datos": estado_copy})
 
+    def _inyectar_meta_juez(self, ts, ev, rol_conexion):
+        accion = ev.get("accion")
+        actor_rol = None
+        if accion == "punto_juez":
+            actor_rol = ev.get("juez")
+        elif accion in ("puntuar", "confirmar_puntuacion"):
+            actor_rol = ev.get("juez_id")
+        elif accion in (
+            "especial", "kyonggo", "gamjeum", "deshacer_arbitro",
+            "aprobar_oro", "rechazar_oro",
+        ):
+            actor_rol = "arbitro"
+
+        actor_rol = actor_rol or rol_conexion
+        if not actor_rol or actor_rol == "pantalla":
+            return
+
+        meta = ts.get("jueces_meta", {}).get(actor_rol) or _meta_desde_conexion(
+            actor_rol, origen="pin"
+        )
+        ev["juez_nombre"] = meta.get("nombre")
+        ev["juez_email"] = meta.get("email")
+        ev["juez_asignacion"] = meta.get("asignacion") or _rol_label(actor_rol)
+        ev["juez_rol"] = meta.get("rol_tatami") or actor_rol
+        ev["juez_acceso"] = meta.get("origen") or "pin"
+
     def _guardar_combate_actual(self, tatami_id, ts):
         """Guarda el combate actual en la base de datos."""
         estado = ts["estado"]
@@ -338,6 +444,7 @@ class CombateNamespace(Namespace):
             return
 
         snapshot = guardar_combate_snapshot(estado)
+        snapshot["jueces_detalle"]["asignaciones"] = self._jueces_reporte(tatami_id, ts)
 
         try:
             sesion = SesionTatami.query.filter_by(
@@ -394,6 +501,31 @@ class CombateNamespace(Namespace):
         except Exception as e:
             db.session.rollback()
             print(f"  [ERR] Error guardando combate: {e}")
+
+    def _jueces_reporte(self, tatami_id, ts):
+        jueces = {}
+        try:
+            asignaciones = AsignacionJuez.query.filter_by(tatami_id=int(tatami_id)).all()
+            for asig in asignaciones:
+                jueces[asig.rol_tatami] = _meta_desde_asignacion(asig)
+        except Exception:
+            pass
+
+        for rol, meta in ts.get("jueces_meta", {}).items():
+            if rol == "pantalla":
+                continue
+            if rol not in jueces or meta.get("origen") == "pin":
+                jueces[rol] = {
+                    "usuario_id": meta.get("usuario_id"),
+                    "nombre": meta.get("nombre") or _rol_label(rol),
+                    "email": meta.get("email") or "",
+                    "rol_tatami": meta.get("rol_tatami") or rol,
+                    "asignacion": meta.get("asignacion") or _rol_label(rol),
+                    "origen": meta.get("origen") or "pin",
+                    "asignado_at": meta.get("asignado_at"),
+                    "asignado_por": meta.get("asignado_por"),
+                }
+        return jueces
 
     def _iniciar_crono(self, tatami_id):
         """Inicia el cronómetro del servidor para un tatami."""

@@ -22,33 +22,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Cargar sesion de localStorage al iniciar
   useEffect(() => {
-    const savedToken = localStorage.getItem("dinamyt_token");
-    const savedUser = localStorage.getItem("dinamyt_user");
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const savedToken = localStorage.getItem("dinamyt_token");
+      const savedUser = localStorage.getItem("dinamyt_user");
 
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-        // Verificar que el token siga vigente
-        getMeAPI()
-          .then((userData) => {
-            setUser(userData);
-            localStorage.setItem("dinamyt_user", JSON.stringify(userData));
-          })
-          .catch(() => {
-            // Token expirado
-            localStorage.removeItem("dinamyt_token");
-            localStorage.removeItem("dinamyt_user");
-            setToken(null);
-            setUser(null);
-          })
-          .finally(() => setLoading(false));
-      } catch {
+      if (savedToken && savedUser) {
+        try {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+          // Verificar que el token siga vigente
+          getMeAPI()
+            .then((userData) => {
+              if (cancelled) return;
+              setUser(userData);
+              localStorage.setItem("dinamyt_user", JSON.stringify(userData));
+            })
+            .catch(() => {
+              if (cancelled) return;
+              // Token expirado
+              localStorage.removeItem("dinamyt_token");
+              localStorage.removeItem("dinamyt_user");
+              setToken(null);
+              setUser(null);
+            })
+            .finally(() => {
+              if (!cancelled) setLoading(false);
+            });
+        } catch {
+          setLoading(false);
+        }
+      } else {
         setLoading(false);
       }
-    } else {
-      setLoading(false);
-    }
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

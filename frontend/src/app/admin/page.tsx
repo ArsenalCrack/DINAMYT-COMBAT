@@ -7,6 +7,7 @@ import {
   createCampeonatoAPI,
   listUsersAPI,
   registerUserAPI,
+  deleteUserAPI,
   type UserData,
 } from "@/lib/api";
 
@@ -38,8 +39,13 @@ export default function AdminPage() {
     if (!saved) { router.replace("/login"); return; }
     const u = JSON.parse(saved);
     if (u.rol !== "admin") { router.replace("/juez"); return; }
-    setUser(u);
-    loadData();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setUser(u);
+      void loadData();
+    });
+    return () => { cancelled = true; };
   }, [router]);
 
   async function loadData() {
@@ -72,6 +78,24 @@ export default function AdminPage() {
       loadData();
       setTimeout(() => setMsg(""), 3000);
     } catch { setMsg("Error al crear usuario"); }
+  }
+
+  async function handleDeleteUser(target: UserData) {
+    if (target.id === user?.id) {
+      setMsg("No puedes quitar tu propio usuario");
+      setTimeout(() => setMsg(""), 3000);
+      return;
+    }
+    const ok = window.confirm(`¿Quitar a ${target.nombre} de la aplicación? Se eliminarán sus asignaciones activas.`);
+    if (!ok) return;
+    try {
+      await deleteUserAPI(target.id);
+      setMsg("Usuario quitado correctamente");
+      loadData();
+      setTimeout(() => setMsg(""), 3000);
+    } catch {
+      setMsg("Error al quitar usuario");
+    }
   }
 
   function handleLogout() {
@@ -207,7 +231,7 @@ export default function AdminPage() {
               Usuarios ({users.length})
             </h2>
             <button className="btn btn-primary" onClick={() => setShowNewUser(!showNewUser)}>
-              + Crear Juez
+              + Crear Usuario
             </button>
           </div>
 
@@ -238,16 +262,32 @@ export default function AdminPage() {
             {users.map((u) => (
               <div key={u.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <span style={{ fontWeight: 700 }}>{u.nombre}</span>
-                  <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.85rem" }}>{u.email}</span>
+                  <div>
+                    <span style={{ fontWeight: 700 }}>{u.nombre}</span>
+                    <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.85rem" }}>{u.email}</span>
+                  </div>
+                  <div style={{ color: "var(--text-dim)", fontSize: "0.76rem", marginTop: 4 }}>
+                    Agregado {u.created_at ? new Date(u.created_at).toLocaleDateString("es-CO") : "—"}
+                    {u.creado_por ? ` por ${u.creado_por.nombre}` : ""}
+                  </div>
                 </div>
-                <span style={{
-                  padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: "0.75rem",
-                  fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
-                  background: u.rol === "admin" ? "var(--gold-bg)" : "var(--chung-bg)",
-                  color: u.rol === "admin" ? "var(--gold)" : "var(--chung-light)",
-                  border: `1px solid ${u.rol === "admin" ? "var(--gold-border)" : "var(--chung-border)"}`,
-                }}>{u.rol}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: "0.75rem",
+                    fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
+                    background: u.rol === "admin" ? "var(--gold-bg)" : "var(--chung-bg)",
+                    color: u.rol === "admin" ? "var(--gold)" : "var(--chung-light)",
+                    border: `1px solid ${u.rol === "admin" ? "var(--gold-border)" : "var(--chung-border)"}`,
+                  }}>{u.rol}</span>
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => handleDeleteUser(u)}
+                    disabled={u.id === user.id}
+                    style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                  >
+                    Quitar
+                  </button>
+                </div>
               </div>
             ))}
           </div>

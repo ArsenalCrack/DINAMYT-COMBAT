@@ -98,6 +98,8 @@ def asignar_juez(tatami_id):
     user = Usuario.query.get(data["usuario_id"])
     if not user:
         return jsonify({"error": "Usuario no encontrado"}), 404
+    if user.rol != "juez" or not user.activo:
+        return jsonify({"error": "Solo se pueden asignar jueces activos"}), 400
 
     ROLES_VALIDOS = ("arbitro", "j1", "j2", "j3", "j4", "j5", "j6", "j7")
     rol = data["rol_tatami"]
@@ -135,6 +137,7 @@ def asignar_juez(tatami_id):
             tatami_id=tatami.id,
             rol_tatami=rol,
             nombre_display=data.get("nombre_display", user.nombre),
+            asignado_por_id=admin.id,
         )
         db.session.add(asignacion)
     else:
@@ -211,7 +214,13 @@ def verificar_pin():
     if not tatami:
         return jsonify({"error": "PIN inválido o tatami inactivo"}), 404
 
+    asignacion = AsignacionJuez.query.filter_by(
+        tatami_id=tatami.id, usuario_id=int(uid)
+    ).first()
+
     return jsonify({
         "tatami": tatami.to_dict(),
         "campeonato_nombre": tatami.campeonato.nombre if tatami.campeonato else None,
+        "rol_sugerido": asignacion.rol_tatami if asignacion else "j1",
+        "acceso_por_pin": True,
     }), 200

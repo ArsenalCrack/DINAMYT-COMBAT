@@ -54,6 +54,68 @@ def _build_query(args):
     return q
 
 
+def _format_momento_evento(entrada):
+    """Formatea el timestamp real de una entrada del historial."""
+    momento = entrada.get("momento") or entrada.get("ts")
+    if not momento:
+        return "-"
+    if isinstance(momento, (int, float)):
+        try:
+            return datetime.fromtimestamp(momento / 1000, tz=timezone.utc).strftime(
+                "%d/%m/%Y %H:%M:%S"
+            )
+        except Exception:
+            return str(momento)
+    if isinstance(momento, str):
+        return momento.replace("T", " ")[:19]
+    return str(momento)
+
+
+def _jueces_meta(combate):
+    detalle = combate.jueces_detalle or {}
+    return detalle.get("asignaciones") or detalle.get("jueces_meta") or {}
+
+
+def _juez_meta_para_evento(combate, entrada):
+    rol = entrada.get("juez_rol") or entrada.get("juez")
+    meta = _jueces_meta(combate).get(rol, {})
+    return {
+        "nombre": entrada.get("juez_nombre") or meta.get("nombre") or rol or "-",
+        "email": entrada.get("juez_email") or meta.get("email") or "-",
+        "asignacion": entrada.get("juez_asignacion") or meta.get("asignacion") or rol or "-",
+        "rol": rol or "-",
+        "acceso": entrada.get("juez_acceso") or meta.get("origen") or "-",
+    }
+
+
+def _jueces_list(combate):
+    jueces = []
+    for rol, meta in sorted(_jueces_meta(combate).items()):
+        jueces.append({
+            "rol_tatami": meta.get("rol_tatami") or rol,
+            "asignacion": meta.get("asignacion") or rol,
+            "nombre": meta.get("nombre") or "-",
+            "email": meta.get("email") or "-",
+            "origen": meta.get("origen") or "-",
+            "asignado_at": meta.get("asignado_at"),
+            "asignado_por": meta.get("asignado_por"),
+        })
+    return jueces
+
+
+def _jueces_resumen(combate):
+    partes = []
+    for juez in _jueces_list(combate):
+        email = juez["email"] if juez["email"] != "-" else ""
+        origen = "PIN" if juez["origen"] == "pin" else "Asignado"
+        partes.append(
+            f"{juez['asignacion']}: {juez['nombre']}"
+            + (f" <{email}>" if email else "")
+            + f" ({origen})"
+        )
+    return "; ".join(partes) if partes else "-"
+
+
 @reportes_bp.route("/combates", methods=["GET"])
 @jwt_required()
 def listar_combates():
@@ -91,6 +153,8 @@ def listar_combates():
             "fin": c.fin.isoformat() if c.fin else None,
             "historial_completo": c.historial_completo or [],
             "jueces_detalle": c.jueces_detalle or {},
+            "jueces": _jueces_list(c),
+            "jueces_resumen": _jueces_resumen(c),
         })
 
     return jsonify({
@@ -137,7 +201,7 @@ def exportar_excel():
     )
 
     # Titulo
-    ws.merge_cells("A1:L1")
+    ws.merge_cells("A1:M1")
     titulo = ws["A1"]
     titulo.value = f"DINAMYT — Reporte de Combates — {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     titulo.font = Font(name="Arial", bold=True, size=13, color="1A1A2E")
@@ -147,7 +211,7 @@ def exportar_excel():
     headers = [
         "ID", "Campeonato", "Tatami", "Hong (Rojo)", "Chung (Azul)",
         "Pts Hong", "Pts Chung", "Ganador", "Ronda Final",
-        "Jueces Esquina", "Duracion (s)", "Fecha/Hora"
+        "Jueces Esquina", "Duracion (s)", "Fecha/Hora", "Jueces"
     ]
     row = 3
     for col_idx, header in enumerate(headers, 1):
@@ -183,6 +247,7 @@ def exportar_excel():
             combate.num_jueces or 4,
             combate.duracion_segundos or "-",
             combate.created_at.strftime("%d/%m/%Y %H:%M") if combate.created_at else "-",
+            _jueces_resumen(combate),
         ]
 
         for col_idx, value in enumerate(data, 1):
@@ -196,14 +261,17 @@ def exportar_excel():
                 cell.fill = chung_fill
 
     # Widths
-    col_widths = [6, 22, 10, 20, 20, 10, 10, 20, 14, 14, 12, 18]
+    col_widths = [6, 22, 10, 20, 20, 10, 10, 20, 14, 14, 12, 18, 42]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
 
     # ── Hoja 2: Detalle de puntos por juez ──────────────────────────────────
     ws2 = wb.create_sheet("Detalle de Puntos")
-    det_headers = ["Combate ID", "Hong", "Chung", "Juez", "Color", "Pts",
-                   "Accion", "Tiempo (s)", "Ronda", "Tipo"]
+    det_headers = [
+        "Combate ID", "Hong", "Chung", "Rol", "Nombre juez", "Correo",
+        "Asignacion", "Acceso", "Color", "Pts", "Accion", "Tiempo (s)",
+        "Momento", "Ronda", "Tipo"
+    ]
     for col_idx, h in enumerate(det_headers, 1):
         cell = ws2.cell(row=1, column=col_idx, value=h)
         cell.font = header_font
@@ -215,6 +283,7 @@ def exportar_excel():
     for combate in combates:
         historial = combate.historial_completo or []
         for entrada in historial:
+            juez_meta = _juez_meta_para_evento(combate, entrada)
             tipo = ""
             if entrada.get("esEspecial"):   tipo = "Especial"
             elif entrada.get("esKyongGo"): tipo = "KyongGo"
@@ -225,11 +294,16 @@ def exportar_excel():
                 combate.id,
                 combate.nombre_hong,
                 combate.nombre_chung,
-                entrada.get("juez", "-"),
+                juez_meta["rol"],
+                juez_meta["nombre"],
+                juez_meta["email"],
+                juez_meta["asignacion"],
+                juez_meta["acceso"],
                 entrada.get("color", "-"),
                 entrada.get("pts", 0),
                 entrada.get("nombre", "-"),
                 entrada.get("tiempo", "-"),
+                _format_momento_evento(entrada),
                 entrada.get("ronda", "-"),
                 tipo,
             ]
@@ -243,7 +317,7 @@ def exportar_excel():
                     cell.fill = chung_fill
             det_row += 1
 
-    for i, w in enumerate([10, 20, 20, 10, 8, 8, 22, 10, 8, 14], 1):
+    for i, w in enumerate([10, 20, 20, 10, 24, 30, 18, 12, 8, 8, 22, 10, 20, 8, 14], 1):
         ws2.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
     # Output
@@ -383,6 +457,90 @@ def exportar_pdf():
     t = Table(table_data, colWidths=col_widths_pdf, repeatRows=1)
     t.setStyle(TableStyle(style_cmds))
     story.append(t)
+
+    # ── Resumen de jueces por combate ──
+    story.append(Spacer(1, 0.7 * cm))
+    story.append(Paragraph("Jueces, correo y asignación", title_style))
+    jueces_table_data = [["Comb ID", "Jueces"]]
+    for combate in combates:
+        jueces_table_data.append([str(combate.id), _jueces_resumen(combate)])
+
+    jueces_table = Table(jueces_table_data, colWidths=[2*cm, 24*cm], repeatRows=1)
+    jueces_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 7),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(jueces_table)
+
+    # ── Detalle de puntos en PDF ──
+    story.append(Spacer(1, 1 * cm))
+    story.append(Paragraph("Detalle de Puntos por Juez", title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DDDDDD")))
+    story.append(Spacer(1, 0.5 * cm))
+
+    det_col_widths = [1.3*cm, 1.2*cm, 3*cm, 4.2*cm, 2.4*cm, 1.4*cm, 1.2*cm, 1*cm, 3*cm, 3*cm, 2*cm]
+    det_table_data = [["Comb ID", "Rol", "Nombre", "Correo", "Asign.", "Acceso", "Color", "Pts", "Accion", "Momento", "Tipo"]]
+    
+    det_style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+
+    det_row_idx = 1
+    for combate in combates:
+        historial = combate.historial_completo or []
+        for entrada in historial:
+            juez_meta = _juez_meta_para_evento(combate, entrada)
+            tipo = ""
+            if entrada.get("esEspecial"):   tipo = "Especial"
+            elif entrada.get("esKyongGo"): tipo = "KyongGo"
+            elif entrada.get("esGamJeum"): tipo = "GamJeum"
+            else:                           tipo = "Punto Normal"
+
+            det_table_data.append([
+                str(combate.id),
+                str(juez_meta["rol"]),
+                str(juez_meta["nombre"]),
+                str(juez_meta["email"]),
+                str(juez_meta["asignacion"]),
+                str(juez_meta["acceso"]),
+                str(entrada.get("color", "-")),
+                str(entrada.get("pts", 0)),
+                str(entrada.get("nombre", "-")),
+                _format_momento_evento(entrada),
+                tipo,
+            ])
+            
+            # Colores de fila alternos y colores para Hong/Chung
+            bg_color = WHITE if det_row_idx % 2 != 0 else GRAY_BG
+            det_style_cmds.append(("BACKGROUND", (0, det_row_idx), (-1, det_row_idx), bg_color))
+            
+            if entrada.get("color") == "hong":
+                det_style_cmds.append(("BACKGROUND", (6, det_row_idx), (6, det_row_idx), HONG_BG))
+            elif entrada.get("color") == "chung":
+                det_style_cmds.append(("BACKGROUND", (6, det_row_idx), (6, det_row_idx), CHUNG_BG))
+                
+            det_row_idx += 1
+
+    if len(det_table_data) > 1:
+        t_det = Table(det_table_data, colWidths=det_col_widths, repeatRows=1)
+        t_det.setStyle(TableStyle(det_style_cmds))
+        story.append(t_det)
 
     doc.build(story)
     output.seek(0)

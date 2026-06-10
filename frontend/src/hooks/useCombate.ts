@@ -25,6 +25,12 @@ export interface CombateState {
   alerta12Lanzada: boolean;
   ronda: string;
   oroResuelto: boolean;
+  oroPendienteAprobacion: boolean;
+  oroGanadorNombre?: string;
+  oroGanadorColor?: "hong" | "chung" | "";
+  _categoria?: string;
+  _tatami_activo?: boolean;
+  _nombre_categoria?: string;
 }
 
 export interface HistorialEntry {
@@ -71,6 +77,7 @@ function estadoInicial(): CombateState {
     alerta12Lanzada: false,
     ronda: "r1",
     oroResuelto: false,
+    oroPendienteAprobacion: false,
   };
 }
 
@@ -109,6 +116,7 @@ export function useCombate(
 ) {
   const [state, setState] = useState<CombateState>(estadoInicial());
   const [connected, setConnected] = useState(false);
+  const [hasServerState, setHasServerState] = useState(false);
   const [pendingEvents, setPendingEvents] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const pendingMap = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -124,12 +132,14 @@ export function useCombate(
     sock.on("disconnect", () => setConnected(false));
 
     sock.on("estado", (data: { datos: CombateState }) => {
+      setHasServerState(true);
       if (pendingMap.current.size === 0) {
         setState(data.datos);
       }
     });
 
     sock.on("estado_confirmado", (data: { datos: CombateState }) => {
+      setHasServerState(true);
       setState(data.datos);
       // Clear all pending
       pendingMap.current.forEach((timer) => clearTimeout(timer));
@@ -150,8 +160,12 @@ export function useCombate(
     sock.emit("pedir");
 
     return () => {
+      pendingMap.current.forEach((timer) => clearTimeout(timer));
+      pendingMap.current.clear();
+      setPendingEvents(0);
       disconnectSocket();
       setConnected(false);
+      setHasServerState(false);
     };
   }, [tatamiId, rol, token]);
 
@@ -176,8 +190,24 @@ export function useCombate(
     const onDerrota = (data: { perdedor: string; razon: string }) => {
       setAlerts((prev) => ({ ...prev, derrota: data }));
     };
-    const onFaltaFlash = (data: { ico: string; titulo: string; sub: string; tipoFalta: string }) => {
-      setAlerts((prev) => ({ ...prev, faltaFlash: data }));
+    const onFaltaFlash = (data: {
+      data?: { ico: string; titulo: string; sub: string; tipo?: string; tipoFalta?: string };
+      ico?: string;
+      titulo?: string;
+      sub?: string;
+      tipo?: string;
+      tipoFalta?: string;
+    }) => {
+      const payload = data.data || data;
+      setAlerts((prev) => ({
+        ...prev,
+        faltaFlash: {
+          ico: payload.ico || "",
+          titulo: payload.titulo || "",
+          sub: payload.sub || "",
+          tipoFalta: payload.tipoFalta || payload.tipo || "adv",
+        },
+      }));
       // Auto-clear after 3s
       setTimeout(() => setAlerts((prev) => ({ ...prev, faltaFlash: undefined })), 3000);
     };
@@ -204,10 +234,6 @@ export function useCombate(
       const evId = `${rol}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const evento = { accion, ...datos };
 
-      // Optimistic local update (basic)
-      // The server will confirm with estado_confirmado
-      sock.emit("evento", { evId, evento });
-
       // Track pending
       const timer = setTimeout(() => {
         // Retry
@@ -215,6 +241,9 @@ export function useCombate(
       }, 2000);
       pendingMap.current.set(evId, timer);
       setPendingEvents(pendingMap.current.size);
+
+      // The server will confirm with estado_confirmado.
+      sock.emit("evento", { evId, evento });
     },
     [rol]
   );
@@ -235,6 +264,7 @@ export function useCombate(
   return {
     state,
     connected,
+    hasServerState,
     pendingEvents,
     enviarEvento,
     broadcast,
