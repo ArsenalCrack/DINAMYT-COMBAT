@@ -269,44 +269,52 @@ function FigurasArbitro({
 
   return (
     <div style={{ padding: 16, maxWidth: 800, margin: "0 auto" }}>
-      <div className="card-title" style={{ fontSize: "1rem", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>
-          <input
-            className="input"
-            value={categoriaDraft}
-            placeholder="Nombre categoría"
-            maxLength={CATEGORIA_NOMBRE_MAX}
-            onChange={(e) => {
-              const nombre = sanitizeCategoryName(e.target.value);
-              setCategoriaDraft(nombre);
-              setCategoriaPendiente(true);
-              setCategoriaError("");
-              enviarEvento("cambiar_nombre_categoria", { nombre });
-            }}
-            onFocus={() => setCategoriaFocused(true)}
-            onBlur={() => {
-              setCategoriaFocused(false);
-              const nombre = commitNombreCategoria();
-              if (nombre && !categoriaNombreValido(nombre)) {
-                setCategoriaError("Usa solo letras y espacios.");
-              }
-            }}
-            style={{
-              width: 220,
-              fontWeight: 800,
-              padding: "2px 6px",
-              height: 28,
-              borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
-            }}
-          /> — Juez Central · Tatami {tatamiId}
-        </span>
-        {state.puntuacion_abierta && state.competidor_activo_id && (
-          <button className="btn btn-sm btn-danger" onClick={() => {
-            if (validarNombreCategoria()) enviarEvento("cerrar_puntuacion");
-          }}>
-            Cerrar Puntuación
-          </button>
-        )}
+      {/* Nombre de la categoría: input en su propia línea, centrado y
+          ocupando el espacio; debajo, el rol y el tatami */}
+      <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        <input
+          className="input"
+          value={categoriaDraft}
+          placeholder="Nombre de la categoría"
+          maxLength={CATEGORIA_NOMBRE_MAX}
+          onChange={(e) => {
+            const nombre = sanitizeCategoryName(e.target.value);
+            setCategoriaDraft(nombre);
+            setCategoriaPendiente(true);
+            setCategoriaError("");
+            enviarEvento("cambiar_nombre_categoria", { nombre });
+          }}
+          onFocus={() => setCategoriaFocused(true)}
+          onBlur={() => {
+            setCategoriaFocused(false);
+            const nombre = commitNombreCategoria();
+            if (nombre && !categoriaNombreValido(nombre)) {
+              setCategoriaError("Usa solo letras y espacios.");
+            }
+          }}
+          style={{
+            width: "100%",
+            textAlign: "center",
+            fontWeight: 800,
+            fontSize: "1.05rem",
+            borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
+          }}
+        />
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          gap: 8, flexWrap: "wrap",
+        }}>
+          <span className="card-title" style={{ marginBottom: 0, fontSize: "0.8rem" }}>
+            Juez Central · Tatami {tatamiId}
+          </span>
+          {state.puntuacion_abierta && state.competidor_activo_id && (
+            <button className="btn btn-sm btn-danger" onClick={() => {
+              if (validarNombreCategoria()) enviarEvento("cerrar_puntuacion");
+            }}>
+              Cerrar Puntuación
+            </button>
+          )}
+        </div>
       </div>
       {categoriaError && (
         <div style={{ color: "var(--orange)", fontWeight: 700, fontSize: "0.82rem", margin: "-8px 0 12px" }}>
@@ -755,7 +763,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
         borderBottom: "1px solid var(--border)",
         background: "var(--bg-card)",
       }}>
-        <Logo stacked fontSize="clamp(1.2rem, 3vw, 1.6rem)" />
+        <Logo fontSize="clamp(1.5rem, 4vw, 2rem)" />
         {state._campeonato_nombre && (
           <div style={{
             fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 700,
@@ -986,7 +994,7 @@ function CombatePantalla({
           textAlign: "center", padding: "12px 20px",
           borderBottom: "1px solid var(--border)", background: "var(--bg-card)",
         }}>
-          <Logo stacked fontSize="clamp(1.1rem, 2.6vw, 1.4rem)" />
+          <Logo fontSize="clamp(1.4rem, 3.5vw, 1.8rem)" />
           {state._campeonato_nombre && (
             <div style={{
               fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700,
@@ -1072,7 +1080,7 @@ function CombatePantalla({
           {/* Logo encima del nombre del campeonato */}
           <Logo
             soloImagen
-            fontSize="clamp(1.3rem, 2.6vw, 2.2rem)"
+            fontSize="clamp(2.2rem, 7vh, 5rem)"
             style={{ marginBottom: 6 }}
           />
           {state._campeonato_nombre && (

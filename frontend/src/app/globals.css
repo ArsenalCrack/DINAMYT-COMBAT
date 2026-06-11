@@ -8,6 +8,10 @@
 ═══════════════════════════════════════════════════════ */
 
 :root {
+  /* Widgets nativos (calendarios de fecha, menús de select, scrollbars)
+     en tema oscuro en todos los navegadores */
+  color-scheme: dark;
+
   /* ── Fondo: gris oscuro calido (no negro puro) para reducir fatiga ── */
   --bg: #14141e;
   --bg-card: #1c1c2a;
@@ -403,6 +407,24 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 
 input[type="date"].input:hover::-webkit-calendar-picker-indicator {
   opacity: 1;
+}
+
+/* Segmentos internos del campo de fecha (dd/mm/aaaa) */
+input[type="date"].input::-webkit-datetime-edit {
+  color: var(--text);
+}
+
+input[type="date"].input::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+input[type="date"].input::-webkit-datetime-edit-day-field:focus,
+input[type="date"].input::-webkit-datetime-edit-month-field:focus,
+input[type="date"].input::-webkit-datetime-edit-year-field:focus {
+  background: var(--gold-bg);
+  color: var(--gold);
+  border-radius: var(--radius-xs);
+  outline: none;
 }
 
 /* ── Menú desplegado del select con el diseño del software ──
