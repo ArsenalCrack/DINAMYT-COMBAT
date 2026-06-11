@@ -1077,11 +1077,11 @@ function CombatePantalla({
 
         {/* CENTER */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 20px" }}>
-          {/* Logo encima del nombre del campeonato */}
+          {/* Logo encima del nombre del campeonato — protagonista del centro */}
           <Logo
             soloImagen
-            fontSize="clamp(2.2rem, 7vh, 5rem)"
-            style={{ marginBottom: 6 }}
+            fontSize="clamp(3.2rem, 16vh, 10.5rem)"
+            style={{ marginBottom: 8 }}
           />
           {state._campeonato_nombre && (
             <div style={{
