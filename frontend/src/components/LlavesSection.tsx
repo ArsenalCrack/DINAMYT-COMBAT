@@ -10,11 +10,14 @@ import {
   type LlaveData,
 } from "@/lib/api";
 import BracketTree from "@/components/BracketTree";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 interface NuevoCompetidor {
   nombre: string;
   club: string;
 }
+
+type TipoMensaje = "ok" | "error";
 
 export default function LlavesSection({ campeonatoId }: { campeonatoId: number }) {
   const [llaves, setLlaves] = useState<LlaveData[]>([]);
@@ -27,8 +30,9 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
   const [compNombre, setCompNombre] = useState("");
   const [compClub, setCompClub] = useState("");
   const [competidores, setCompetidores] = useState<NuevoCompetidor[]>([]);
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ texto: string; tipo: TipoMensaje } | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const { pedirConfirmacion, dialogo } = useConfirmDialog();
 
   const cargar = useCallback(async () => {
     try {
@@ -49,9 +53,9 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
     return () => { cancelled = true; };
   }, [cargar]);
 
-  function flash(texto: string) {
-    setMsg(texto);
-    setTimeout(() => setMsg(""), 3500);
+  function flash(texto: string, tipo: TipoMensaje = "error") {
+    setMsg({ texto, tipo });
+    setTimeout(() => setMsg(null), 3500);
   }
 
   // ── Alta de competidores (igual que en figuras: nombre y club por aparte) ──
@@ -105,7 +109,7 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
       setCompetidores([]);
       await cargar();
       setAbierta(res.llave.id);
-      flash("Llave creada con sorteo aleatorio.");
+      flash("Llave creada con sorteo aleatorio.", "ok");
     } catch (err) {
       const m = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       flash(m || "Error al crear la llave.");
@@ -127,17 +131,23 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
     }
   }
 
-  async function handleEliminar(llave: LlaveData) {
-    const ok = window.confirm(`¿Eliminar la llave "${llave.nombre}"? Se perderá el cuadro completo.`);
-    if (!ok) return;
-    try {
-      await deleteLlaveAPI(llave.id);
-      setLlaves((prev) => prev.filter((l) => l.id !== llave.id));
-      if (abierta === llave.id) setAbierta(null);
-      flash("Llave eliminada.");
-    } catch {
-      flash("No se pudo eliminar la llave.");
-    }
+  function handleEliminar(llave: LlaveData) {
+    pedirConfirmacion({
+      titulo: "Eliminar llave",
+      mensaje: `¿Eliminar la llave "${llave.nombre}"? Se perderá el cuadro completo con sus resultados.`,
+      tipo: "peligro",
+      confirmLabel: "Eliminar",
+      onConfirm: async () => {
+        try {
+          await deleteLlaveAPI(llave.id);
+          setLlaves((prev) => prev.filter((l) => l.id !== llave.id));
+          if (abierta === llave.id) setAbierta(null);
+          flash("Llave eliminada.", "ok");
+        } catch {
+          flash("No se pudo eliminar la llave.");
+        }
+      },
+    });
   }
 
   const llavesVisibles = filtroTatami
@@ -172,12 +182,15 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
       </div>
 
       {msg && (
-        <div className="animate-fade" style={{
-          background: "var(--gold-bg)", border: "1px solid var(--gold-border)",
+        <div className="animate-fade" role={msg.tipo === "error" ? "alert" : "status"} style={{
+          background: msg.tipo === "error" ? "rgba(255,68,68,0.10)" : "var(--green-bg)",
+          border: `1px solid ${msg.tipo === "error" ? "rgba(255,68,68,0.35)" : "var(--green-border)"}`,
           borderRadius: "var(--radius-sm)", padding: "8px 14px",
-          color: "var(--gold)", marginBottom: 12, fontSize: "0.85rem", fontWeight: 700,
-        }}>{msg}</div>
+          color: msg.tipo === "error" ? "var(--red-alert)" : "var(--green)",
+          marginBottom: 12, fontSize: "0.85rem", fontWeight: 700,
+        }}>{msg.texto}</div>
       )}
+      {dialogo}
 
       {creando && (
         <form onSubmit={handleCrear} className="card animate-slide"

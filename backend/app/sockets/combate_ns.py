@@ -64,6 +64,7 @@ def _serializar_ts(ts):
         "jueces_meta": ts.get("jueces_meta", {}),
         "tatami_numero": ts.get("tatami_numero"),
         "campeonato_nombre": ts.get("campeonato_nombre"),
+        "campeonato_id": ts.get("campeonato_id"),
         "combate_llave": ts.get("combate_llave"),
         "mostrar_arbol": bool(ts.get("mostrar_arbol")),
         "llave_arbol": ts.get("llave_arbol"),
@@ -111,6 +112,7 @@ def _cargar_estados():
                 "roles_activos": {},
                 "tatami_numero": guardado.get("tatami_numero"),
                 "campeonato_nombre": guardado.get("campeonato_nombre"),
+                "campeonato_id": guardado.get("campeonato_id"),
                 "combate_llave": guardado.get("combate_llave"),
                 "mostrar_arbol": bool(guardado.get("mostrar_arbol")),
                 "llave_arbol": guardado.get("llave_arbol"),
@@ -201,18 +203,18 @@ ROL_LABELS = {
 
 
 def _info_tatami(tatami_id):
-    """Número visible y campeonato del tatami (el ID interno no se muestra)."""
+    """Número visible, nombre e id del campeonato del tatami."""
     try:
         from ..models.tatami import Tatami as TatamiModel
         from ..models.campeonato import Campeonato as CampeonatoModel
 
         tatami = TatamiModel.query.get(int(tatami_id))
         if not tatami:
-            return None, None
+            return None, None, None
         camp = CampeonatoModel.query.get(tatami.campeonato_id) if tatami.campeonato_id else None
-        return tatami.numero, (camp.nombre if camp else None)
+        return tatami.numero, (camp.nombre if camp else None), tatami.campeonato_id
     except Exception:
-        return None, None
+        return None, None, None
 
 
 def _get_tatami_state(tatami_id):
@@ -220,7 +222,7 @@ def _get_tatami_state(tatami_id):
     _cargar_estados()
     tid = str(tatami_id)
     if tid not in tatami_states:
-        numero, camp_nombre = _info_tatami(tatami_id)
+        numero, camp_nombre, camp_id = _info_tatami(tatami_id)
         tatami_states[tid] = {
             "estado": estado_inicial(),
             "categoria_activa": "combate",
@@ -235,13 +237,15 @@ def _get_tatami_state(tatami_id):
             "roles_activos": {},
             "tatami_numero": numero,
             "campeonato_nombre": camp_nombre,
+            "campeonato_id": camp_id,
         }
     ts = tatami_states[tid]
     # Estados restaurados de versiones previas pueden no tener el número
-    if ts.get("tatami_numero") is None:
-        numero, camp_nombre = _info_tatami(tatami_id)
+    if ts.get("tatami_numero") is None or ts.get("campeonato_id") is None:
+        numero, camp_nombre, camp_id = _info_tatami(tatami_id)
         ts["tatami_numero"] = numero
         ts["campeonato_nombre"] = camp_nombre
+        ts["campeonato_id"] = camp_id
     return ts
 
 
@@ -257,6 +261,7 @@ def _build_estado_broadcast(ts):
     estado_copy["_nombre_categoria"] = ts.get("nombre_categoria", "Figuras")
     estado_copy["_tatami_numero"] = ts.get("tatami_numero")
     estado_copy["_campeonato_nombre"] = ts.get("campeonato_nombre")
+    estado_copy["_campeonato_id"] = ts.get("campeonato_id")
     estado_copy["_combate_llave"] = ts.get("combate_llave")
     # Árbol de la llave para la pantalla pública. La estructura completa
     # solo viaja cuando está visible (los ticks del cronómetro no la cargan),

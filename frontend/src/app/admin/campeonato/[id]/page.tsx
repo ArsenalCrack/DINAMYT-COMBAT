@@ -13,6 +13,7 @@ import {
   regenerarPinAPI,
   type UserData,
 } from "@/lib/api";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 interface Tatami {
   id: number;
@@ -53,9 +54,10 @@ export default function CampeonatoDetailPage() {
   const [assigning, setAssigning] = useState(false);
   const [assignData, setAssignData] = useState({ usuario_id: 0, rol_tatami: "j1" });
   const [judgeSearch, setJudgeSearch] = useState("");
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ texto: string; tipo: "ok" | "error" } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({ nombre: "", descripcion: "" });
+  const { pedirConfirmacion, dialogo } = useConfirmDialog();
 
   const loadData = useCallback(async () => {
     try {
@@ -97,16 +99,15 @@ export default function CampeonatoDetailPage() {
     if (!selectedTatami || !assignData.usuario_id) return;
     try {
       await asignarJuezAPI(selectedTatami.id, assignData);
-      setMsg("Juez asignado correctamente");
       setAssigning(false);
       setAssignData({ usuario_id: 0, rol_tatami: "j1" });
       setJudgeSearch("");
       await Promise.all([loadData(), loadTatamiDetail(selectedTatami.id)]);
-      setTimeout(() => setMsg(""), 3000);
+      flash("Juez asignado correctamente", "ok");
     } catch (err) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })
         .response?.data?.error;
-      setMsg(errorMsg || "Error al asignar juez");
+      flash(errorMsg || "Error al asignar juez", "error");
     }
   }
 
@@ -114,12 +115,13 @@ export default function CampeonatoDetailPage() {
     try {
       await desasignarJuezAPI(tatamiId, userId);
       await Promise.all([loadData(), loadTatamiDetail(tatamiId)]);
-    } catch { /* */ }
+      flash("Asignación eliminada", "ok");
+    } catch { flash("Error al quitar la asignación", "error"); }
   }
 
-  function flash(texto: string) {
-    setMsg(texto);
-    setTimeout(() => setMsg(""), 3500);
+  function flash(texto: string, tipo: "ok" | "error" = "ok") {
+    setMsg({ texto, tipo });
+    setTimeout(() => setMsg(null), 3500);
   }
 
   async function handleToggleActivo() {
@@ -129,8 +131,8 @@ export default function CampeonatoDetailPage() {
       await loadData();
       flash(camp.activo
         ? "Campeonato desactivado: el público ya no lo verá."
-        : "Campeonato activado: visible para el público.");
-    } catch { flash("Error al cambiar el estado del campeonato"); }
+        : "Campeonato activado: visible para el público.", "ok");
+    } catch { flash("Error al cambiar el estado del campeonato", "error"); }
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
@@ -143,32 +145,40 @@ export default function CampeonatoDetailPage() {
       });
       setEditing(false);
       await loadData();
-      flash("Campeonato actualizado");
-    } catch { flash("Error al actualizar el campeonato"); }
+      flash("Campeonato actualizado", "ok");
+    } catch { flash("Error al actualizar el campeonato", "error"); }
   }
 
-  async function handleDeleteCampeonato() {
+  function handleDeleteCampeonato() {
     if (!camp) return;
-    const ok = window.confirm(
-      `¿Eliminar el campeonato "${camp.nombre}"? Se eliminarán sus tatamis, asignaciones y llaves. Los combates guardados en reportes NO se podrán filtrar por este campeonato.`
-    );
-    if (!ok) return;
-    try {
-      await deleteCampeonatoAPI(camp.id);
-      router.replace("/admin");
-    } catch { flash("Error al eliminar el campeonato"); }
+    pedirConfirmacion({
+      titulo: "Eliminar campeonato",
+      mensaje: `¿Eliminar el campeonato "${camp.nombre}"? Se eliminarán sus tatamis, asignaciones y llaves. Esta acción no se puede deshacer.`,
+      tipo: "peligro",
+      confirmLabel: "Eliminar",
+      onConfirm: async () => {
+        try {
+          await deleteCampeonatoAPI(camp.id);
+          router.replace("/admin");
+        } catch { flash("Error al eliminar el campeonato", "error"); }
+      },
+    });
   }
 
-  async function handleRegenerarPin(tatamiId: number) {
-    const ok = window.confirm(
-      "¿Generar un PIN nuevo para este tatami? El PIN anterior dejará de funcionar."
-    );
-    if (!ok) return;
-    try {
-      const res = await regenerarPinAPI(tatamiId);
-      await Promise.all([loadData(), loadTatamiDetail(tatamiId)]);
-      flash(`Nuevo PIN: ${res.pin}`);
-    } catch { flash("Error al regenerar el PIN"); }
+  function handleRegenerarPin(tatamiId: number) {
+    pedirConfirmacion({
+      titulo: "Regenerar PIN",
+      mensaje: "¿Generar un PIN nuevo para este tatami? El PIN anterior dejará de funcionar y los jueces deberán usar el nuevo.",
+      tipo: "advertencia",
+      confirmLabel: "Regenerar",
+      onConfirm: async () => {
+        try {
+          const res = await regenerarPinAPI(tatamiId);
+          await Promise.all([loadData(), loadTatamiDetail(tatamiId)]);
+          flash(`Nuevo PIN: ${res.pin}`, "ok");
+        } catch { flash("Error al regenerar el PIN", "error"); }
+      },
+    });
   }
 
   const searchTerm = judgeSearch.trim().toLowerCase();
@@ -261,12 +271,15 @@ export default function CampeonatoDetailPage() {
       )}
 
       {msg && (
-        <div style={{
-          background: "var(--green-bg)", border: "1px solid rgba(0,196,106,.25)",
-          borderRadius: "var(--radius-sm)", padding: "10px 16px", color: "var(--green)",
-          marginBottom: 16, fontSize: "0.9rem"
-        }} className="animate-fade">{msg}</div>
+        <div role={msg.tipo === "error" ? "alert" : "status"} style={{
+          background: msg.tipo === "error" ? "rgba(255,68,68,0.10)" : "var(--green-bg)",
+          border: `1px solid ${msg.tipo === "error" ? "rgba(255,68,68,0.35)" : "rgba(0,196,106,.25)"}`,
+          borderRadius: "var(--radius-sm)", padding: "10px 16px",
+          color: msg.tipo === "error" ? "var(--red-alert)" : "var(--green)",
+          marginBottom: 16, fontSize: "0.9rem", fontWeight: 700,
+        }} className="animate-fade">{msg.texto}</div>
       )}
+      {dialogo}
 
       <div className="campeonato-admin-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         {/* Tatamis list */}

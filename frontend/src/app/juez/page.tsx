@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { misTatamisAPI, verificarPinAPI, type UserData } from "@/lib/api";
 import LogoutButton from "@/components/LogoutButton";
+import Logo from "@/components/Logo";
 
 interface MiTatami {
   id: number;
@@ -102,7 +103,7 @@ export default function JuezPage() {
         marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--border)"
       }}>
         <div>
-          <div className="logo" style={{ fontSize: "1.8rem", textAlign: "left" }}>DINA<em>MYT</em></div>
+          <Logo fontSize="1.8rem" />
           <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 2 }}>
             Bienvenido, {user.nombre}
           </p>

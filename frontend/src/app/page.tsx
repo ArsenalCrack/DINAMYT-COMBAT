@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Logo from "@/components/Logo";
 
 export default function Home() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function Home() {
       justifyContent: "center",
       height: "100vh",
     }}>
-      <div className="logo animate-fade">DINA<em>MYT</em></div>
+      <Logo className="animate-fade" fontSize="2.5rem" />
     </div>
   );
 }

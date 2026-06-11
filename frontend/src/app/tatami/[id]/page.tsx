@@ -18,6 +18,7 @@ import AlertSystem, {
 } from "@/components/AlertSystem";
 import LlavePanel from "@/components/LlavePanel";
 import BracketTree from "@/components/BracketTree";
+import Logo from "@/components/Logo";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
 interface Criterio { id: string; nombre: string; max_pts: number; }
@@ -40,6 +41,7 @@ interface FigurasState {
   _nombre_categoria?: string;
   _tatami_numero?: number | null;
   _campeonato_nombre?: string | null;
+  _campeonato_id?: number | null;
 }
 
 type AnyState = (CombateState & { _categoria?: string }) | (FigurasState & { _categoria?: string });
@@ -753,7 +755,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
         borderBottom: "1px solid var(--border)",
         background: "var(--bg-card)",
       }}>
-        <div className="logo" style={{ fontSize: "2rem" }}>DINA<em>MYT</em></div>
+        <Logo fontSize="clamp(1.5rem, 4vw, 2rem)" />
         {state._campeonato_nombre && (
           <div style={{
             fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 700,
@@ -984,7 +986,7 @@ function CombatePantalla({
           textAlign: "center", padding: "12px 20px",
           borderBottom: "1px solid var(--border)", background: "var(--bg-card)",
         }}>
-          <div className="logo" style={{ fontSize: "1.8rem" }}>DINA<em>MYT</em></div>
+          <Logo fontSize="clamp(1.4rem, 3.5vw, 1.8rem)" />
           {state._campeonato_nombre && (
             <div style={{
               fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700,
@@ -1023,7 +1025,7 @@ function CombatePantalla({
           padding: "8px 24px", borderTop: "1px solid var(--border)",
           fontSize: "0.78rem", color: "var(--text-dim)",
         }}>
-          <span className="logo" style={{ fontSize: "1.1rem" }}>DINA<em>MYT</em></span>
+          <Logo fontSize="1.1rem" />
           <span>Tatami {tatamiId}</span>
           <span>
             <span className={`status-dot ${connected ? "online" : "offline"}`} />
@@ -1139,7 +1141,7 @@ function CombatePantalla({
         padding: "8px 24px", borderTop: "1px solid var(--border)",
         fontSize: "0.78rem", color: "var(--text-dim)",
       }}>
-        <span className="logo" style={{ fontSize: "1.1rem" }}>DINA<em>MYT</em></span>
+        <Logo fontSize="1.1rem" />
         <span>Tatami {tatamiId}</span>
         <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
@@ -1849,7 +1851,11 @@ function TatamiContent() {
   function getRolBack() {
     const user = localStorage.getItem("dinamyt_user");
     if (!user) return "/login";
-    return JSON.parse(user).rol === "admin" ? "/admin" : "/juez";
+    if (JSON.parse(user).rol !== "admin") return "/juez";
+    // El admin vuelve a los tatamis del campeonato de este tatami,
+    // no hasta la lista general de campeonatos.
+    const campId = anyState._campeonato_id;
+    return campId ? `/admin/campeonato/${campId}` : "/admin";
   }
 
   function handleVolver() {
@@ -1899,7 +1905,7 @@ function TatamiContent() {
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div className="card" style={{ maxWidth: 460, width: "100%", textAlign: "center" }}>
-          <div className="logo" style={{ fontSize: "2.4rem", marginBottom: 12 }}>DINA<em>MYT</em></div>
+          <Logo fontSize="2.4rem" style={{ marginBottom: 12 }} />
           <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "1rem", marginBottom: 8 }}>
             Rol no disponible
           </div>
@@ -1917,7 +1923,7 @@ function TatamiContent() {
   if (!hasServerState) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
-        <div className="logo animate-fade" style={{ fontSize: "3rem" }}>DINA<em>MYT</em></div>
+        <Logo className="animate-fade" fontSize="3rem" />
       </div>
     );
   }
@@ -1927,7 +1933,7 @@ function TatamiContent() {
     if (anyState._tatami_activo === false) {
       return (
         <div style={{ height: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <div className="logo" style={{ fontSize: "4rem", marginBottom: 16 }}>DINA<em>MYT</em></div>
+          <Logo fontSize="clamp(2.6rem, 8vw, 4rem)" style={{ marginBottom: 16 }} />
           <div style={{ fontSize: "2.5rem", color: "var(--text-dim)", fontFamily: "var(--font-display)", letterSpacing: "0.15em", marginBottom: 8 }}>
             TATAMI {tatamiLabel}
           </div>
@@ -2151,7 +2157,7 @@ export default function TatamiPage() {
   return (
     <Suspense fallback={
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
-        <div className="logo animate-fade" style={{ fontSize: "3rem" }}>DINA<em>MYT</em></div>
+        <Logo className="animate-fade" fontSize="3rem" />
       </div>
     }>
       <TatamiContent />

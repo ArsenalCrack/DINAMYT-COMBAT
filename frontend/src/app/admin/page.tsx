@@ -12,6 +12,8 @@ import {
   type UserData,
 } from "@/lib/api";
 import LogoutButton from "@/components/LogoutButton";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
+import Logo from "@/components/Logo";
 
 interface Campeonato {
   id: number;
@@ -34,11 +36,12 @@ export default function AdminPage() {
   const [showNewUser, setShowNewUser] = useState(false);
   const [newCamp, setNewCamp] = useState({ nombre: "", descripcion: "", num_tatamis: 6 });
   const [newUser, setNewUser] = useState({ email: "", password: "", nombre: "", rol: "juez" });
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ texto: string; tipo: "ok" | "error" } | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "" });
+  const { pedirConfirmacion, dialogo } = useConfirmDialog();
 
   useEffect(() => {
     const saved = localStorage.getItem("dinamyt_user");
@@ -66,9 +69,9 @@ export default function AdminPage() {
     } catch { /* */ }
   }
 
-  function flash(texto: string) {
-    setMsg(texto);
-    setTimeout(() => setMsg(""), 3500);
+  function flash(texto: string, tipo: "ok" | "error" = "ok") {
+    setMsg({ texto, tipo });
+    setTimeout(() => setMsg(null), 3500);
   }
 
   async function handleToggleCampActivo(c: Campeonato) {
@@ -77,8 +80,8 @@ export default function AdminPage() {
       await loadData(showInactive);
       flash(c.activo
         ? `"${c.nombre}" desactivado: el público ya no lo verá.`
-        : `"${c.nombre}" activado: visible para el público.`);
-    } catch { flash("Error al cambiar el estado del campeonato"); }
+        : `"${c.nombre}" activado: visible para el público.`, "ok");
+    } catch { flash("Error al cambiar el estado del campeonato", "error"); }
   }
 
   async function handleSaveUserEdit(e: React.FormEvent) {
@@ -92,53 +95,61 @@ export default function AdminPage() {
       await updateUserAPI(editingUser.id, payload);
       setEditingUser(null);
       await loadData(showInactive);
-      flash("Usuario actualizado correctamente");
+      flash("Usuario actualizado correctamente", "ok");
     } catch (err) {
       const m = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
-      flash(m || "Error al actualizar el usuario");
+      flash(m || "Error al actualizar el usuario", "error");
     }
   }
 
-  async function handleToggleUserActivo(target: UserData) {
+  function handleToggleUserActivo(target: UserData) {
     if (target.id === user?.id) {
-      flash("No puedes desactivar tu propio usuario");
+      flash("No puedes desactivar tu propio usuario", "error");
       return;
     }
+    const ejecutar = async () => {
+      try {
+        await updateUserAPI(target.id, { activo: !target.activo });
+        await loadData(showInactive);
+        flash(target.activo ? "Usuario desactivado" : "Usuario reactivado", "ok");
+      } catch { flash("Error al cambiar el estado del usuario", "error"); }
+    };
     if (target.activo) {
-      const ok = window.confirm(
-        `¿Desactivar a ${target.nombre}? No podrá iniciar sesión y se quitarán sus asignaciones de tatami.`
-      );
-      if (!ok) return;
+      pedirConfirmacion({
+        titulo: "Desactivar usuario",
+        mensaje: `¿Desactivar a ${target.nombre}? No podrá iniciar sesión y se quitarán sus asignaciones de tatami.`,
+        tipo: "peligro",
+        confirmLabel: "Desactivar",
+        onConfirm: ejecutar,
+      });
+    } else {
+      void ejecutar();
     }
-    try {
-      await updateUserAPI(target.id, { activo: !target.activo });
-      await loadData(showInactive);
-      flash(target.activo ? "Usuario desactivado" : "Usuario reactivado");
-    } catch { flash("Error al cambiar el estado del usuario"); }
   }
 
   async function handleCreateCamp(e: React.FormEvent) {
     e.preventDefault();
     try {
       await createCampeonatoAPI(newCamp);
-      setMsg("Campeonato creado exitosamente");
       setShowNewCamp(false);
       setNewCamp({ nombre: "", descripcion: "", num_tatamis: 6 });
       loadData(showInactive);
-      setTimeout(() => setMsg(""), 3000);
-    } catch { setMsg("Error al crear campeonato"); }
+      flash("Campeonato creado exitosamente", "ok");
+    } catch { flash("Error al crear el campeonato", "error"); }
   }
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     try {
       await registerUserAPI(newUser);
-      setMsg("Usuario creado exitosamente");
       setShowNewUser(false);
       setNewUser({ email: "", password: "", nombre: "", rol: "juez" });
       loadData(showInactive);
-      setTimeout(() => setMsg(""), 3000);
-    } catch { setMsg("Error al crear usuario"); }
+      flash("Usuario creado exitosamente", "ok");
+    } catch (err) {
+      const m = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+      flash(m || "Error al crear el usuario", "error");
+    }
   }
 
   if (!user) return null;
@@ -151,7 +162,7 @@ export default function AdminPage() {
         marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--border)"
       }}>
         <div>
-          <div className="logo" style={{ fontSize: "1.8rem", textAlign: "left" }}>DINA<em>MYT</em></div>
+          <Logo fontSize="1.8rem" />
           <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 2 }}>
             Panel de Administracion &middot; {user.nombre}
           </p>
@@ -161,14 +172,17 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Success message */}
+      {/* Mensajes: verde = satisfactorio, rojo = no se pudo realizar */}
       {msg && (
-        <div style={{
-          background: "var(--green-bg)", border: "1px solid rgba(0,196,106,.25)",
-          borderRadius: "var(--radius-sm)", padding: "10px 16px", color: "var(--green)",
-          marginBottom: 16, fontSize: "0.9rem"
-        }} className="animate-fade">{msg}</div>
+        <div role={msg.tipo === "error" ? "alert" : "status"} style={{
+          background: msg.tipo === "error" ? "rgba(255,68,68,0.10)" : "var(--green-bg)",
+          border: `1px solid ${msg.tipo === "error" ? "rgba(255,68,68,0.35)" : "rgba(0,196,106,.25)"}`,
+          borderRadius: "var(--radius-sm)", padding: "10px 16px",
+          color: msg.tipo === "error" ? "var(--red-alert)" : "var(--green)",
+          marginBottom: 16, fontSize: "0.9rem", fontWeight: 700,
+        }} className="animate-fade">{msg.texto}</div>
       )}
+      {dialogo}
 
       {/* Tabs */}
       <div className="admin-tabs" style={{ display: "flex", gap: 8, marginBottom: 20 }}>

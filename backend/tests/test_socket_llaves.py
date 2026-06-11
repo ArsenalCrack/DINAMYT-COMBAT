@@ -22,10 +22,17 @@ DevelopmentConfig.SQLALCHEMY_DATABASE_URI = "sqlite://"
 
 
 @pytest.fixture()
-def entorno():
+def entorno(tmp_path):
     """App + DB en memoria con campeonato, tatami y llave de 2 competidores."""
     app = create_app("development")
     assert "dinamyt.db" not in str(app.config["SQLALCHEMY_DATABASE_URI"])
+
+    # Aislar la persistencia de tatamis: ni leer ni escribir el archivo real
+    # (instance/tatami_states.json) que usa el servidor de desarrollo.
+    from app.sockets import combate_ns
+    combate_ns._SNAPSHOT_PATH = tmp_path / "tatami_states_test.json"
+    combate_ns._snapshots_cargados = True
+
     with app.app_context():
         db.create_all()
         from app.seeds.seed_categorias import seed_categorias
@@ -99,6 +106,9 @@ class TestCombateEliminacionSocket:
         _emitir(cliente, "activar_combate_llave", llave_id=llave_id)
         estado = _ultimo_estado(cliente)
         assert estado is not None
+        # El broadcast lleva el campeonato (lo usa el botón Volver del admin)
+        assert estado["_campeonato_id"] is not None
+        assert estado["_tatami_numero"] == 1
         # Nombres autocompletados desde la llave y crono pausado
         assert {estado["nombreHong"], estado["nombreChung"]} == {"Ana", "Luis"}
         assert estado["activo"] is False

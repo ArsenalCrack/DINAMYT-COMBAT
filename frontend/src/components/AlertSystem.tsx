@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Logo from "@/components/Logo";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface FlashData {
@@ -335,6 +336,9 @@ function GanadorOverlay({
           animation: "ganador-entrada 0.5s cubic-bezier(.17,.67,.35,1.4)",
         }}
       >
+        <div style={{ marginBottom: 10 }}>
+          <Logo fontSize={isPantalla ? "1.6rem" : "1.1rem"} style={{ opacity: 0.85 }} />
+        </div>
         <div style={{ fontSize: isPantalla ? "10rem" : "5rem", lineHeight: 1 }}>
           🏆
         </div>

@@ -39,6 +39,7 @@ export interface CombateState {
   _nombre_categoria?: string;
   _tatami_numero?: number | null;
   _campeonato_nombre?: string | null;
+  _campeonato_id?: number | null;
   _combate_llave?: {
     llave_id: number;
     nombre: string;

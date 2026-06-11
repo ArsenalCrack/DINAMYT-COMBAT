@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listCampeonatosPublicoAPI } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 interface TatamiPublico {
   id: number;
@@ -52,7 +53,7 @@ export default function PantallaAccess() {
         border: "1px solid var(--border)", borderRadius: "var(--radius-lg)",
         padding: "36px 28px", textAlign: "center"
       }} className="animate-slide">
-        <div className="logo" style={{ fontSize: "2.5rem", marginBottom: 4 }}>DINA<em>MYT</em></div>
+        <Logo fontSize="clamp(2rem, 7vw, 2.5rem)" style={{ marginBottom: 4 }} />
         <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: "0.9rem" }}>
           Pantalla Publica &middot; Sin Login
         </p>

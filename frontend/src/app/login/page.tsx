@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginAPI } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function LoginPage() {
       <div className="login-wrapper animate-slide">
         {/* Logo central */}
         <div className="login-logo">
-          <div className="logo" style={{ fontSize: "3.5rem" }}>DINA<em>MYT</em></div>
+          <Logo fontSize="clamp(2.4rem, 8vw, 3.5rem)" />
           <p className="login-tagline">Sistema Oficial de Competencias Hapkido</p>
           <p className="login-sub">Global Hapkido Association · GHA</p>
         </div>
