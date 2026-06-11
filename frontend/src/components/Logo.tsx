@@ -37,6 +37,8 @@ export default function Logo({
         ...style,
       }}
     >
+      {/* La imagen ya es la D con fondo transparente: sin bordes ni
+          redondeos para que se acople directamente al fondo */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo.png"
@@ -46,7 +48,6 @@ export default function Logo({
           height: stacked ? "2.1em" : "1.08em",
           width: "auto",
           display: "block",
-          borderRadius: "16%",
           flexShrink: 0,
         }}
       />
