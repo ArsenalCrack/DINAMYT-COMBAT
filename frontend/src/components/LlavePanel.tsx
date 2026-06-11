@@ -22,10 +22,15 @@ interface CombateLlaveActivo {
  * - "Soltar" libera el marcador para un combate suelto.
  */
 export default function LlavePanel({
-  tatamiDbId, combateLlave, enviarEvento, onShowConfirm,
+  tatamiDbId, combateLlave, mostrarArbol = false, hayArbol = false,
+  enviarEvento, onShowConfirm,
 }: {
   tatamiDbId: string;
   combateLlave?: CombateLlaveActivo | null;
+  /** El público está viendo el árbol (true) o el marcador (false). */
+  mostrarArbol?: boolean;
+  /** Hay un árbol cargado para poder mostrarlo al público. */
+  hayArbol?: boolean;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   onShowConfirm: (data: ConfirmData) => void;
 }) {
@@ -49,13 +54,41 @@ export default function LlavePanel({
   }, [cargar, combateLlave?.llave_id, combateLlave?.partido]);
 
   const hayPendientes = llaves.some((l) => l.pendientes > 0 || l.campeon);
-  if (!cargado || (!combateLlave && !hayPendientes)) return null;
+  if (!cargado || (!combateLlave && !hayPendientes && !hayArbol)) return null;
 
   return (
     <div className="card" style={{ marginBottom: 8, padding: "10px 14px", borderColor: "var(--gold-border)" }}>
-      <div className="card-title" style={{ marginBottom: 8 }}>
-        Combates de Eliminación
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        gap: 8, flexWrap: "wrap", marginBottom: 8,
+      }}>
+        <div className="card-title" style={{ marginBottom: 0 }}>
+          Combates de Eliminación
+        </div>
+        {hayArbol && (
+          <button
+            className="btn btn-sm"
+            onClick={() => enviarEvento("mostrar_arbol", { mostrar: !mostrarArbol })}
+            title={mostrarArbol
+              ? "La pantalla pública pasará a mostrar el marcador de puntos"
+              : "La pantalla pública pasará a mostrar el árbol de la llave"}
+            style={{
+              background: mostrarArbol ? "var(--gold-bg)" : undefined,
+              borderColor: mostrarArbol ? "var(--gold-border)" : undefined,
+              color: mostrarArbol ? "var(--gold)" : undefined,
+              fontSize: "0.75rem",
+            }}
+          >
+            {mostrarArbol ? "Mostrar puntuación" : "Mostrar árbol"}
+          </button>
+        )}
       </div>
+      {hayArbol && (
+        <p style={{ color: "var(--text-dim)", fontSize: "0.72rem", margin: "0 0 8px" }}>
+          El público ve {mostrarArbol ? "el árbol de la llave" : "el marcador de puntos"}.
+          Al iniciar el cronómetro cambia solo a la puntuación.
+        </p>
+      )}
 
       {combateLlave ? (
         /* ── Combate de llave EN CURSO en este tatami ── */

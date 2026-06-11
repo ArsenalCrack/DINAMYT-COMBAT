@@ -65,6 +65,8 @@ def _serializar_ts(ts):
         "tatami_numero": ts.get("tatami_numero"),
         "campeonato_nombre": ts.get("campeonato_nombre"),
         "combate_llave": ts.get("combate_llave"),
+        "mostrar_arbol": bool(ts.get("mostrar_arbol")),
+        "llave_arbol": ts.get("llave_arbol"),
     }
 
 
@@ -110,6 +112,8 @@ def _cargar_estados():
                 "tatami_numero": guardado.get("tatami_numero"),
                 "campeonato_nombre": guardado.get("campeonato_nombre"),
                 "combate_llave": guardado.get("combate_llave"),
+                "mostrar_arbol": bool(guardado.get("mostrar_arbol")),
+                "llave_arbol": guardado.get("llave_arbol"),
             }
         if data:
             print(f"  [OK] Estado de {len(data)} tatami(s) restaurado tras reinicio")
@@ -180,6 +184,7 @@ ACCIONES_SOLO_ARBITRO = {
     "finalizar",
     "activar_combate_llave",
     "soltar_combate_llave",
+    "mostrar_arbol",
 }
 
 CATEGORIA_NOMBRE_MAX = 40
@@ -253,6 +258,12 @@ def _build_estado_broadcast(ts):
     estado_copy["_tatami_numero"] = ts.get("tatami_numero")
     estado_copy["_campeonato_nombre"] = ts.get("campeonato_nombre")
     estado_copy["_combate_llave"] = ts.get("combate_llave")
+    # Árbol de la llave para la pantalla pública. La estructura completa
+    # solo viaja cuando está visible (los ticks del cronómetro no la cargan),
+    # pero _hay_arbol siempre indica si existe para el botón del Juez Central.
+    estado_copy["_mostrar_arbol"] = bool(ts.get("mostrar_arbol"))
+    estado_copy["_hay_arbol"] = bool(ts.get("llave_arbol"))
+    estado_copy["_llave_arbol"] = ts.get("llave_arbol") if ts.get("mostrar_arbol") else None
     return estado_copy
 
 
@@ -552,6 +563,17 @@ class CombateNamespace(Namespace):
                         "[LLAVE] Combate de eliminación liberado — marcador suelto",
                         "arb",
                     )
+                ts["mostrar_arbol"] = False
+                ts.pop("llave_arbol", None)
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                self._broadcast_estado(room, ts)
+                return
+
+            # ── Mostrar árbol / puntuación en la pantalla pública ──────────
+            if accion == "mostrar_arbol":
+                if ts.get("llave_arbol"):
+                    ts["mostrar_arbol"] = bool(ev.get("mostrar", True))
                 if ev_id:
                     emit("ack", {"evId": ev_id})
                 self._broadcast_estado(room, ts)
@@ -660,6 +682,9 @@ class CombateNamespace(Namespace):
 
             # ── Manejar cronómetro ─────────────────────────────────────────
             if accion == "crono_start":
+                # Al iniciar el combate, la pantalla pública pasa del árbol
+                # de la llave al marcador automáticamente.
+                ts["mostrar_arbol"] = False
                 self._iniciar_crono(tatami_id)
             elif accion in ("crono_pause", "crono_reset", "reset", "declarar_ganador"):
                 self._detener_crono(tatami_id)
@@ -813,6 +838,13 @@ class CombateNamespace(Namespace):
             "comp1": partido["comp1"],
             "comp2": partido["comp2"],
         }
+        # El público ve el árbol hasta que el combate comience (crono_start)
+        ts["llave_arbol"] = {
+            "llave_id": llave.id,
+            "nombre": llave.nombre,
+            "estructura": copy.deepcopy(llave.estructura),
+        }
+        ts["mostrar_arbol"] = True
         self._detener_crono(tatami_id)
         _agregar_log(
             ts["estado"],
@@ -837,6 +869,14 @@ class CombateNamespace(Namespace):
                 )
                 llave.estructura = estructura
                 db.session.commit()
+
+                # El público vuelve a ver el árbol actualizado tras el combate
+                ts["llave_arbol"] = {
+                    "llave_id": llave.id,
+                    "nombre": llave.nombre,
+                    "estructura": copy.deepcopy(estructura),
+                }
+                ts["mostrar_arbol"] = True
 
                 ganador = llave_info["comp1"] if lado == 1 else llave_info["comp2"]
                 campeon = estructura.get("campeon")

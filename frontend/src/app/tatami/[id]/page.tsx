@@ -17,6 +17,7 @@ import AlertSystem, {
   type DerrotaData,
 } from "@/components/AlertSystem";
 import LlavePanel from "@/components/LlavePanel";
+import BracketTree from "@/components/BracketTree";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
 interface Criterio { id: string; nombre: string; max_pts: number; }
@@ -975,6 +976,64 @@ function CombatePantalla({
     }
   }, [state.segundos, soundOn]);
 
+  // ── Árbol de la llave en pantalla pública (antes/entre combates) ──
+  if (state._mostrar_arbol && state._llave_arbol) {
+    return (
+      <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{
+          textAlign: "center", padding: "12px 20px",
+          borderBottom: "1px solid var(--border)", background: "var(--bg-card)",
+        }}>
+          <div className="logo" style={{ fontSize: "1.8rem" }}>DINA<em>MYT</em></div>
+          {state._campeonato_nombre && (
+            <div style={{
+              fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 2,
+            }}>{state._campeonato_nombre} · Tatami {tatamiId}</div>
+          )}
+          <div style={{
+            fontFamily: "var(--font-display)", fontSize: "clamp(1.6rem,3.5vw,3rem)",
+            color: "var(--gold)", letterSpacing: "0.1em", lineHeight: 1.05, marginTop: 6,
+          }}>
+            {state._llave_arbol.nombre}
+          </div>
+          {state._combate_llave && (
+            <div style={{
+              fontSize: "clamp(0.75rem,1.4vw,1rem)", color: "var(--text)",
+              fontWeight: 700, marginTop: 4,
+            }}>
+              Próximo ({state._combate_llave.ronda_nombre}):{" "}
+              <span style={{ color: "var(--hong-light)" }}>{state._combate_llave.comp1.nombre}</span>
+              {" vs "}
+              <span style={{ color: "var(--chung-light)" }}>{state._combate_llave.comp2.nombre}</span>
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "clamp(10px,2vh,24px) clamp(12px,2vw,28px)" }}>
+          <BracketTree
+            estructura={state._llave_arbol.estructura}
+            variant="pantalla"
+            destacar={state._combate_llave
+              ? { ronda: state._combate_llave.ronda, partido: state._combate_llave.partido }
+              : null}
+          />
+        </div>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "8px 24px", borderTop: "1px solid var(--border)",
+          fontSize: "0.78rem", color: "var(--text-dim)",
+        }}>
+          <span className="logo" style={{ fontSize: "1.1rem" }}>DINA<em>MYT</em></span>
+          <span>Tatami {tatamiId}</span>
+          <span>
+            <span className={`status-dot ${connected ? "online" : "offline"}`} />
+            {connected ? "En vivo" : "Desconectado"}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {/* Main scoreboard */}
@@ -1449,6 +1508,8 @@ function CombateArbitro({
       <LlavePanel
         tatamiDbId={tatamiDbId}
         combateLlave={state._combate_llave}
+        mostrarArbol={Boolean(state._mostrar_arbol)}
+        hayArbol={Boolean(state._hay_arbol)}
         enviarEvento={enviarEvento}
         onShowConfirm={onShowConfirm}
       />

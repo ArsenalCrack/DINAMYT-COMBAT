@@ -16,6 +16,7 @@ interface Combate {
   ronda_final: string;
   rondas_resumen?: string;
   figuras_completas?: boolean | null;
+  llave?: { llave_id: number; nombre: string; ronda_nombre: string } | null;
   num_jueces: number;
   tatami_numero: number;
   created_at: string;
@@ -561,7 +562,16 @@ export default function ReportesCampeonatoPage() {
                       {c.tatami_numero ? `T${c.tatami_numero}` : "—"}
                     </td>
                     <td style={{ fontWeight: 700 }}>
-                      {c.nombre_categoria || (c.tipo === "figuras" ? "Figuras" : "Combate")}
+                      {c.llave ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                          <span>{c.llave.nombre}</span>
+                          <span className="badge badge-gold">
+                            Eliminación · {c.llave.ronda_nombre}
+                          </span>
+                        </div>
+                      ) : (
+                        c.nombre_categoria || (c.tipo === "figuras" ? "Figuras" : "Combate")
+                      )}
                     </td>
                     <td className="text-center font-mono" style={{ fontSize: "1.05rem" }}>
                       {c.tipo === "figuras" ? (

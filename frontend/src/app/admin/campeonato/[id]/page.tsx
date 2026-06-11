@@ -13,7 +13,6 @@ import {
   regenerarPinAPI,
   type UserData,
 } from "@/lib/api";
-import LlavesSection from "@/components/LlavesSection";
 
 interface Tatami {
   id: number;
@@ -213,6 +212,17 @@ export default function CampeonatoDetailPage() {
             }}
           >
             Reportes
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => router.push(`/admin/campeonato/${camp.id}/llaves`)}
+            style={{
+              background: "var(--gold-bg)",
+              borderColor: "var(--gold-border)",
+              color: "var(--gold)",
+            }}
+          >
+            Llaves
           </button>
           <button
             className="btn btn-sm"
@@ -438,9 +448,6 @@ export default function CampeonatoDetailPage() {
           )}
         </div>
       </div>
-
-      {/* Llaves de eliminación del campeonato */}
-      <LlavesSection campeonatoId={campId} />
 
       <style>{`
         .campeonato-admin-grid {

@@ -48,6 +48,14 @@ export interface CombateState {
     comp1: { id: number; nombre: string };
     comp2: { id: number; nombre: string };
   } | null;
+  // Árbol de la llave para mostrar en la pantalla pública
+  _mostrar_arbol?: boolean;
+  _hay_arbol?: boolean;
+  _llave_arbol?: {
+    llave_id: number;
+    nombre: string;
+    estructura: import("../lib/api").LlaveEstructura;
+  } | null;
 }
 
 export interface HistorialEntry {

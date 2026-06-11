@@ -149,6 +149,12 @@ def eliminar(camp_id):
         return jsonify({"error": "Solo administradores"}), 403
 
     camp = Campeonato.query.get_or_404(camp_id)
+    # Capturar el nombre ANTES de borrar (tras commit el objeto expira)
+    nombre = camp.nombre
+    # Las llaves referencian campeonato y tatami: borrarlas primero para
+    # no violar llaves foráneas en PostgreSQL (producción).
+    from ..models.llave import Llave
+    Llave.query.filter_by(campeonato_id=camp.id).delete()
     db.session.delete(camp)
     db.session.commit()
-    return jsonify({"message": f"Campeonato '{camp.nombre}' eliminado"}), 200
+    return jsonify({"message": f"Campeonato '{nombre}' eliminado"}), 200

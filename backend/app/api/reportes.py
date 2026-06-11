@@ -394,6 +394,8 @@ def listar_combates():
             "ronda_final": c.ronda_final,
             "rondas_resumen": _rondas_resumen(c),
             "figuras_completas": _figuras_completas(c) if tipo == "figuras" else None,
+            # Combate de eliminación: llave y ronda (Semifinal, Final, ...)
+            "llave": (c.jueces_detalle or {}).get("llave"),
             "num_jueces": c.num_jueces,
             "duracion_segundos": c.duracion_segundos,
             "tatami_id": tatami.id if tatami else None,

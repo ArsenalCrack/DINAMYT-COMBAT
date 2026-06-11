@@ -357,6 +357,9 @@ def eliminar(llave_id):
         return jsonify({"error": "Solo administradores"}), 403
 
     llave = Llave.query.get_or_404(llave_id)
+    # Capturar el nombre ANTES de borrar: tras el commit el objeto queda
+    # expirado y acceder a sus atributos lanza ObjectDeletedError (500).
+    nombre = llave.nombre
     db.session.delete(llave)
     db.session.commit()
-    return jsonify({"message": f"Llave '{llave.nombre}' eliminada"}), 200
+    return jsonify({"message": f"Llave '{nombre}' eliminada"}), 200
