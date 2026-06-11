@@ -27,6 +27,8 @@ interface CompetidorRankeado extends Competidor {
   total: number;
   puesto: number;
   empate: boolean;
+  /** Todos los jueces activos ya confirmaron su nota */
+  completo: boolean;
 }
 interface FigurasState {
   tipo: "figuras";
@@ -137,14 +139,24 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
  *   (1, 2, 2, 4) y se resuelve con presentación de desempate (Reevaluar).
  */
 function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
+  const jueces = juecesActivosFiguras(state);
+
   function totalDe(comp: Competidor): number {
     const puntajes = Object.values(state.puntuaciones[String(comp.id)] || {}).map(Number);
     return Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
   }
 
+  function completoDe(comp: Competidor): boolean {
+    return jueces.length > 0 && jueces.every(
+      (j) => state.puntuaciones_confirmadas?.[String(comp.id)]?.[j]
+    );
+  }
+
   function ordenar(lista: Competidor[], todosPrimero: boolean): CompetidorRankeado[] {
     const items = lista
-      .map((c) => ({ ...c, total: totalDe(c), puesto: 1, empate: false }))
+      .map((c) => ({
+        ...c, total: totalDe(c), puesto: 1, empate: false, completo: completoDe(c),
+      }))
       .sort((a, b) => b.total - a.total);
     if (todosPrimero) return items;
     let puesto = 0;
@@ -152,9 +164,14 @@ function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
       if (idx === 0 || item.total !== items[idx - 1].total) puesto = idx + 1;
       item.puesto = puesto;
     });
-    const conteo: Record<number, number> = {};
-    items.forEach((r) => { conteo[r.puesto] = (conteo[r.puesto] || 0) + 1; });
-    items.forEach((r) => { r.empate = conteo[r.puesto] > 1; });
+    // Empate solo entre competidores con puntuación COMPLETA: dos sin
+    // calificar (0.00) no están empatados, les falta puntuar.
+    const grupos: Record<number, CompetidorRankeado[]> = {};
+    items.forEach((r) => { (grupos[r.puesto] = grupos[r.puesto] || []).push(r); });
+    Object.values(grupos).forEach((grupo) => {
+      const esEmpate = grupo.length > 1 && grupo.every((g) => g.completo);
+      grupo.forEach((g) => { g.empate = esEmpate; });
+    });
     return items;
   }
 
@@ -501,15 +518,17 @@ function FigurasArbitro({
                 </div>
                 {!isActive && (() => {
                   const fueraDelDesempate = enDesempate.length > 0 && !enDesempate.includes(comp.id);
-                  const bloqueado = activoIncompleto || fueraDelDesempate;
+                  const bloqueado = activoIncompleto || fueraDelDesempate || comp.completo;
                   return (
                     <button className="btn btn-sm"
                       disabled={bloqueado}
-                      title={fueraDelDesempate
-                        ? "Desempate en curso: solo los empatados pueden presentarse"
-                        : activoIncompleto
-                          ? "El competidor en turno aún tiene puntuaciones pendientes"
-                          : undefined}
+                      title={comp.completo
+                        ? "Ya fue calificado por completo (sus notas son inmutables)"
+                        : fueraDelDesempate
+                          ? "Desempate en curso: solo los empatados pueden presentarse"
+                          : activoIncompleto
+                            ? "El competidor en turno aún tiene puntuaciones pendientes"
+                            : undefined}
                       onClick={() => {
                         if (!validarNombreCategoria()) return;
                         if (activoIncompleto) {

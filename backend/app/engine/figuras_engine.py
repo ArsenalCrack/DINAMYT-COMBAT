@@ -103,19 +103,22 @@ def _jueces_activos_figuras(estado):
     return jueces
 
 
-def puntuaciones_completas(estado):
-    if not estado.get("competidores"):
-        return False
+def _competidor_completo(estado, comp_id):
+    """True si todos los jueces activos ya confirmaron su nota."""
     jueces = _jueces_activos_figuras(estado)
     if not jueces:
         return False
-    confirmadas = estado.get("puntuaciones_confirmadas", {})
-    for comp in estado["competidores"]:
-        comp_id = str(comp["id"])
-        for juez_id in jueces:
-            if not confirmadas.get(comp_id, {}).get(juez_id):
-                return False
-    return True
+    confirmadas = estado.get("puntuaciones_confirmadas", {}).get(str(comp_id), {})
+    return all(confirmadas.get(j) for j in jueces)
+
+
+def puntuaciones_completas(estado):
+    if not estado.get("competidores"):
+        return False
+    return all(
+        _competidor_completo(estado, comp["id"])
+        for comp in estado["competidores"]
+    )
 
 
 def _juez_meta_evento(ev, juez_fallback):
@@ -179,11 +182,18 @@ def _ordenar_con_puestos(estado, comps, todos_primer_puesto=False):
         item["puesto"] = puesto
         prev_total = item["total"]
 
-    conteo = {}
+    # Un empate solo cuenta cuando TODOS los del grupo ya tienen sus
+    # puntuaciones completas: dos competidores sin calificar (0.00) o a
+    # medias no están "empatados", simplemente les falta puntuar.
+    grupos = {}
     for item in items:
-        conteo[item["puesto"]] = conteo.get(item["puesto"], 0) + 1
-    for item in items:
-        item["empate"] = conteo[item["puesto"]] > 1
+        grupos.setdefault(item["puesto"], []).append(item)
+    for grupo in grupos.values():
+        es_empate = len(grupo) > 1 and all(
+            _competidor_completo(estado, g["id"]) for g in grupo
+        )
+        for g in grupo:
+            g["empate"] = es_empate
     return items
 
 
@@ -290,6 +300,15 @@ def aplicar_evento_figuras(estado, ev):
                 _agregar_log_f(
                     estado,
                     "[TURNO] Bloqueado: desempate en curso — solo los empatados pueden presentarse",
+                    "arb",
+                )
+                return estado
+            # Un competidor ya calificado por completo no se vuelve a activar
+            # (sus notas son inmutables; para repetir está el desempate).
+            if _competidor_completo(estado, comp["id"]):
+                _agregar_log_f(
+                    estado,
+                    f"[TURNO] Bloqueado: {comp['nombre']} ya fue calificado por completo",
                     "arb",
                 )
                 return estado

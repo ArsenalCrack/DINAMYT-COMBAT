@@ -232,6 +232,32 @@ class TestRankingFiguras:
         # Los especiales nunca quedan marcados en empate (no se reevalúan)
         assert all(not r["empate"] for r in ranking if r.get("especial"))
 
+    def test_empate_no_aparece_antes_de_calificar_completo(self):
+        e = self._base([("Ana", False), ("Luis", False)])
+        # Sin notas: ambos suman 0.00 pero NO es empate, les falta puntuar
+        ranking = calcular_ranking(e)
+        assert all(r["empate"] is False for r in ranking)
+        # Ana completa con 8.00; Luis con total parcial coincidente (8.00)
+        # pero aún incompleto: tampoco es empate todavía
+        _puntuar(e, 1, "j1", "4.00")
+        _puntuar(e, 1, "j2", "4.00")
+        _puntuar(e, 2, "j1", "8.00")
+        ranking = calcular_ranking(e)
+        assert all(r["empate"] is False for r in ranking)
+        # Solo cuando AMBOS están calificados por completo con el mismo total
+        _puntuar(e, 2, "j2", "0.00")
+        ranking = calcular_ranking(e)
+        assert all(r["empate"] is True for r in ranking)
+
+    def test_competidor_completo_no_se_reactiva(self):
+        e = self._base([("Ana", False), ("Luis", False)])
+        _puntuar(e, 1, "j1", "8.00")
+        _puntuar(e, 1, "j2", "8.00")  # Ana queda completa
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 2})
+        assert e["competidor_activo_id"] == 2, "Luis aún puede presentarse"
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 1})
+        assert e["competidor_activo_id"] == 2, "Ana ya está completa: no se reactiva"
+
     def test_mismo_total_es_empate_real(self):
         # Mismo total (16.00) aunque la distribución de notas difiera:
         # NO se desempata por la nota más alta, es empate real
