@@ -180,13 +180,34 @@ export interface LlaveEstructura {
 export interface LlaveData {
   id: number;
   campeonato_id: number;
+  tatami_id?: number | null;
+  tatami_numero?: number | null;
   nombre: string;
   estructura: LlaveEstructura;
   created_at: string;
 }
 
+export interface LlaveSiguiente {
+  ronda: number;
+  partido: number;
+  ronda_nombre: string;
+  comp1: LlaveCompetidor;
+  comp2: LlaveCompetidor;
+}
+
+export interface LlaveTatamiInfo {
+  id: number;
+  nombre: string;
+  tatami_id?: number | null;
+  tatami_numero?: number | null;
+  pendientes: number;
+  siguiente: LlaveSiguiente | null;
+  campeon: LlaveCompetidor | null;
+}
+
 export async function createLlaveAPI(data: {
   campeonato_id: number;
+  tatami_id?: number | null;
   nombre: string;
   competidores: { nombre: string; club?: string }[];
 }) {
@@ -197,6 +218,12 @@ export async function createLlaveAPI(data: {
 export async function listLlavesAPI(campeonatoId: number) {
   const res = await api.get(`/llaves/campeonato/${campeonatoId}`);
   return res.data as LlaveData[];
+}
+
+export async function listLlavesTatamiAPI(tatamiId: number | string) {
+  // Llaves asignadas a un tatami con su siguiente combate sugerido
+  const res = await api.get(`/llaves/tatami/${tatamiId}`);
+  return res.data as LlaveTatamiInfo[];
 }
 
 export async function marcarGanadorLlaveAPI(

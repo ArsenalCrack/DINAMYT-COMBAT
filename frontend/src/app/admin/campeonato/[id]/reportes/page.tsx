@@ -31,12 +31,19 @@ interface JuezReporte {
   origen: string;
 }
 
+interface CategoriaResumen {
+  nombre: string;
+  puntuacion: "combate" | "individual";
+  cantidad: number;
+}
+
 interface ReportData {
   combates: Combate[];
   total: number;
   page: number;
   pages: number;
   per_page: number;
+  categorias?: CategoriaResumen[];
 }
 
 interface TatamiOption {
@@ -86,6 +93,7 @@ export default function ReportesCampeonatoPage() {
   const [filters, setFilters] = useState({
     tatami_id: "",
     tipo: "",
+    categoria: "",
     desde: "",
     hasta: "",
     page: 1,
@@ -127,6 +135,7 @@ export default function ReportesCampeonatoPage() {
       };
       if (filters.tatami_id) qp.tatami_id = filters.tatami_id;
       if (filters.tipo) qp.tipo = filters.tipo;
+      if (filters.categoria) qp.categoria = filters.categoria;
       if (filters.desde) qp.desde = filters.desde;
       if (filters.hasta) qp.hasta = filters.hasta;
 
@@ -205,6 +214,7 @@ export default function ReportesCampeonatoPage() {
     const qp: Record<string, string> = { campeonato_id: campId, ...extra };
     if (filters.tatami_id) qp.tatami_id = filters.tatami_id;
     if (filters.tipo) qp.tipo = filters.tipo;
+    if (filters.categoria) qp.categoria = filters.categoria;
     if (filters.desde) qp.desde = filters.desde;
     if (filters.hasta) qp.hasta = filters.hasta;
     return new URLSearchParams(qp).toString();
@@ -248,8 +258,6 @@ export default function ReportesCampeonatoPage() {
     return "badge-gray";
   }
 
-  const numCombates = data?.combates.filter((c) => c.tipo !== "figuras").length || 0;
-  const numFiguras = data?.combates.filter((c) => c.tipo === "figuras").length || 0;
   const todosVisiblesMarcados = Boolean(
     data && data.combates.length > 0 && data.combates.every((c) => seleccion.has(c.id))
   );
@@ -324,27 +332,69 @@ export default function ReportesCampeonatoPage() {
         </div>
       )}
 
-      {/* Resumen */}
+      {/* Resumen: total + cada categoría del campeonato */}
       {data && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {[
-            { label: "Registros", valor: data.total, color: "var(--gold)" },
-            { label: "Combates (página)", valor: numCombates, color: "var(--hong-light)" },
-            { label: "Figuras (página)", valor: numFiguras, color: "var(--chung-light)" },
-            { label: "Seleccionados", valor: seleccion.size, color: "var(--green)" },
-          ].map((s) => (
-            <div key={s.label} className="card" style={{
+          <div className="card" style={{
+            padding: "10px 18px", display: "flex", flexDirection: "column",
+            alignItems: "center", flex: "0 1 140px",
+          }}>
+            <span style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", lineHeight: 1, color: "var(--gold)" }}>
+              {data.total}
+            </span>
+            <span style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)", marginTop: 4 }}>
+              Registros
+            </span>
+          </div>
+          {(data.categorias || []).map((cat) => (
+            <button
+              key={cat.nombre}
+              type="button"
+              className="card"
+              onClick={() => setFilters(f => ({
+                ...f,
+                categoria: f.categoria.toLowerCase() === cat.nombre.toLowerCase() ? "" : cat.nombre,
+                page: 1,
+              }))}
+              title={`Filtrar por ${cat.nombre} (puntuación ${cat.puntuacion === "individual" ? "individual" : "de combate"})`}
+              style={{
+                padding: "10px 18px", display: "flex", flexDirection: "column",
+                alignItems: "center", flex: "0 1 auto", minWidth: 120,
+                cursor: "pointer", font: "inherit", color: "inherit",
+                borderColor: filters.categoria.toLowerCase() === cat.nombre.toLowerCase()
+                  ? "var(--gold)" : undefined,
+                background: filters.categoria.toLowerCase() === cat.nombre.toLowerCase()
+                  ? "rgba(240,184,0,0.06)" : undefined,
+              }}
+            >
+              <span style={{
+                fontFamily: "var(--font-display)", fontSize: "1.8rem", lineHeight: 1,
+                color: cat.puntuacion === "individual" ? "var(--chung-light)" : "var(--hong-light)",
+              }}>
+                {cat.cantidad}
+              </span>
+              <span style={{
+                fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase",
+                letterSpacing: "0.06em", color: "var(--text-muted)", marginTop: 4,
+                maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {cat.nombre}
+              </span>
+            </button>
+          ))}
+          {seleccion.size > 0 && (
+            <div className="card" style={{
               padding: "10px 18px", display: "flex", flexDirection: "column",
-              alignItems: "center", flex: "1 1 120px",
+              alignItems: "center", flex: "0 1 140px", borderColor: "var(--green-border)",
             }}>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", lineHeight: 1, color: s.color }}>
-                {s.valor}
+              <span style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", lineHeight: 1, color: "var(--green)" }}>
+                {seleccion.size}
               </span>
               <span style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)", marginTop: 4 }}>
-                {s.label}
+                Seleccionados
               </span>
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -365,17 +415,31 @@ export default function ReportesCampeonatoPage() {
               ))}
             </select>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px" }}>
-            <label className="login-label" style={{ fontSize: "0.72rem" }}>Tipo</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 170px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Puntuación</label>
             <select
               className="input"
               value={filters.tipo}
               onChange={(e) => setFilters(f => ({ ...f, tipo: e.target.value, page: 1 }))}
               style={{ padding: "8px 12px", minHeight: 36 }}
             >
-              <option value="">Todos</option>
-              <option value="combate">Combates</option>
-              <option value="figuras">Figuras</option>
+              <option value="">Todas</option>
+              <option value="combate">Puntuación Combate</option>
+              <option value="figuras">Puntuación Individual</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 170px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Categoría</label>
+            <select
+              className="input"
+              value={filters.categoria}
+              onChange={(e) => setFilters(f => ({ ...f, categoria: e.target.value, page: 1 }))}
+              style={{ padding: "8px 12px", minHeight: 36 }}
+            >
+              <option value="">Todas las categorías</option>
+              {(data?.categorias || []).map((cat) => (
+                <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>
+              ))}
             </select>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
@@ -398,7 +462,7 @@ export default function ReportesCampeonatoPage() {
           </div>
           <button
             className="btn btn-sm"
-            onClick={() => setFilters({ tatami_id: "", tipo: "", desde: "", hasta: "", page: 1 })}
+            onClick={() => setFilters({ tatami_id: "", tipo: "", categoria: "", desde: "", hasta: "", page: 1 })}
             style={{ alignSelf: "flex-end" }}
           >
             Limpiar
@@ -464,7 +528,7 @@ export default function ReportesCampeonatoPage() {
                     />
                   </th>
                   <th>#</th>
-                  <th>Tipo</th>
+                  <th>Puntuación</th>
                   <th>Tatami</th>
                   <th>Categoría</th>
                   <th>Marcador</th>
@@ -489,8 +553,8 @@ export default function ReportesCampeonatoPage() {
                     </td>
                     <td className="text-muted font-mono" style={{ fontSize: "0.8rem" }}>{c.id}</td>
                     <td>
-                      <span className={`badge ${c.tipo === "figuras" ? "badge-gold" : "badge-gray"}`}>
-                        {c.tipo === "figuras" ? "Figuras" : "Combate"}
+                      <span className={`badge ${c.tipo === "figuras" ? "badge-chung" : "badge-hong"}`}>
+                        {c.tipo === "figuras" ? "Individual" : "Combate"}
                       </span>
                     </td>
                     <td className="text-center">

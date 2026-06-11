@@ -64,6 +64,7 @@ def _serializar_ts(ts):
         "jueces_meta": ts.get("jueces_meta", {}),
         "tatami_numero": ts.get("tatami_numero"),
         "campeonato_nombre": ts.get("campeonato_nombre"),
+        "combate_llave": ts.get("combate_llave"),
     }
 
 
@@ -108,6 +109,7 @@ def _cargar_estados():
                 "roles_activos": {},
                 "tatami_numero": guardado.get("tatami_numero"),
                 "campeonato_nombre": guardado.get("campeonato_nombre"),
+                "combate_llave": guardado.get("combate_llave"),
             }
         if data:
             print(f"  [OK] Estado de {len(data)} tatami(s) restaurado tras reinicio")
@@ -176,6 +178,8 @@ ACCIONES_SOLO_ARBITRO = {
     "activar_competidor",
     "cerrar_puntuacion",
     "finalizar",
+    "activar_combate_llave",
+    "soltar_combate_llave",
 }
 
 CATEGORIA_NOMBRE_MAX = 40
@@ -248,6 +252,7 @@ def _build_estado_broadcast(ts):
     estado_copy["_nombre_categoria"] = ts.get("nombre_categoria", "Figuras")
     estado_copy["_tatami_numero"] = ts.get("tatami_numero")
     estado_copy["_campeonato_nombre"] = ts.get("campeonato_nombre")
+    estado_copy["_combate_llave"] = ts.get("combate_llave")
     return estado_copy
 
 
@@ -528,10 +533,62 @@ class CombateNamespace(Namespace):
                 self._broadcast_estado(room, ts)
                 return
 
+            # ── Activar / soltar combate de eliminación (llave) ────────────
+            if accion == "activar_combate_llave":
+                error = self._activar_combate_llave(tatami_id, ts, ev)
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                if error:
+                    emit("accion_rechazada", {"message": error})
+                    return
+                self._broadcast_estado(room, ts)
+                return
+
+            if accion == "soltar_combate_llave":
+                if ts.get("combate_llave"):
+                    ts.pop("combate_llave", None)
+                    _agregar_log(
+                        ts["estado"],
+                        "[LLAVE] Combate de eliminación liberado — marcador suelto",
+                        "arb",
+                    )
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                self._broadcast_estado(room, ts)
+                return
+
             # ── Nuevo combate / nueva categoría ────────────────────────────
             if accion == "nuevo_combate":
-                self._guardar_combate_actual(tatami_id, ts)
                 categoria = ts.get("categoria_activa", "combate")
+                llave_info = ts.get("combate_llave") if categoria == "combate" else None
+
+                # Combate de eliminación: debe haber un ganador definido
+                ganador_color = None
+                if llave_info:
+                    if not ts["estado"].get("historial"):
+                        if ev_id:
+                            emit("ack", {"evId": ev_id})
+                        emit("accion_rechazada", {
+                            "message": "No hay puntos registrados en este combate de eliminación. "
+                                       "Usa 'Soltar combate' si no se va a disputar."
+                        })
+                        return
+                    snap = guardar_combate_snapshot(ts["estado"])
+                    ganador_color = snap.get("ganador_manual") or (
+                        "hong" if snap["marcador_hong"] > snap["marcador_chung"]
+                        else "chung" if snap["marcador_chung"] > snap["marcador_hong"]
+                        else "empate"
+                    )
+                    if ganador_color == "empate":
+                        if ev_id:
+                            emit("ack", {"evId": ev_id})
+                        emit("accion_rechazada", {
+                            "message": "En un combate de eliminación debe haber un ganador. "
+                                       "Usa Punto de Oro o la decisión del Juez Central para desempatar."
+                        })
+                        return
+
+                self._guardar_combate_actual(tatami_id, ts, llave_info=llave_info)
                 if categoria == "figuras":
                     nombre_cat = ts.get("nombre_categoria", "Figuras")
                     nuevo = estado_inicial_figuras()
@@ -552,6 +609,11 @@ class CombateNamespace(Namespace):
                     ts["estado"]["numJueces"] = num_j
                     ts["estado"]["nombresJueces"] = nombres_j
                     _agregar_log(ts["estado"], "[OK] Combate guardado — Nuevo combate", "arb")
+
+                # El ganador avanza en la llave y se libera el tatami
+                if llave_info and ganador_color in ("hong", "chung"):
+                    self._registrar_resultado_llave(ts, llave_info, ganador_color)
+
                 self._detener_crono(tatami_id)
                 if ev_id:
                     emit("ack", {"evId": ev_id})
@@ -695,6 +757,109 @@ class CombateNamespace(Namespace):
         ev["juez_rol"] = meta.get("rol_tatami") or actor_rol
         ev["juez_acceso"] = meta.get("origen") or "pin"
 
+    def _activar_combate_llave(self, tatami_id, ts, ev):
+        """
+        Activa el siguiente combate de eliminación de una llave en este tatami:
+        autocompleta los nombres (comp1=Hong/Rojo, comp2=Chung/Azul) y deja el
+        cronómetro pausado, listo para comenzar.
+        Retorna un mensaje de error, o None si todo salió bien.
+        """
+        from ..models.llave import Llave
+        from ..api.llaves import siguiente_partido, nombre_ronda
+
+        if ts.get("categoria_activa", "combate") != "combate":
+            return "Cambia a la categoría Combate antes de activar un combate de eliminación."
+
+        estado = ts["estado"]
+        if estado.get("historial") or estado.get("segundos", 0) < estado.get("segundosMax", 120):
+            return "Guarda o resetea el combate actual antes de activar uno de eliminación."
+
+        try:
+            llave = Llave.query.get(int(ev.get("llave_id", 0)))
+        except (TypeError, ValueError):
+            llave = None
+        if not llave:
+            return "Llave no encontrada."
+        if llave.tatami_id != int(tatami_id):
+            return "Esta llave está asignada a otro tatami."
+
+        sig = siguiente_partido(llave.estructura or {})
+        if sig is None:
+            return "No quedan combates pendientes en esta llave."
+
+        ronda_idx, partido_idx, partido = sig
+        total_rondas = len((llave.estructura or {}).get("rondas", []))
+
+        # Nuevo marcador con los nombres del cuadro (crono pausado)
+        seg_max = estado.get("segundosMax", 120)
+        num_j = estado.get("numJueces", 4)
+        nombres_j = copy.deepcopy(estado.get("nombresJueces", {}))
+        nuevo = estado_inicial()
+        nuevo["segundosMax"] = seg_max
+        nuevo["segundos"] = seg_max
+        nuevo["numJueces"] = num_j
+        nuevo["nombresJueces"] = nombres_j
+        nuevo["nombreHong"] = partido["comp1"]["nombre"]
+        nuevo["nombreChung"] = partido["comp2"]["nombre"]
+        ts["estado"] = nuevo
+
+        etiqueta_ronda = nombre_ronda(ronda_idx, total_rondas)
+        ts["combate_llave"] = {
+            "llave_id": llave.id,
+            "nombre": llave.nombre,
+            "ronda": ronda_idx,
+            "partido": partido_idx,
+            "ronda_nombre": etiqueta_ronda,
+            "comp1": partido["comp1"],
+            "comp2": partido["comp2"],
+        }
+        self._detener_crono(tatami_id)
+        _agregar_log(
+            ts["estado"],
+            f"[LLAVE] {llave.nombre} · {etiqueta_ronda}: "
+            f"{partido['comp1']['nombre']} (Rojo) vs {partido['comp2']['nombre']} (Azul)",
+            "arb",
+        )
+        return None
+
+    def _registrar_resultado_llave(self, ts, llave_info, ganador_color):
+        """El ganador del combate avanza en la llave; libera el tatami."""
+        from ..models.llave import Llave
+        from ..api.llaves import registrar_resultado, partidos_jugables
+
+        try:
+            llave = Llave.query.get(llave_info["llave_id"])
+            if llave:
+                estructura = copy.deepcopy(llave.estructura)
+                lado = 1 if ganador_color == "hong" else 2
+                registrar_resultado(
+                    estructura, llave_info["ronda"], llave_info["partido"], lado
+                )
+                llave.estructura = estructura
+                db.session.commit()
+
+                ganador = llave_info["comp1"] if lado == 1 else llave_info["comp2"]
+                campeon = estructura.get("campeon")
+                pendientes = len(partidos_jugables(estructura))
+                if campeon:
+                    _agregar_log(
+                        ts["estado"],
+                        f"[LLAVE] 🏆 {campeon['nombre']} CAMPEÓN — {llave_info['nombre']}",
+                        "arb",
+                    )
+                else:
+                    _agregar_log(
+                        ts["estado"],
+                        f"[LLAVE] {ganador['nombre']} avanza — "
+                        f"{pendientes} combate(s) pendiente(s) en {llave_info['nombre']}",
+                        "arb",
+                    )
+        except Exception as e:
+            db.session.rollback()
+            print(f"  [ERR] Error registrando resultado en la llave: {e}")
+        finally:
+            ts.pop("combate_llave", None)
+
     def _obtener_sesion_categoria(self, tatami_id, slug):
         from ..models.categoria import Categoria
 
@@ -718,7 +883,7 @@ class CombateNamespace(Namespace):
             db.session.flush()
         return sesion, cat
 
-    def _guardar_combate_actual(self, tatami_id, ts):
+    def _guardar_combate_actual(self, tatami_id, ts, llave_info=None):
         """Guarda el combate actual en la base de datos."""
         estado = ts["estado"]
         categoria = ts.get("categoria_activa", "combate")
@@ -788,6 +953,15 @@ class CombateNamespace(Namespace):
 
         snapshot = guardar_combate_snapshot(estado)
         snapshot["jueces_detalle"]["asignaciones"] = self._jueces_reporte(tatami_id, ts)
+        if llave_info:
+            snapshot["jueces_detalle"]["llave"] = {
+                "llave_id": llave_info.get("llave_id"),
+                "nombre": llave_info.get("nombre"),
+                "ronda_nombre": llave_info.get("ronda_nombre"),
+            }
+            snapshot["jueces_detalle"]["nombre_categoria"] = (
+                f"{llave_info.get('nombre')} · {llave_info.get('ronda_nombre')}"
+            )
 
         try:
             sesion, cat = self._obtener_sesion_categoria(tatami_id, "combate")

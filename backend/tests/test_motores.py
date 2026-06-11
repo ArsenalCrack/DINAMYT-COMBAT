@@ -19,7 +19,15 @@ from app.engine.figuras_engine import (  # noqa: E402
     puntuaciones_completas,
     _parse_puntuacion,
 )
-from app.api.llaves import generar_estructura, _avanzar, _limpiar_descendientes  # noqa: E402
+from app.api.llaves import (  # noqa: E402
+    generar_estructura,
+    _avanzar,
+    _limpiar_descendientes,
+    siguiente_partido,
+    registrar_resultado,
+    partidos_jugables,
+    nombre_ronda,
+)
 from app.security import intento_bloqueado, limpiar_intentos  # noqa: E402
 
 
@@ -173,6 +181,74 @@ class TestLlaves:
         _limpiar_descendientes(e, 0, 0)
         assert e["campeon"] is None
         assert e["rondas"][1][0]["ganador"] is None
+
+
+# ══════════════════════════════════════════════════════════════════
+#  SIGUIENTE COMBATE (integración con el Juez Central)
+# ══════════════════════════════════════════════════════════════════
+
+class TestSiguienteCombate:
+    def test_nombres_de_ronda(self):
+        assert nombre_ronda(2, 3) == "Final"
+        assert nombre_ronda(1, 3) == "Semifinal"
+        assert nombre_ronda(0, 3) == "Cuartos"
+        assert nombre_ronda(0, 4) == "Octavos"
+
+    def test_siguiente_en_orden(self):
+        e = generar_estructura([{"nombre": f"C{i}"} for i in range(8)])
+        sig = siguiente_partido(e)
+        assert sig is not None
+        assert sig[0] == 0  # primera ronda primero
+
+    def test_registrar_resultado_avanza_y_marca_descanso(self):
+        e = generar_estructura([{"nombre": f"C{i}"} for i in range(4)])
+        r, i, p = siguiente_partido(e)
+        registrar_resultado(e, r, i, 1)
+        ganador = p["comp1"]
+        # el ganador quedó en la siguiente ronda
+        assert any(
+            (m["comp1"] and m["comp1"]["id"] == ganador["id"])
+            or (m["comp2"] and m["comp2"]["id"] == ganador["id"])
+            for m in e["rondas"][1]
+        )
+        # quienes acaban de pelear quedan registrados para descanso
+        assert set(e["ultimo_jugado"]) == {p["comp1"]["id"], p["comp2"]["id"]}
+
+    def test_evita_que_ganador_pelee_de_inmediato(self):
+        # 4 competidores: tras jugar el partido 0, el siguiente debe ser el
+        # partido 1 (los del partido 0 descansan).
+        e = generar_estructura([{"nombre": f"C{i}"} for i in range(4)])
+        r0, i0, p0 = siguiente_partido(e)
+        ids_p0 = {p0["comp1"]["id"], p0["comp2"]["id"]}
+        registrar_resultado(e, r0, i0, 1)
+        sig = siguiente_partido(e)
+        assert sig is not None
+        ids_sig = {sig[2]["comp1"]["id"], sig[2]["comp2"]["id"]}
+        assert not (ids_sig & ids_p0), "el ganador no debe pelear de inmediato"
+
+    def test_acepta_consecutivo_si_no_hay_opcion(self):
+        # Con 2 competidores la final es inevitablemente consecutiva… pero
+        # con 3, tras el único partido de ronda 0, la final incluye al ganador
+        # (no hay otra opción) y debe sugerirse igualmente.
+        e = generar_estructura([{"nombre": "A"}, {"nombre": "B"}, {"nombre": "C"}])
+        r, i, _p = siguiente_partido(e)
+        registrar_resultado(e, r, i, 1)
+        sig = siguiente_partido(e)
+        assert sig is not None, "debe sugerir la final aunque haya repetición"
+
+    def test_torneo_completo_via_siguiente(self):
+        e = generar_estructura([{"nombre": f"C{i}"} for i in range(6)])
+        vueltas = 0
+        while True:
+            sig = siguiente_partido(e)
+            if sig is None:
+                break
+            r, i, _ = sig
+            registrar_resultado(e, r, i, 1)
+            vueltas += 1
+            assert vueltas < 20, "bucle infinito"
+        assert e["campeon"] is not None
+        assert len(partidos_jugables(e)) == 0
 
 
 # ══════════════════════════════════════════════════════════════════

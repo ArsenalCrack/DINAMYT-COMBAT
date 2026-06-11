@@ -16,6 +16,7 @@ import AlertSystem, {
   type Alerta12Data,
   type DerrotaData,
 } from "@/components/AlertSystem";
+import LlavePanel from "@/components/LlavePanel";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
 interface Criterio { id: string; nombre: string; max_pts: number; }
@@ -1038,6 +1039,15 @@ function CombatePantalla({
           }}>
             {RONDAS[state.ronda] || state.ronda}
           </div>
+          {state._combate_llave && (
+            <div style={{
+              fontSize: "clamp(0.65rem,1.2vw,0.95rem)", fontWeight: 800,
+              color: "var(--gold)", textTransform: "uppercase",
+              letterSpacing: "0.1em", marginTop: 8,
+            }}>
+              {state._combate_llave.nombre} · {state._combate_llave.ronda_nombre}
+            </div>
+          )}
         </div>
 
         {/* CHUNG */}
@@ -1263,12 +1273,13 @@ function CombateJuez({
 // COMBATE — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function CombateArbitro({
-  state, enviarEvento,
+  state, enviarEvento, tatamiDbId,
   onFlash, onFaltaFlash, onShowConfirm, broadcast
 }: {
   state: CombateState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   tatamiId: string;
+  tatamiDbId: string;
   onFlash: (ico: string, txt: string) => void;
   onFaltaFlash: (data: FaltaFlashData) => void;
   onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
@@ -1433,6 +1444,14 @@ function CombateArbitro({
           </div>
         </div>
       )}
+
+      {/* Combates de eliminación (llaves asignadas a este tatami) */}
+      <LlavePanel
+        tatamiDbId={tatamiDbId}
+        combateLlave={state._combate_llave}
+        enviarEvento={enviarEvento}
+        onShowConfirm={onShowConfirm}
+      />
 
       {/* Nombres */}
       <div className="grid-2" style={{ marginBottom: 10 }}>
@@ -2047,6 +2066,7 @@ function TatamiContent() {
                 state={state}
                 enviarEvento={enviarEvento}
                 tatamiId={tatamiLabel}
+                tatamiDbId={tatamiId}
                 onFlash={alertSystem.showFlash}
                 onFaltaFlash={alertSystem.showFaltaFlash}
                 onShowConfirm={alertSystem.showConfirm}

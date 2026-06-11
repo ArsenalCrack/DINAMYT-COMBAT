@@ -82,6 +82,39 @@ def _build_query(args):
     return q
 
 
+def _rows_filtradas(args):
+    """
+    Filas (combate, tatami, camp) con todos los filtros aplicados.
+    El filtro de categoría se aplica en Python porque el nombre de la
+    categoría vive dentro del JSON jueces_detalle.
+    """
+    rows = _build_query(args).all()
+    categoria = (args.get("categoria") or "").strip().lower()
+    if categoria:
+        rows = [
+            r for r in rows
+            if _nombre_categoria_registro(r[0]).strip().lower() == categoria
+        ]
+    return rows
+
+
+def _resumen_categorias(rows):
+    """Conteo por nombre de categoría con su forma de puntuación."""
+    resumen = {}
+    for c, _t, _camp in rows:
+        nombre = _nombre_categoria_registro(c)
+        tipo = _tipo_registro(c)
+        item = resumen.setdefault(nombre, {
+            "nombre": nombre,
+            # Forma de puntuación: "combate" (Hong vs Chung) o
+            # "individual" (sistema de figuras reutilizado por categorías)
+            "puntuacion": "individual" if tipo == "figuras" else "combate",
+            "cantidad": 0,
+        })
+        item["cantidad"] += 1
+    return sorted(resumen.values(), key=lambda x: (-x["cantidad"], x["nombre"]))
+
+
 def _slug(texto, fallback="reporte"):
     """Texto seguro para nombres de archivo."""
     limpio = re.sub(r"[^A-Za-z0-9]+", "-", str(texto or "")).strip("-").lower()
@@ -330,9 +363,21 @@ def listar_combates():
     page = max(1, int(request.args.get("page", 1)))
     per_page = min(200, max(1, int(request.args.get("per_page", 50))))
 
-    q = _build_query(request.args)
-    total = q.count()
-    rows = q.offset((page - 1) * per_page).limit(per_page).all()
+    # Todas las filas con filtros SQL: el resumen por categoría se calcula
+    # ANTES del filtro de categoría para que el selector muestre todas.
+    rows_sql = _build_query(request.args).all()
+    categorias = _resumen_categorias(rows_sql)
+
+    categoria = (request.args.get("categoria") or "").strip().lower()
+    rows_filtradas = rows_sql
+    if categoria:
+        rows_filtradas = [
+            r for r in rows_sql
+            if _nombre_categoria_registro(r[0]).strip().lower() == categoria
+        ]
+
+    total = len(rows_filtradas)
+    rows = rows_filtradas[(page - 1) * per_page: page * per_page]
 
     result = []
     for c, tatami, camp in rows:
@@ -370,6 +415,7 @@ def listar_combates():
         "page": page,
         "per_page": per_page,
         "pages": (total + per_page - 1) // per_page,
+        "categorias": categorias,
     }), 200
 
 
@@ -893,7 +939,7 @@ def exportar_excel():
         return jsonify({"error": "Solo administradores"}), 403
 
     try:
-        rows = _build_query(request.args).all()
+        rows = _rows_filtradas(request.args)
         ctx = _contexto_filtros(request.args)
         output = _generar_excel(rows, _subtitulo_filtros(ctx))
     except ImportError:
@@ -918,7 +964,7 @@ def exportar_pdf():
         return jsonify({"error": "Solo administradores"}), 403
 
     try:
-        rows = _build_query(request.args).all()
+        rows = _rows_filtradas(request.args)
         ctx = _contexto_filtros(request.args)
         output = _generar_pdf(rows, _subtitulo_filtros(ctx))
     except ImportError:
@@ -952,7 +998,7 @@ def exportar_zip():
     if formato not in ("excel", "pdf"):
         return jsonify({"error": "Formato inválido. Usa 'excel' o 'pdf'."}), 400
 
-    rows = _build_query(request.args).all()
+    rows = _rows_filtradas(request.args)
     if not rows:
         return jsonify({"error": "No hay registros con los filtros actuales."}), 404
 

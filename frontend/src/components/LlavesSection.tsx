@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createLlaveAPI,
   listLlavesAPI,
+  listTatamisAPI,
   marcarGanadorLlaveAPI,
   deleteLlaveAPI,
   type LlaveData,
@@ -57,17 +58,25 @@ function LadoPartido({
 
 export default function LlavesSection({ campeonatoId }: { campeonatoId: number }) {
   const [llaves, setLlaves] = useState<LlaveData[]>([]);
+  const [tatamis, setTatamis] = useState<{ id: number; numero: number }[]>([]);
   const [abierta, setAbierta] = useState<number | null>(null);
   const [creando, setCreando] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [tatamiId, setTatamiId] = useState("");
   const [listaTexto, setListaTexto] = useState("");
   const [msg, setMsg] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
-      const data = await listLlavesAPI(campeonatoId);
+      const [data, t] = await Promise.all([
+        listLlavesAPI(campeonatoId),
+        listTatamisAPI(campeonatoId),
+      ]);
       setLlaves(data);
+      setTatamis(
+        (t as { id: number; numero: number }[]).map((x) => ({ id: x.id, numero: x.numero }))
+      );
     } catch { /* */ }
   }, [campeonatoId]);
 
@@ -96,15 +105,21 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
       flash("Escribe el nombre de la llave y al menos 2 competidores.");
       return;
     }
+    if (!tatamiId) {
+      flash("Selecciona el tatami donde se disputará esta llave.");
+      return;
+    }
     setGuardando(true);
     try {
       const res = await createLlaveAPI({
         campeonato_id: campeonatoId,
+        tatami_id: Number(tatamiId),
         nombre: nombre.trim(),
         competidores,
       });
       setCreando(false);
       setNombre("");
+      setTatamiId("");
       setListaTexto("");
       await cargar();
       setAbierta(res.llave.id);
@@ -175,6 +190,17 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
             onChange={(e) => setNombre(e.target.value)}
             required
           />
+          <select
+            className="input"
+            value={tatamiId}
+            onChange={(e) => setTatamiId(e.target.value)}
+            required
+          >
+            <option value="">Tatami donde se disputará...</option>
+            {tatamis.map((t) => (
+              <option key={t.id} value={String(t.id)}>Tatami {t.numero}</option>
+            ))}
+          </select>
           <textarea
             className="input"
             placeholder={"Un competidor por línea. Club opcional con coma:\nJuan Pérez, Club Tigre\nMaría López"}
@@ -222,7 +248,14 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: "1rem" }}>{llave.nombre}</div>
+                    <div style={{ fontWeight: 800, fontSize: "1rem" }}>
+                      {llave.nombre}
+                      {llave.tatami_numero && (
+                        <span className="badge badge-chung" style={{ marginLeft: 8, verticalAlign: "middle" }}>
+                          Tatami {llave.tatami_numero}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", marginTop: 2 }}>
                       {llave.estructura.competidores.length} competidores · {totalRondas} ronda(s)
                       {campeon && (

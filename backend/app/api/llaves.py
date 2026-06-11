@@ -15,11 +15,97 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
 from ..models.usuario import Usuario
 from ..models.campeonato import Campeonato
+from ..models.tatami import Tatami
 from ..models.llave import Llave
 
 llaves_bp = Blueprint("llaves", __name__)
 
 MAX_COMPETIDORES = 64
+
+RONDA_NOMBRES = {1: "Final", 2: "Semifinal", 3: "Cuartos", 4: "Octavos"}
+
+
+def nombre_ronda(ronda_idx, total_rondas):
+    """Nombre legible de una ronda: Final, Semifinal, Cuartos, ..."""
+    restantes = total_rondas - ronda_idx
+    return RONDA_NOMBRES.get(restantes, f"Ronda {ronda_idx + 1}")
+
+
+def partidos_jugables(estructura):
+    """Partidos con ambos competidores definidos y sin ganador, en orden."""
+    jugables = []
+    for r, ronda in enumerate(estructura.get("rondas", [])):
+        for i, p in enumerate(ronda):
+            if p.get("ganador") is None and p.get("comp1") and p.get("comp2"):
+                jugables.append((r, i, p))
+    return jugables
+
+
+def siguiente_partido(estructura):
+    """
+    Elige el siguiente combate a disputar.
+    Se intenta que los peleadores del último combate jugado no vuelvan
+    a pelear de inmediato (descanso), cuando hay otra opción disponible.
+    Retorna (ronda_idx, partido_idx, partido) o None si no quedan.
+    """
+    jugables = partidos_jugables(estructura)
+    if not jugables:
+        return None
+    ultimo = estructura.get("ultimo_jugado") or []
+    ids_descansando = set(ultimo)
+    if ids_descansando:
+        for r, i, p in jugables:
+            ids = {p["comp1"]["id"], p["comp2"]["id"]}
+            if not (ids & ids_descansando):
+                return (r, i, p)
+    return jugables[0]
+
+
+def registrar_resultado(estructura, ronda_idx, partido_idx, ganador):
+    """
+    Marca (o corrige) el ganador de un partido, propaga el avance y
+    registra quiénes acaban de pelear (para darles descanso).
+    Lanza ValueError si el partido o el lado no son válidos.
+    """
+    rondas = estructura.get("rondas", [])
+    if not (0 <= ronda_idx < len(rondas)) or not (0 <= partido_idx < len(rondas[ronda_idx])):
+        raise ValueError("Partido no encontrado")
+
+    partido = rondas[ronda_idx][partido_idx]
+    if ganador == 1 and not partido.get("comp1"):
+        raise ValueError("Ese lado del partido está vacío")
+    if ganador == 2 and not partido.get("comp2"):
+        raise ValueError("Ese lado del partido está vacío")
+    if ganador not in (1, 2, None):
+        raise ValueError("ganador debe ser 1, 2 o null")
+
+    _limpiar_descendientes(estructura, ronda_idx, partido_idx)
+    partido["ganador"] = ganador
+    if ganador is not None:
+        _avanzar(estructura, ronda_idx, partido_idx)
+        if partido.get("comp1") and partido.get("comp2"):
+            estructura["ultimo_jugado"] = [
+                partido["comp1"]["id"], partido["comp2"]["id"],
+            ]
+    return estructura
+
+
+def _info_siguiente(llave):
+    """Resumen del siguiente combate de una llave (para UI del Juez Central)."""
+    estructura = llave.estructura or {}
+    sig = siguiente_partido(estructura)
+    total = len(estructura.get("rondas", []))
+    return {
+        "pendientes": len(partidos_jugables(estructura)),
+        "siguiente": None if sig is None else {
+            "ronda": sig[0],
+            "partido": sig[1],
+            "ronda_nombre": nombre_ronda(sig[0], total),
+            "comp1": sig[2]["comp1"],
+            "comp2": sig[2]["comp2"],
+        },
+        "campeon": estructura.get("campeon"),
+    }
 
 
 def _require_admin():
@@ -130,6 +216,7 @@ def crear():
 
     data = request.get_json() or {}
     campeonato_id = data.get("campeonato_id")
+    tatami_id = data.get("tatami_id")
     nombre = (data.get("nombre") or "").strip()
     competidores = data.get("competidores") or []
 
@@ -137,6 +224,13 @@ def crear():
         return jsonify({"error": "Campeonato no encontrado"}), 404
     if not nombre:
         return jsonify({"error": "El nombre de la llave es requerido"}), 400
+
+    # El tatami es donde se disputarán los combates de esta llave
+    tatami = None
+    if tatami_id:
+        tatami = Tatami.query.get(int(tatami_id))
+        if not tatami or tatami.campeonato_id != int(campeonato_id):
+            return jsonify({"error": "El tatami no pertenece a este campeonato"}), 400
 
     competidores = [
         {"nombre": str(c.get("nombre", "")).strip(), "club": str(c.get("club", "")).strip()}
@@ -150,13 +244,27 @@ def crear():
 
     llave = Llave(
         campeonato_id=int(campeonato_id),
+        tatami_id=tatami.id if tatami else None,
         nombre=nombre[:120],
         estructura=generar_estructura(competidores),
         created_by=admin.id,
     )
     db.session.add(llave)
     db.session.commit()
-    return jsonify({"message": "Llave creada con sorteo aleatorio", "llave": llave.to_dict()}), 201
+    return jsonify({
+        "message": "Llave creada con sorteo aleatorio",
+        "llave": llave.to_dict(tatami_numero=tatami.numero if tatami else None),
+    }), 201
+
+
+def _con_numero_tatami(llaves):
+    """Adjunta el número de tatami a cada llave (una consulta por lote)."""
+    tatami_ids = {l.tatami_id for l in llaves if l.tatami_id}
+    numeros = {}
+    if tatami_ids:
+        for t in Tatami.query.filter(Tatami.id.in_(tatami_ids)).all():
+            numeros[t.id] = t.numero
+    return [l.to_dict(tatami_numero=numeros.get(l.tatami_id)) for l in llaves]
 
 
 @llaves_bp.route("/campeonato/<int:camp_id>", methods=["GET"])
@@ -168,7 +276,28 @@ def listar_por_campeonato(camp_id):
         .order_by(Llave.created_at.desc())
         .all()
     )
-    return jsonify([l.to_dict() for l in llaves]), 200
+    return jsonify(_con_numero_tatami(llaves)), 200
+
+
+@llaves_bp.route("/tatami/<int:tatami_id>", methods=["GET"])
+@jwt_required()
+def listar_por_tatami(tatami_id):
+    """
+    GET /api/llaves/tatami/:id — Llaves asignadas a un tatami, con el
+    siguiente combate sugerido (lo usa el panel del Juez Central).
+    """
+    llaves = (
+        Llave.query.filter_by(tatami_id=tatami_id)
+        .order_by(Llave.created_at.asc())
+        .all()
+    )
+    result = []
+    for llave_obj, datos in zip(llaves, _con_numero_tatami(llaves)):
+        datos.update(_info_siguiente(llave_obj))
+        # El cuadro completo no hace falta en el panel del tatami
+        datos.pop("estructura", None)
+        result.append(datos)
+    return jsonify(result), 200
 
 
 @llaves_bp.route("/<int:llave_id>", methods=["GET"])
@@ -176,7 +305,7 @@ def listar_por_campeonato(camp_id):
 def obtener(llave_id):
     """GET /api/llaves/:id — Detalle de una llave."""
     llave = Llave.query.get_or_404(llave_id)
-    return jsonify(llave.to_dict()), 200
+    return jsonify(_con_numero_tatami([llave])[0]), 200
 
 
 @llaves_bp.route("/<int:llave_id>/partido", methods=["PUT"])
@@ -201,31 +330,22 @@ def marcar_ganador(llave_id):
         return jsonify({"error": "ronda y partido son requeridos"}), 400
 
     ganador = data.get("ganador")
-    if ganador not in (1, 2, None):
-        return jsonify({"error": "ganador debe ser 1, 2 o null"}), 400
 
-    # Copia profunda implícita: JSON column requiere reasignar el objeto
+    # Copia profunda: la columna JSON requiere reasignar el objeto completo
     import copy
     estructura = copy.deepcopy(llave.estructura)
-    rondas = estructura.get("rondas", [])
-    if not (0 <= ronda_idx < len(rondas)) or not (0 <= partido_idx < len(rondas[ronda_idx])):
-        return jsonify({"error": "Partido no encontrado"}), 404
-
-    partido = rondas[ronda_idx][partido_idx]
-    if ganador == 1 and not partido.get("comp1"):
-        return jsonify({"error": "Ese lado del partido está vacío"}), 400
-    if ganador == 2 and not partido.get("comp2"):
-        return jsonify({"error": "Ese lado del partido está vacío"}), 400
-
-    # Corregir resultado previo: limpiar lo que dependía de él
-    _limpiar_descendientes(estructura, ronda_idx, partido_idx)
-    partido["ganador"] = ganador
-    if ganador is not None:
-        _avanzar(estructura, ronda_idx, partido_idx)
+    try:
+        registrar_resultado(estructura, ronda_idx, partido_idx, ganador)
+    except ValueError as e:
+        codigo = 404 if "no encontrado" in str(e) else 400
+        return jsonify({"error": str(e)}), codigo
 
     llave.estructura = estructura
     db.session.commit()
-    return jsonify({"message": "Resultado registrado", "llave": llave.to_dict()}), 200
+    return jsonify({
+        "message": "Resultado registrado",
+        "llave": _con_numero_tatami([llave])[0],
+    }), 200
 
 
 @llaves_bp.route("/<int:llave_id>", methods=["DELETE"])

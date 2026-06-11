@@ -39,6 +39,15 @@ export interface CombateState {
   _nombre_categoria?: string;
   _tatami_numero?: number | null;
   _campeonato_nombre?: string | null;
+  _combate_llave?: {
+    llave_id: number;
+    nombre: string;
+    ronda: number;
+    partido: number;
+    ronda_nombre: string;
+    comp1: { id: number; nombre: string };
+    comp2: { id: number; nombre: string };
+  } | null;
 }
 
 export interface HistorialEntry {

@@ -13,6 +13,9 @@ OPTIONAL_COLUMNS = {
     "asignaciones_juez": {
         "asignado_por_id": "INTEGER",
     },
+    "llaves": {
+        "tatami_id": "INTEGER",
+    },
 }
 
 
