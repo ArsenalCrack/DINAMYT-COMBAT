@@ -755,7 +755,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
         borderBottom: "1px solid var(--border)",
         background: "var(--bg-card)",
       }}>
-        <Logo fontSize="clamp(1.5rem, 4vw, 2rem)" />
+        <Logo stacked fontSize="clamp(1.2rem, 3vw, 1.6rem)" />
         {state._campeonato_nombre && (
           <div style={{
             fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 700,
@@ -986,7 +986,7 @@ function CombatePantalla({
           textAlign: "center", padding: "12px 20px",
           borderBottom: "1px solid var(--border)", background: "var(--bg-card)",
         }}>
-          <Logo fontSize="clamp(1.4rem, 3.5vw, 1.8rem)" />
+          <Logo stacked fontSize="clamp(1.1rem, 2.6vw, 1.4rem)" />
           {state._campeonato_nombre && (
             <div style={{
               fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 700,
@@ -1069,6 +1069,12 @@ function CombatePantalla({
 
         {/* CENTER */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 20px" }}>
+          {/* Logo encima del nombre del campeonato */}
+          <Logo
+            soloImagen
+            fontSize="clamp(1.3rem, 2.6vw, 2.2rem)"
+            style={{ marginBottom: 6 }}
+          />
           {state._campeonato_nombre && (
             <div style={{
               fontSize: "clamp(0.65rem,1.2vw,0.9rem)", color: "var(--text-muted)",
@@ -1905,7 +1911,7 @@ function TatamiContent() {
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div className="card" style={{ maxWidth: 460, width: "100%", textAlign: "center" }}>
-          <Logo fontSize="2.4rem" style={{ marginBottom: 12 }} />
+          <Logo stacked fontSize="1.9rem" style={{ marginBottom: 12 }} />
           <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "1rem", marginBottom: 8 }}>
             Rol no disponible
           </div>
@@ -1923,7 +1929,7 @@ function TatamiContent() {
   if (!hasServerState) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
-        <Logo className="animate-fade" fontSize="3rem" />
+        <Logo stacked className="animate-fade" fontSize="2.4rem" />
       </div>
     );
   }
@@ -1933,7 +1939,7 @@ function TatamiContent() {
     if (anyState._tatami_activo === false) {
       return (
         <div style={{ height: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <Logo fontSize="clamp(2.6rem, 8vw, 4rem)" style={{ marginBottom: 16 }} />
+          <Logo stacked fontSize="clamp(2rem, 6vw, 3rem)" style={{ marginBottom: 16 }} />
           <div style={{ fontSize: "2.5rem", color: "var(--text-dim)", fontFamily: "var(--font-display)", letterSpacing: "0.15em", marginBottom: 8 }}>
             TATAMI {tatamiLabel}
           </div>
@@ -2157,7 +2163,7 @@ export default function TatamiPage() {
   return (
     <Suspense fallback={
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
-        <Logo className="animate-fade" fontSize="3rem" />
+        <Logo stacked className="animate-fade" fontSize="2.4rem" />
       </div>
     }>
       <TatamiContent />

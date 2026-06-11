@@ -38,7 +38,7 @@ export default function LoginPage() {
       <div className="login-wrapper animate-slide">
         {/* Logo central */}
         <div className="login-logo">
-          <Logo fontSize="clamp(2.4rem, 8vw, 3.5rem)" />
+          <Logo stacked fontSize="clamp(2rem, 6vw, 2.8rem)" />
           <p className="login-tagline">Sistema Oficial de Competencias Hapkido</p>
           <p className="login-sub">Global Hapkido Association · GHA</p>
         </div>

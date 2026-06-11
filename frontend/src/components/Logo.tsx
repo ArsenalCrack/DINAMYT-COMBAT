@@ -2,16 +2,24 @@
 
 /**
  * Logo de DINAMYT: imagen + marca de texto.
- * La imagen escala con el tamaño de fuente (alto en `em`), así que se adapta
- * a cualquier pantalla sin romper los layouts existentes: basta con pasar el
- * mismo fontSize que usaba el texto "DINAMYT".
+ * - inline (default): imagen a la izquierda del texto, escala con `fontSize`.
+ * - stacked: imagen EN GRANDE arriba y "DINAMYT" centrado debajo (pantallas
+ *   públicas y portadas).
+ * - soloImagen: solo la imagen (para espacios reducidos donde la marca de
+ *   texto ya aparece en otro lugar de la pantalla).
+ * El alto de la imagen va en `em`, así que todo escala con el fontSize
+ * (incluido clamp()) sin romper los layouts existentes.
  */
 export default function Logo({
   fontSize = "2rem",
+  stacked = false,
+  soloImagen = false,
   className = "",
   style,
 }: {
   fontSize?: string | number;
+  stacked?: boolean;
+  soloImagen?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -21,9 +29,10 @@ export default function Logo({
       style={{
         fontSize,
         display: "inline-flex",
+        flexDirection: stacked ? "column" : "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: "0.26em",
+        gap: stacked ? "0.18em" : "0.26em",
         lineHeight: 1,
         ...style,
       }}
@@ -34,14 +43,14 @@ export default function Logo({
         alt=""
         aria-hidden="true"
         style={{
-          height: "1.08em",
+          height: stacked ? "2.1em" : "1.08em",
           width: "auto",
           display: "block",
           borderRadius: "16%",
           flexShrink: 0,
         }}
       />
-      <span>DINA<em>MYT</em></span>
+      {!soloImagen && <span>DINA<em>MYT</em></span>}
     </span>
   );
 }

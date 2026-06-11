@@ -28,7 +28,7 @@ export default function Home() {
       justifyContent: "center",
       height: "100vh",
     }}>
-      <Logo className="animate-fade" fontSize="2.5rem" />
+      <Logo stacked className="animate-fade" fontSize="2.2rem" />
     </div>
   );
 }

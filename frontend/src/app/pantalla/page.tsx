@@ -53,7 +53,7 @@ export default function PantallaAccess() {
         border: "1px solid var(--border)", borderRadius: "var(--radius-lg)",
         padding: "36px 28px", textAlign: "center"
       }} className="animate-slide">
-        <Logo fontSize="clamp(2rem, 7vw, 2.5rem)" style={{ marginBottom: 4 }} />
+        <Logo stacked fontSize="clamp(1.8rem, 6vw, 2.2rem)" style={{ marginBottom: 8 }} />
         <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: "0.9rem" }}>
           Pantalla Publica &middot; Sin Login
         </p>
