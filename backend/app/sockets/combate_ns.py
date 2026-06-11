@@ -939,7 +939,12 @@ class CombateNamespace(Namespace):
                 return
             snapshot = guardar_figuras_snapshot(estado)
             ranking = snapshot.get("ranking") or []
-            ganador = ranking[0] if ranking else None
+            # El campeón del registro es el 1° del podio normal; los de
+            # categoría especial tienen su propio primer puesto aparte.
+            ganador = next(
+                (r for r in ranking if not r.get("especial")),
+                ranking[0] if ranking else None,
+            )
             jueces_detalle = {
                 "tipo": "figuras",
                 "nombre_categoria": snapshot.get("nombre_categoria", "Figuras"),

@@ -141,17 +141,75 @@ def calcular_total_competidor(estado, competidor_id):
     return round(sum(puntajes.values()), 2)
 
 
-def calcular_ranking(estado):
-    """Retorna la lista de competidores ordenados por total desc."""
-    ranking = []
-    for comp in estado["competidores"]:
+def _vector_desempate(estado, competidor_id):
+    """Notas individuales de mayor a menor (criterio de desempate)."""
+    puntajes = estado["puntuaciones"].get(str(competidor_id), {})
+    return sorted((float(v) for v in puntajes.values()), reverse=True)
+
+
+def _ordenar_con_puestos(estado, comps):
+    """
+    Ordena por total. Desempate: la nota individual más alta; si persiste,
+    la siguiente más alta, y así sucesivamente. Si los puntajes son
+    idénticos, el empate es real: comparten puesto (1, 2, 2, 4) y quedan
+    marcados con empate=True.
+    """
+    items = []
+    for comp in comps:
         cid = str(comp["id"])
         total = calcular_total_competidor(estado, cid)
-        ranking.append({**comp, "total": total})
-    ranking.sort(key=lambda x: x["total"], reverse=True)
-    for i, item in enumerate(ranking):
-        item["puesto"] = i + 1
-    return ranking
+        clave = (total, *_vector_desempate(estado, cid))
+        items.append({**comp, "total": total, "_clave": clave})
+
+    # Normalizar longitudes de clave (por si alguien tiene menos notas)
+    max_len = max((len(i["_clave"]) for i in items), default=0)
+    for i in items:
+        i["_clave"] = tuple(list(i["_clave"]) + [0.0] * (max_len - len(i["_clave"])))
+
+    items.sort(key=lambda x: x["_clave"], reverse=True)
+
+    # Puestos con ranking estándar de competencia: los empatados comparten
+    # puesto y el siguiente se salta (dos terceros puestos → no hay cuarto).
+    prev_clave = None
+    puesto = 0
+    for idx, item in enumerate(items):
+        if prev_clave is None or item["_clave"] != prev_clave:
+            puesto = idx + 1
+        item["puesto"] = puesto
+        prev_clave = item["_clave"]
+
+    conteo = {}
+    for item in items:
+        conteo[item["puesto"]] = conteo.get(item["puesto"], 0) + 1
+    for item in items:
+        item["empate"] = conteo[item["puesto"]] > 1
+        del item["_clave"]
+    return items
+
+
+def calcular_ranking(estado):
+    """
+    Ranking completo:
+    - Los competidores de categoría especial van primero, con su propio
+      podio (su 1er puesto no desplaza al 1er puesto normal).
+    - El resto compite en el podio normal con desempate automático.
+    """
+    especiales = [c for c in estado["competidores"] if c.get("especial")]
+    normales = [c for c in estado["competidores"] if not c.get("especial")]
+    ranking_especial = _ordenar_con_puestos(estado, especiales)
+    for item in ranking_especial:
+        item["especial"] = True
+    return ranking_especial + _ordenar_con_puestos(estado, normales)
+
+
+def empates_en_ranking(ranking):
+    """Agrupa los empates reales por puesto (para logs y avisos)."""
+    grupos = {}
+    for item in ranking:
+        if item.get("empate"):
+            clave = ("especial" if item.get("especial") else "normal", item["puesto"])
+            grupos.setdefault(clave, []).append(item["nombre"])
+    return grupos
 
 
 def _parse_puntuacion(valor):
@@ -184,6 +242,7 @@ def aplicar_evento_figuras(estado, ev):
     elif accion == "agregar_competidor":
         nombre = ev.get("nombre", "Competidor").strip()
         club = ev.get("club", "").strip()
+        especial = bool(ev.get("especial"))
         if not nombre:
             return estado
         if len(estado["competidores"]) >= 50:
@@ -194,10 +253,12 @@ def aplicar_evento_figuras(estado, ev):
             "id": nuevo_id,
             "nombre": nombre,
             "club": club,
+            "especial": especial,
         })
         estado["puntuaciones"][str(nuevo_id)] = {}
         estado["puntuaciones_confirmadas"][str(nuevo_id)] = {}
-        _agregar_log_f(estado, f"[+] {nombre}", "info")
+        etiqueta = " (Categoría Especial)" if especial else ""
+        _agregar_log_f(estado, f"[+] {nombre}{etiqueta}", "info")
 
     elif accion == "eliminar_competidor":
         cid = ev.get("competidor_id")
@@ -322,6 +383,13 @@ def aplicar_evento_figuras(estado, ev):
             estado["finalizado"] = True
             estado["puntuacion_abierta"] = False
             _agregar_log_f(estado, "[PODIO] Puntuaciones completas — Podio habilitado", "arb")
+            for (ambito, puesto), nombres in empates_en_ranking(calcular_ranking(estado)).items():
+                etiqueta = " (Especial)" if ambito == "especial" else ""
+                _agregar_log_f(
+                    estado,
+                    f"[PODIO] Empate real en el puesto {puesto}{etiqueta}: {' y '.join(nombres)} — comparten el puesto",
+                    "arb",
+                )
 
     # ── Nombre de juez ───────────────────────────────────────────────────────
     elif accion == "set_nombre_juez":
@@ -344,8 +412,15 @@ def aplicar_evento_figuras(estado, ev):
         estado["finalizado"] = True
         estado["puntuacion_abierta"] = False
         ranking = calcular_ranking(estado)
-        if ranking:
-            ganador = ranking[0]
+        for item in ranking:
+            if item.get("especial") and item["puesto"] == 1:
+                _agregar_log_f(
+                    estado,
+                    f"[1° Especial] {item['nombre']} — {item['total']} pts",
+                    "info",
+                )
+        ganador = next((r for r in ranking if not r.get("especial")), None)
+        if ganador:
             _agregar_log_f(
                 estado,
                 f"[1°] {ganador['nombre']} — {ganador['total']} pts",

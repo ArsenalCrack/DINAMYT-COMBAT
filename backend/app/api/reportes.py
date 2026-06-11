@@ -281,6 +281,16 @@ def _ranking_figuras(combate):
     return ranking if isinstance(ranking, list) else []
 
 
+def _puesto_figuras_txt(item):
+    """Puesto anotado: '1 (Especial)' / '3 (Empate)' para Excel y PDF."""
+    puesto = str(item.get("puesto", "-"))
+    if item.get("especial"):
+        puesto += " (Especial)"
+    elif item.get("empate"):
+        puesto += " (Empate)"
+    return puesto
+
+
 def _figuras_completas(combate):
     """True si todos los competidores fueron calificados en todos sus criterios."""
     detalle = _detalle_registro(combate)
@@ -375,7 +385,10 @@ def _figuras_puntajes_detalle(combate, comp_id):
 def _ganador_nombre(combate):
     if _tipo_registro(combate) == "figuras":
         ranking = _ranking_figuras(combate)
-        return ranking[0].get("nombre", "-") if ranking else "-"
+        # 1° del podio normal (los especiales tienen su podio aparte)
+        normal = next((r for r in ranking if not r.get("especial")), None)
+        item = normal or (ranking[0] if ranking else None)
+        return item.get("nombre", "-") if item else "-"
     if combate.ganador == "hong":
         return combate.nombre_hong
     if combate.ganador == "chung":
@@ -634,7 +647,7 @@ def _generar_excel(rows, subtitulo=""):
                 camp.nombre if camp else "-",
                 f"Tatami {tatami.numero}" if tatami else "-",
                 estado,
-                item.get("puesto", "-"),
+                _puesto_figuras_txt(item),
                 item.get("nombre", "-"),
                 item.get("club") or "-",
                 float(item.get("total", 0)),
@@ -904,7 +917,7 @@ def _generar_pdf(rows, subtitulo=""):
                     str(combate.id),
                     _nombre_categoria_registro(combate),
                     estado,
-                    str(item.get("puesto", "-")),
+                    _puesto_figuras_txt(item),
                     str(item.get("nombre", "-")),
                     str(item.get("club") or "-"),
                     str(float(item.get("total", 0))),

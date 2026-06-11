@@ -22,7 +22,12 @@ import Logo from "@/components/Logo";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
 interface Criterio { id: string; nombre: string; max_pts: number; }
-interface Competidor { id: number; nombre: string; club?: string; promedio?: number; }
+interface Competidor { id: number; nombre: string; club?: string; especial?: boolean; promedio?: number; }
+interface CompetidorRankeado extends Competidor {
+  total: number;
+  puesto: number;
+  empate: boolean;
+}
 interface FigurasState {
   tipo: "figuras";
   criterios: Criterio[];
@@ -123,6 +128,64 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
   });
 }
 
+/**
+ * Ranking de figuras (espejo de calcular_ranking del backend):
+ * - Categoría especial primero, con su propio podio (no desplaza al normal).
+ * - Desempate: nota individual más alta, luego la siguiente, etc.
+ * - Empate real: comparten puesto (1, 2, 2, 4) y quedan marcados.
+ */
+function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
+  function clave(comp: Competidor): number[] {
+    const puntajes = Object.values(state.puntuaciones[String(comp.id)] || {})
+      .map(Number)
+      .sort((a, b) => b - a);
+    const total = Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
+    return [total, ...puntajes];
+  }
+
+  function ordenar(lista: Competidor[]): CompetidorRankeado[] {
+    const items = lista.map((c) => ({ comp: c, clave: clave(c) }));
+    const maxLen = Math.max(0, ...items.map((i) => i.clave.length));
+    items.forEach((i) => {
+      while (i.clave.length < maxLen) i.clave.push(0);
+    });
+    items.sort((a, b) => {
+      for (let k = 0; k < maxLen; k++) {
+        if (a.clave[k] !== b.clave[k]) return b.clave[k] - a.clave[k];
+      }
+      return 0;
+    });
+    const resultado: CompetidorRankeado[] = [];
+    let puesto = 0;
+    items.forEach((item, idx) => {
+      const empatadoConPrev = idx > 0
+        && items[idx - 1].clave.every((v, k) => v === item.clave[k]);
+      if (!empatadoConPrev) puesto = idx + 1;
+      resultado.push({
+        ...item.comp,
+        total: item.clave[0],
+        puesto,
+        empate: false,
+      });
+    });
+    const conteo: Record<number, number> = {};
+    resultado.forEach((r) => { conteo[r.puesto] = (conteo[r.puesto] || 0) + 1; });
+    resultado.forEach((r) => { r.empate = conteo[r.puesto] > 1; });
+    return resultado;
+  }
+
+  const especiales = state.competidores.filter((c) => c.especial);
+  const normales = state.competidores.filter((c) => !c.especial);
+  return [...ordenar(especiales), ...ordenar(normales)];
+}
+
+function colorPuesto(puesto: number, especial?: boolean) {
+  if (especial || puesto === 1) return "var(--gold)";
+  if (puesto === 2) return "#C0C0C0";
+  if (puesto === 3) return "#CD7F32";
+  return "var(--text-dim)";
+}
+
 function figurasConDatos(state: FigurasState) {
   // Solo competidores o puntuaciones reales bloquean el cambio de categoría;
   // el log o el nombre de la categoría no cuentan como "datos en curso".
@@ -192,7 +255,7 @@ function FigurasArbitro({
   tatamiId: string;
   onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
 }) {
-  const [newComp, setNewComp] = useState({ nombre: "", club: "" });
+  const [newComp, setNewComp] = useState({ nombre: "", club: "", especial: false });
   const [showAddComp, setShowAddComp] = useState(false);
   const [categoriaError, setCategoriaError] = useState("");
   const [categoriaDraft, setCategoriaDraft] = useState(state.nombre_categoria ?? "");
@@ -238,18 +301,7 @@ function FigurasArbitro({
     return true;
   }
 
-  function calcTotal(comp: Competidor) {
-    const puntajes = state.puntuaciones[String(comp.id)] || {};
-    let total = 0;
-    Object.values(puntajes).forEach((val) => {
-      total += val || 0;
-    });
-    return total;
-  }
-
-  const ranking = [...state.competidores]
-    .map((c) => ({ ...c, total: calcTotal(c) }))
-    .sort((a, b) => b.total - a.total);
+  const ranking = rankingFiguras(state);
 
   const MAX_COMPETIDORES = 50;
   const puedeAgregar = state.competidores.length < MAX_COMPETIDORES;
@@ -372,49 +424,71 @@ function FigurasArbitro({
         )}
 
         {showAddComp && (
-          <div className="animate-fade" style={{ marginBottom: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input className="input" placeholder="Nombre del competidor" value={newComp.nombre}
-              onChange={(e) => setNewComp((v) => ({ ...v, nombre: e.target.value }))}
-              style={{ flex: "2 1 180px" }} />
-            <input className="input" placeholder="Club / Equipo (opc.)" value={newComp.club}
-              onChange={(e) => setNewComp((v) => ({ ...v, club: e.target.value }))}
-              style={{ flex: "1 1 140px" }} />
-            <button className="btn btn-primary"
-              onClick={() => {
-                if (validarNombreCategoria() && newComp.nombre.trim()) {
-                  enviarEvento("agregar_competidor", { nombre: newComp.nombre.trim(), club: newComp.club.trim() });
-                  setNewComp({ nombre: "", club: "" });
-                  setShowAddComp(false);
-                }
-              }}>
-              Agregar
-            </button>
+          <div className="animate-fade" style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input className="input" placeholder="Nombre del competidor" value={newComp.nombre}
+                onChange={(e) => setNewComp((v) => ({ ...v, nombre: e.target.value }))}
+                style={{ flex: "2 1 180px" }} />
+              <input className="input" placeholder="Club / Equipo (opc.)" value={newComp.club}
+                onChange={(e) => setNewComp((v) => ({ ...v, club: e.target.value }))}
+                style={{ flex: "1 1 140px" }} />
+              <button className="btn btn-primary"
+                onClick={() => {
+                  if (validarNombreCategoria() && newComp.nombre.trim()) {
+                    enviarEvento("agregar_competidor", {
+                      nombre: newComp.nombre.trim(),
+                      club: newComp.club.trim(),
+                      especial: newComp.especial,
+                    });
+                    setNewComp({ nombre: "", club: "", especial: false });
+                    setShowAddComp(false);
+                  }
+                }}>
+                Agregar
+              </button>
+            </div>
+            <label style={{
+              display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+              fontSize: "0.82rem", fontWeight: 700, userSelect: "none",
+              color: newComp.especial ? "var(--gold)" : "var(--text-muted)",
+            }}>
+              <input
+                type="checkbox"
+                checked={newComp.especial}
+                onChange={(e) => setNewComp((v) => ({ ...v, especial: e.target.checked }))}
+                style={{ accentColor: "var(--gold)", width: 16, height: 16 }}
+              />
+              Categoría especial — recibe su propio primer puesto sin afectar el podio del resto
+            </label>
           </div>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {ranking.map((comp, i) => {
+          {ranking.map((comp) => {
             const isActive = state.competidor_activo_id === comp.id;
+            const esPrimero = comp.puesto === 1;
             return (
               <div key={comp.id} style={{
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "8px 12px",
-                background: isActive ? "rgba(240,184,0,0.1)" : (i === 0 ? "rgba(240,184,0,0.04)" : "var(--bg-elevated)"),
+                background: isActive ? "rgba(240,184,0,0.1)" : (esPrimero ? "rgba(240,184,0,0.04)" : "var(--bg-elevated)"),
                 borderRadius: "var(--radius-sm)",
-                border: `1.5px solid ${isActive ? "var(--gold)" : (i === 0 ? "var(--gold-border)" : "var(--border)")}`,
+                border: `1.5px solid ${isActive ? "var(--gold)" : (esPrimero ? "var(--gold-border)" : "var(--border)")}`,
               }}>
                 <span style={{
                   fontFamily: "var(--font-display)", fontSize: "1.5rem", minWidth: 32, textAlign: "center",
-                  color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
-                }}>{i + 1}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: isActive ? "var(--gold)" : "inherit" }}>
+                  color: colorPuesto(comp.puesto, comp.especial),
+                }}>{comp.puesto}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: isActive ? "var(--gold)" : "inherit", overflowWrap: "anywhere" }}>
                     {comp.nombre}
+                    {comp.especial && <span className="badge badge-gold" style={{ marginLeft: 8, verticalAlign: "middle" }}>Especial</span>}
+                    {comp.empate && <span className="badge badge-gray" style={{ marginLeft: 8, verticalAlign: "middle", color: "var(--orange)", borderColor: "rgba(255,140,0,0.4)" }}>Empate</span>}
                     {isActive && <span style={{ marginLeft: 8, fontSize: "0.7rem", background: "var(--gold)", color: "#000", padding: "2px 6px", borderRadius: 4 }}>EN TURNO</span>}
                   </div>
                   {comp.club && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{comp.club}</div>}
                 </div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: i === 0 || isActive ? "var(--gold)" : "var(--text)" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: esPrimero || isActive ? "var(--gold)" : "var(--text)" }}>
                   {comp.total.toFixed(2)}
                 </div>
                 {!isActive && (
@@ -581,7 +655,7 @@ function FigurasScoreCard({
     }
     const formatted = normalizeScoreInput(nota);
     if (!formatted || !isValidScore(formatted)) {
-      setError("Ingresa la puntuación con dos decimales, por ejemplo 8.75.");
+      setError("Ingresa la puntuación con números, por ejemplo 875 para 8.75.");
       return;
     }
     setNota(formatted);
@@ -622,16 +696,16 @@ function FigurasScoreCard({
         <input
           className="input"
           type="text"
-          inputMode="decimal"
+          inputMode="numeric"
           placeholder="0.00"
           value={nota}
           disabled={isConfirmed}
           onChange={(e) => {
-            const next = e.target.value.replace(",", ".");
-            if (/^\d?(\.\d{0,2})?$/.test(next)) {
-              setNota(next);
-              setError("");
-            }
+            // Solo números: el punto decimal se inserta automáticamente
+            // después del primer dígito (875 → 8.75, 90 → 9.0)
+            const digitos = e.target.value.replace(/\D/g, "").slice(0, 3);
+            setNota(digitos.length <= 1 ? digitos : `${digitos[0]}.${digitos.slice(1)}`);
+            setError("");
           }}
           onBlur={(e) => handleBlur(e.target.value)}
           style={{
@@ -642,6 +716,13 @@ function FigurasScoreCard({
             maxWidth: 200, margin: "0 auto", height: 80,
           }}
         />
+
+        {!isConfirmed && (
+          <div style={{ marginTop: 8, color: "var(--text-dim)", fontSize: "0.78rem" }}>
+            Escribe solo los números: <strong style={{ color: "var(--text-muted)" }}>875</strong> se
+            convierte en <strong style={{ color: "var(--gold)" }}>8.75</strong>
+          </div>
+        )}
 
         {error && (
           <div style={{ marginTop: 10, color: "var(--orange)", fontWeight: 700, fontSize: "0.86rem" }}>
@@ -736,16 +817,7 @@ function FigurasJuez({
 // FIGURAS — Pantalla Pública
 // ══════════════════════════════════════════════════════════════════════════════
 function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: string }) {
-  function calcTotal(comp: Competidor) {
-    const puntajes = state.puntuaciones[String(comp.id)] || {};
-    let total = 0;
-    Object.values(puntajes).forEach((val) => { total += val || 0; });
-    return total;
-  }
-
-  const ranking = [...state.competidores]
-    .map((c) => ({ ...c, total: calcTotal(c) }))
-    .sort((a, b) => b.total - a.total);
+  const ranking = rankingFiguras(state);
   const nombreCategoria = state._nombre_categoria || state.nombre_categoria || "Figuras";
   const puntuacionesCompletas = figurasPuntuacionesCompletas(state);
   // El podio aparece automáticamente cuando TODOS los competidores fueron
@@ -754,7 +826,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
   const activeComp = state.competidores.find((c) => c.id === state.competidor_activo_id);
   const juecesActivos = juecesActivosFiguras(state);
   const activeCompId = activeComp ? String(activeComp.id) : "";
-  const activeTotal = activeComp ? calcTotal(activeComp) : 0;
+  const activeTotal = ranking.find((r) => r.id === activeComp?.id)?.total ?? 0;
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -885,37 +957,56 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
           )
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 960, margin: "0 auto" }}>
-            {ranking.map((comp, i) => {
+            {ranking.map((comp) => {
               const isActive = state.competidor_activo_id === comp.id;
+              const esPrimero = comp.puesto === 1;
               return (
                 <div key={comp.id} className="animate-fade" style={{
                   display: "flex", alignItems: "center", gap: 16,
                   padding: "16px 24px",
-                  background: isActive ? "rgba(240,184,0,0.12)" : (i === 0 ? "rgba(240,184,0,0.08)" : "var(--bg-card)"),
-                  border: `1.5px solid ${isActive ? "var(--gold)" : (i === 0 ? "var(--gold-border)" : "var(--border)")}`,
+                  background: isActive ? "rgba(240,184,0,0.12)" : (esPrimero ? "rgba(240,184,0,0.08)" : "var(--bg-card)"),
+                  border: `1.5px solid ${isActive ? "var(--gold)" : (esPrimero ? "var(--gold-border)" : "var(--border)")}`,
                   borderRadius: "var(--radius)",
-                  boxShadow: i === 0 || isActive ? "var(--shadow-gold)" : undefined,
+                  boxShadow: esPrimero || isActive ? "var(--shadow-gold)" : undefined,
                 }}>
                   <span style={{
                     fontFamily: "var(--font-display)", fontSize: "clamp(3rem,6vw,5rem)",
-                    color: i === 0 ? "var(--gold)" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "var(--text-dim)",
+                    color: colorPuesto(comp.puesto, comp.especial),
                     minWidth: 80, textAlign: "center", lineHeight: 1,
-                  }}>{i + 1}</span>
-                  <div style={{ flex: 1 }}>
+                  }}>{comp.puesto}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontFamily: "var(--font-display)",
                       fontSize: "clamp(2rem,4vw,3.5rem)",
                       letterSpacing: "0.04em", lineHeight: 1,
-                      color: isActive ? "var(--gold)" : (i === 0 ? "var(--gold)" : "var(--text)"),
+                      overflowWrap: "anywhere",
+                      color: isActive || esPrimero ? "var(--gold)" : "var(--text)",
                     }}>
                       {comp.nombre}
                     </div>
-                    {comp.club && <div style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginTop: 2 }}>{comp.club}</div>}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
+                      {comp.especial && (
+                        <span className="badge badge-gold" style={{ fontSize: "clamp(0.6rem,1.2vw,0.85rem)" }}>
+                          Categoría Especial
+                        </span>
+                      )}
+                      {comp.empate && (
+                        <span className="badge" style={{
+                          fontSize: "clamp(0.6rem,1.2vw,0.85rem)",
+                          background: "rgba(255,140,0,0.12)",
+                          border: "1px solid rgba(255,140,0,0.4)",
+                          color: "var(--orange)",
+                        }}>
+                          Empate — comparten puesto
+                        </span>
+                      )}
+                      {comp.club && <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{comp.club}</span>}
+                    </div>
                   </div>
                   <div style={{
                     fontFamily: "var(--font-display)",
                     fontSize: "clamp(3rem,5vw,5rem)",
-                    color: i === 0 || isActive ? "var(--gold)" : "var(--text)",
+                    color: esPrimero || isActive ? "var(--gold)" : "var(--text)",
                     letterSpacing: "0.04em",
                   }}>
                     {comp.total.toFixed(2)}

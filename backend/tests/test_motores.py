@@ -17,6 +17,8 @@ from app.engine.figuras_engine import (  # noqa: E402
     estado_inicial_figuras,
     aplicar_evento_figuras,
     puntuaciones_completas,
+    calcular_ranking,
+    empates_en_ranking,
     _parse_puntuacion,
 )
 from app.api.llaves import (  # noqa: E402
@@ -181,6 +183,80 @@ class TestLlaves:
         _limpiar_descendientes(e, 0, 0)
         assert e["campeon"] is None
         assert e["rondas"][1][0]["ganador"] is None
+
+
+def _puntuar(e, comp_id, juez, valor):
+    aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": comp_id})
+    aplicar_evento_figuras(e, {"accion": "puntuar", "juez_id": juez, "competidor_id": comp_id, "valor": valor})
+    aplicar_evento_figuras(e, {"accion": "confirmar_puntuacion", "juez_id": juez, "competidor_id": comp_id})
+
+
+class TestRankingFiguras:
+    def _base(self, nombres_y_flags):
+        e = estado_inicial_figuras()
+        e["nombre_categoria"] = "Test"
+        aplicar_evento_figuras(e, {"accion": "set_num_jueces", "num_jueces": 2})
+        for nombre, especial in nombres_y_flags:
+            aplicar_evento_figuras(e, {
+                "accion": "agregar_competidor", "nombre": nombre, "especial": especial,
+            })
+        return e
+
+    def test_especial_tiene_su_propio_primer_puesto(self):
+        # El especial recibe el 1° aparte; el podio normal no se desplaza
+        e = self._base([("Esp", True), ("Ana", False), ("Luis", False)])
+        for cid, notas in ((1, ("5.00", "5.00")), (2, ("9.00", "9.00")), (3, ("8.00", "8.00"))):
+            for juez, valor in zip(("j1", "j2"), notas):
+                _puntuar(e, cid, juez, valor)
+        ranking = calcular_ranking(e)
+        esp = next(r for r in ranking if r["nombre"] == "Esp")
+        ana = next(r for r in ranking if r["nombre"] == "Ana")
+        luis = next(r for r in ranking if r["nombre"] == "Luis")
+        assert esp["puesto"] == 1 and esp.get("especial") is True
+        assert ana["puesto"] == 1 and not ana.get("especial")  # dos primeros puestos
+        assert luis["puesto"] == 2
+        # El especial va primero en la lista
+        assert ranking[0]["nombre"] == "Esp"
+
+    def test_desempate_por_nota_individual_mas_alta(self):
+        # Mismo total (16.00) pero Ana tiene la nota individual más alta
+        e = self._base([("Ana", False), ("Luis", False)])
+        _puntuar(e, 1, "j1", "9.00")
+        _puntuar(e, 1, "j2", "7.00")
+        _puntuar(e, 2, "j1", "8.00")
+        _puntuar(e, 2, "j2", "8.00")
+        ranking = calcular_ranking(e)
+        assert ranking[0]["nombre"] == "Ana"
+        assert ranking[0]["puesto"] == 1 and ranking[0]["empate"] is False
+        assert ranking[1]["puesto"] == 2
+
+    def test_empate_real_comparte_puesto(self):
+        # Notas idénticas → comparten puesto y el siguiente se salta (1,1,3)
+        e = self._base([("Ana", False), ("Luis", False), ("Caro", False)])
+        for cid in (1, 2):
+            _puntuar(e, cid, "j1", "8.00")
+            _puntuar(e, cid, "j2", "8.00")
+        _puntuar(e, 3, "j1", "7.00")
+        _puntuar(e, 3, "j2", "7.00")
+        ranking = calcular_ranking(e)
+        puestos = {r["nombre"]: (r["puesto"], r["empate"]) for r in ranking}
+        assert puestos["Ana"] == (1, True)
+        assert puestos["Luis"] == (1, True)
+        assert puestos["Caro"] == (3, False)
+        # El log del podio recibe el empate detectado
+        grupos = empates_en_ranking(ranking)
+        assert ("normal", 1) in grupos
+        assert sorted(grupos[("normal", 1)]) == ["Ana", "Luis"]
+
+    def test_podio_completo_incluye_especiales(self):
+        e = self._base([("Esp", True), ("Ana", False)])
+        _puntuar(e, 2, "j1", "8.00")
+        _puntuar(e, 2, "j2", "8.00")
+        assert puntuaciones_completas(e) is False, "falta calificar al especial"
+        _puntuar(e, 1, "j1", "6.00")
+        _puntuar(e, 1, "j2", "6.00")
+        assert puntuaciones_completas(e) is True
+        assert e["finalizado"] is True
 
 
 # ══════════════════════════════════════════════════════════════════
