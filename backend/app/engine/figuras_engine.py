@@ -80,6 +80,8 @@ def estado_inicial_figuras(config=None):
         "puntuacion_abierta": False,    # True = jueces pueden puntuar
         # Estado final
         "finalizado": False,
+        # Constancia de reevaluaciones por empate (para reportes)
+        "desempates": [],
         "log": [],
 }
 
@@ -141,49 +143,36 @@ def calcular_total_competidor(estado, competidor_id):
     return round(sum(puntajes.values()), 2)
 
 
-def _vector_desempate(estado, competidor_id):
-    """Notas individuales de mayor a menor (criterio de desempate)."""
-    puntajes = estado["puntuaciones"].get(str(competidor_id), {})
-    return sorted((float(v) for v in puntajes.values()), reverse=True)
-
-
 def _ordenar_con_puestos(estado, comps):
     """
-    Ordena por total. Desempate: la nota individual más alta; si persiste,
-    la siguiente más alta, y así sucesivamente. Si los puntajes son
-    idénticos, el empate es real: comparten puesto (1, 2, 2, 4) y quedan
-    marcados con empate=True.
+    Ordena por total. Un empate de totales es un empate REAL: comparten
+    puesto (1, 2, 2, 4) y quedan marcados con empate=True. La resolución
+    es una presentación de desempate (acción reevaluar_empate), no un
+    criterio automático.
     """
     items = []
     for comp in comps:
         cid = str(comp["id"])
         total = calcular_total_competidor(estado, cid)
-        clave = (total, *_vector_desempate(estado, cid))
-        items.append({**comp, "total": total, "_clave": clave})
+        items.append({**comp, "total": total})
 
-    # Normalizar longitudes de clave (por si alguien tiene menos notas)
-    max_len = max((len(i["_clave"]) for i in items), default=0)
-    for i in items:
-        i["_clave"] = tuple(list(i["_clave"]) + [0.0] * (max_len - len(i["_clave"])))
-
-    items.sort(key=lambda x: x["_clave"], reverse=True)
+    items.sort(key=lambda x: x["total"], reverse=True)
 
     # Puestos con ranking estándar de competencia: los empatados comparten
     # puesto y el siguiente se salta (dos terceros puestos → no hay cuarto).
-    prev_clave = None
+    prev_total = None
     puesto = 0
     for idx, item in enumerate(items):
-        if prev_clave is None or item["_clave"] != prev_clave:
+        if prev_total is None or item["total"] != prev_total:
             puesto = idx + 1
         item["puesto"] = puesto
-        prev_clave = item["_clave"]
+        prev_total = item["total"]
 
     conteo = {}
     for item in items:
         conteo[item["puesto"]] = conteo.get(item["puesto"], 0) + 1
     for item in items:
         item["empate"] = conteo[item["puesto"]] > 1
-        del item["_clave"]
     return items
 
 
@@ -427,6 +416,36 @@ def aplicar_evento_figuras(estado, ev):
                 "info"
             )
 
+    # ── Desempate: reevaluación de los empatados (solo podio normal) ────────
+    elif accion == "reevaluar_empate":
+        # Solo cuando ya terminaron de puntuar y hay un empate real
+        if not (estado.get("finalizado") or puntuaciones_completas(estado)):
+            return estado
+        ranking = calcular_ranking(estado)
+        empatados = [r for r in ranking if r.get("empate") and not r.get("especial")]
+        if not empatados:
+            return estado
+        nombres = [r["nombre"] for r in empatados]
+        # Limpiar SOLO las notas de los empatados: los jueces de esquina
+        # los vuelven a evaluar; la categoría especial no se toca.
+        for r in empatados:
+            cid = str(r["id"])
+            estado["puntuaciones"][cid] = {}
+            estado["puntuaciones_confirmadas"][cid] = {}
+        # El podio se oculta mientras dura el desempate (deja de estar completo)
+        estado["finalizado"] = False
+        estado["puntuacion_abierta"] = False
+        estado["competidor_activo_id"] = None
+        estado.setdefault("desempates", []).append({
+            "nombres": nombres,
+            "ts": int(time.time() * 1000),
+        })
+        _agregar_log_f(
+            estado,
+            f"[DESEMPATE] Reevaluación de: {', '.join(nombres)} — notas limpiadas, el podio vuelve al completar",
+            "arb",
+        )
+
     # ── Reset ────────────────────────────────────────────────────────────────
     elif accion in ("reset_figuras", "reset"):
         config = ev.get("config") if accion == "reset_figuras" else None
@@ -458,6 +477,7 @@ def guardar_figuras_snapshot(estado):
         ),
         "ranking": ranking,
         "num_jueces": estado["num_jueces"],
+        "desempates": copy.deepcopy(estado.get("desempates", [])),
         "puntuaciones_completas": puntuaciones_completas(estado),
         "finalizado": estado["finalizado"],
         "log": copy.deepcopy(estado.get("log", [])),

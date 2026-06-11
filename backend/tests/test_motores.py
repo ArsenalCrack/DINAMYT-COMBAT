@@ -218,17 +218,17 @@ class TestRankingFiguras:
         # El especial va primero en la lista
         assert ranking[0]["nombre"] == "Esp"
 
-    def test_desempate_por_nota_individual_mas_alta(self):
-        # Mismo total (16.00) pero Ana tiene la nota individual más alta
+    def test_mismo_total_es_empate_real(self):
+        # Mismo total (16.00) aunque la distribución de notas difiera:
+        # NO se desempata por la nota más alta, es empate real
         e = self._base([("Ana", False), ("Luis", False)])
         _puntuar(e, 1, "j1", "9.00")
         _puntuar(e, 1, "j2", "7.00")
         _puntuar(e, 2, "j1", "8.00")
         _puntuar(e, 2, "j2", "8.00")
         ranking = calcular_ranking(e)
-        assert ranking[0]["nombre"] == "Ana"
-        assert ranking[0]["puesto"] == 1 and ranking[0]["empate"] is False
-        assert ranking[1]["puesto"] == 2
+        assert ranking[0]["puesto"] == 1 and ranking[0]["empate"] is True
+        assert ranking[1]["puesto"] == 1 and ranking[1]["empate"] is True
 
     def test_empate_real_comparte_puesto(self):
         # Notas idénticas → comparten puesto y el siguiente se salta (1,1,3)
@@ -257,6 +257,55 @@ class TestRankingFiguras:
         _puntuar(e, 1, "j2", "6.00")
         assert puntuaciones_completas(e) is True
         assert e["finalizado"] is True
+
+    def test_reevaluar_empate_limpia_solo_a_los_empatados(self):
+        # Esp (especial, empata con nadie de su podio), Ana y Luis empatados,
+        # Caro de tercera
+        e = self._base([("Esp", True), ("Ana", False), ("Luis", False), ("Caro", False)])
+        for cid, valor in ((1, "5.00"), (2, "8.00"), (3, "8.00"), (4, "7.00")):
+            _puntuar(e, cid, "j1", valor)
+            _puntuar(e, cid, "j2", valor)
+        assert e["finalizado"] is True
+
+        aplicar_evento_figuras(e, {"accion": "reevaluar_empate"})
+
+        # Solo los empatados (Ana=2, Luis=3) quedan sin notas
+        assert e["puntuaciones"]["2"] == {} and e["puntuaciones_confirmadas"]["2"] == {}
+        assert e["puntuaciones"]["3"] == {} and e["puntuaciones_confirmadas"]["3"] == {}
+        # La especial y la tercera conservan sus notas
+        assert e["puntuaciones"]["1"] != {} and e["puntuaciones"]["4"] != {}
+        # El podio se oculta mientras dura el desempate
+        assert e["finalizado"] is False
+        assert puntuaciones_completas(e) is False
+        # Queda constancia para el reporte
+        assert len(e["desempates"]) == 1
+        assert sorted(e["desempates"][0]["nombres"]) == ["Ana", "Luis"]
+
+        # Reevaluación: ahora Ana gana — el podio vuelve resuelto
+        _puntuar(e, 2, "j1", "9.00")
+        _puntuar(e, 2, "j2", "9.00")
+        _puntuar(e, 3, "j1", "8.00")
+        _puntuar(e, 3, "j2", "8.00")
+        assert e["finalizado"] is True
+        ranking = calcular_ranking(e)
+        puestos = {r["nombre"]: r["puesto"] for r in ranking if not r.get("especial")}
+        assert puestos == {"Ana": 1, "Luis": 2, "Caro": 3}
+
+        # La constancia viaja en el snapshot que se guarda en reportes
+        from app.engine.figuras_engine import guardar_figuras_snapshot
+        snap = guardar_figuras_snapshot(e)
+        assert len(snap["desempates"]) == 1
+
+    def test_reevaluar_sin_empate_no_hace_nada(self):
+        e = self._base([("Ana", False), ("Luis", False)])
+        _puntuar(e, 1, "j1", "9.00")
+        _puntuar(e, 1, "j2", "9.00")
+        _puntuar(e, 2, "j1", "8.00")
+        _puntuar(e, 2, "j2", "8.00")
+        aplicar_evento_figuras(e, {"accion": "reevaluar_empate"})
+        assert e["finalizado"] is True
+        assert e["puntuaciones"]["1"] != {}
+        assert e["desempates"] == []
 
 
 # ══════════════════════════════════════════════════════════════════

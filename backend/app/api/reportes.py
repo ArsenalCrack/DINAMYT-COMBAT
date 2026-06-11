@@ -310,8 +310,21 @@ def _figuras_completas(combate):
     )
 
 
+def _figuras_desempates(combate):
+    """Reevaluaciones por empate registradas en la categoría."""
+    desempates = _detalle_registro(combate).get("desempates")
+    return desempates if isinstance(desempates, list) else []
+
+
 def _figuras_estado(combate):
-    return "Completo" if _figuras_completas(combate) else "Incompleto"
+    estado = "Completo" if _figuras_completas(combate) else "Incompleto"
+    desempates = _figuras_desempates(combate)
+    if desempates:
+        nombres = "; ".join(
+            " y ".join(d.get("nombres", [])) for d in desempates
+        )
+        estado += f" · Desempate reevaluado: {nombres}"
+    return estado
 
 
 def _puntos_por_ronda(combate):
@@ -438,6 +451,7 @@ def listar_combates():
             "ronda_final": c.ronda_final,
             "rondas_resumen": _rondas_resumen(c),
             "figuras_completas": _figuras_completas(c) if tipo == "figuras" else None,
+            "figuras_desempates": _figuras_desempates(c) if tipo == "figuras" else [],
             # Combate de eliminación: llave y ronda (Semifinal, Final, ...)
             "llave": (c.jueces_detalle or {}).get("llave"),
             "num_jueces": c.num_jueces,

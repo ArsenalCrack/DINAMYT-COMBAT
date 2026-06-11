@@ -16,6 +16,7 @@ interface Combate {
   ronda_final: string;
   rondas_resumen?: string;
   figuras_completas?: boolean | null;
+  figuras_desempates?: { nombres: string[]; ts?: number }[];
   llave?: { llave_id: number; nombre: string; ronda_nombre: string } | null;
   num_jueces: number;
   tatami_numero: number;
@@ -638,9 +639,24 @@ export default function ReportesCampeonatoPage() {
                     </td>
                     <td className="text-muted" style={{ fontSize: "0.8rem", minWidth: 150 }}>
                       {c.tipo === "figuras" ? (
-                        <span className={`badge ${c.figuras_completas ? "badge-green" : "badge-gray"}`}>
-                          {c.figuras_completas ? "Completo" : "Incompleto"}
-                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                          <span className={`badge ${c.figuras_completas ? "badge-green" : "badge-gray"}`}>
+                            {c.figuras_completas ? "Completo" : "Incompleto"}
+                          </span>
+                          {(c.figuras_desempates?.length || 0) > 0 && (
+                            <span
+                              className="badge"
+                              title={c.figuras_desempates?.map((d) => d.nombres.join(" y ")).join("; ")}
+                              style={{
+                                background: "rgba(255,140,0,0.12)",
+                                border: "1px solid rgba(255,140,0,0.4)",
+                                color: "var(--orange)",
+                              }}
+                            >
+                              Desempate reevaluado
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         c.rondas_resumen && c.rondas_resumen !== "-"
                           ? c.rondas_resumen

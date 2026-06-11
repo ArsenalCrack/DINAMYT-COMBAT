@@ -131,47 +131,28 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
 /**
  * Ranking de figuras (espejo de calcular_ranking del backend):
  * - Categoría especial primero, con su propio podio (no desplaza al normal).
- * - Desempate: nota individual más alta, luego la siguiente, etc.
- * - Empate real: comparten puesto (1, 2, 2, 4) y quedan marcados.
+ * - Empate de totales = empate REAL: comparten puesto (1, 2, 2, 4) y se
+ *   resuelve con una presentación de desempate (botón Reevaluar del JC).
  */
 function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
-  function clave(comp: Competidor): number[] {
-    const puntajes = Object.values(state.puntuaciones[String(comp.id)] || {})
-      .map(Number)
-      .sort((a, b) => b - a);
-    const total = Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
-    return [total, ...puntajes];
+  function totalDe(comp: Competidor): number {
+    const puntajes = Object.values(state.puntuaciones[String(comp.id)] || {}).map(Number);
+    return Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
   }
 
   function ordenar(lista: Competidor[]): CompetidorRankeado[] {
-    const items = lista.map((c) => ({ comp: c, clave: clave(c) }));
-    const maxLen = Math.max(0, ...items.map((i) => i.clave.length));
-    items.forEach((i) => {
-      while (i.clave.length < maxLen) i.clave.push(0);
-    });
-    items.sort((a, b) => {
-      for (let k = 0; k < maxLen; k++) {
-        if (a.clave[k] !== b.clave[k]) return b.clave[k] - a.clave[k];
-      }
-      return 0;
-    });
-    const resultado: CompetidorRankeado[] = [];
+    const items = lista
+      .map((c) => ({ ...c, total: totalDe(c), puesto: 0, empate: false }))
+      .sort((a, b) => b.total - a.total);
     let puesto = 0;
     items.forEach((item, idx) => {
-      const empatadoConPrev = idx > 0
-        && items[idx - 1].clave.every((v, k) => v === item.clave[k]);
-      if (!empatadoConPrev) puesto = idx + 1;
-      resultado.push({
-        ...item.comp,
-        total: item.clave[0],
-        puesto,
-        empate: false,
-      });
+      if (idx === 0 || item.total !== items[idx - 1].total) puesto = idx + 1;
+      item.puesto = puesto;
     });
     const conteo: Record<number, number> = {};
-    resultado.forEach((r) => { conteo[r.puesto] = (conteo[r.puesto] || 0) + 1; });
-    resultado.forEach((r) => { r.empate = conteo[r.puesto] > 1; });
-    return resultado;
+    items.forEach((r) => { conteo[r.puesto] = (conteo[r.puesto] || 0) + 1; });
+    items.forEach((r) => { r.empate = conteo[r.puesto] > 1; });
+    return items;
   }
 
   const especiales = state.competidores.filter((c) => c.especial);
@@ -306,6 +287,24 @@ function FigurasArbitro({
   const MAX_COMPETIDORES = 50;
   const puedeAgregar = state.competidores.length < MAX_COMPETIDORES;
   const puntuacionesCompletas = figurasPuntuacionesCompletas(state);
+
+  // Empate real en el podio normal (la categoría especial no se reevalúa)
+  const empatadosNormales = (puntuacionesCompletas || state.finalizado)
+    ? ranking.filter((r) => r.empate && !r.especial)
+    : [];
+
+  function handleReevaluarEmpate() {
+    if (!validarNombreCategoria() || empatadosNormales.length === 0) return;
+    const nombres = empatadosNormales.map((r) => r.nombre).join(", ");
+    onShowConfirm({
+      titulo: "REEVALUAR EMPATE",
+      mensaje: `Presentación de desempate para: ${nombres}. Se limpiarán SOLO sus puntuaciones para que los jueces los evalúen de nuevo; el podio se ocultará hasta completar. La categoría especial no se afecta y quedará constancia en el reporte.`,
+      tipo: "advertencia",
+      confirmLabel: "REEVALUAR",
+      cancelLabel: "Cancelar",
+      onConfirm: () => enviarEvento("reevaluar_empate"),
+    });
+  }
 
   // No se puede pasar el turno a otro competidor si al activo
   // le falta alguna puntuación por confirmar.
@@ -552,6 +551,38 @@ function FigurasArbitro({
           ))}
         </div>
       </div>
+
+      {/* Empate real: presentación de desempate solo para los empatados */}
+      {empatadosNormales.length > 0 && (
+        <div className="animate-fade" style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          gap: 10, flexWrap: "wrap", marginBottom: 12, padding: "10px 14px",
+          background: "rgba(255,140,0,0.08)",
+          border: "1.5px solid rgba(255,140,0,0.4)",
+          borderRadius: "var(--radius)",
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: "var(--orange)", fontWeight: 800, fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Empate en el puesto {empatadosNormales[0].puesto}
+            </div>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: 2, overflowWrap: "anywhere" }}>
+              {empatadosNormales.map((r) => r.nombre).join(" · ")}
+            </div>
+          </div>
+          <button
+            className="btn btn-sm"
+            onClick={handleReevaluarEmpate}
+            style={{
+              background: "rgba(255,140,0,0.15)",
+              borderColor: "rgba(255,140,0,0.5)",
+              color: "var(--orange)",
+              fontWeight: 800,
+            }}
+          >
+            Reevaluar
+          </button>
+        </div>
+      )}
 
       {/* Acciones — el podio se muestra automáticamente al completar */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
@@ -984,24 +1015,34 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
                     }}>
                       {comp.nombre}
                     </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
-                      {comp.especial && (
-                        <span className="badge badge-gold" style={{ fontSize: "clamp(0.6rem,1.2vw,0.85rem)" }}>
-                          Categoría Especial
-                        </span>
-                      )}
-                      {comp.empate && (
-                        <span className="badge" style={{
-                          fontSize: "clamp(0.6rem,1.2vw,0.85rem)",
-                          background: "rgba(255,140,0,0.12)",
-                          border: "1px solid rgba(255,140,0,0.4)",
-                          color: "var(--orange)",
-                        }}>
-                          Empate — comparten puesto
-                        </span>
-                      )}
-                      {comp.club && <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{comp.club}</span>}
-                    </div>
+                    {comp.club && (
+                      <div style={{
+                        fontSize: "clamp(0.85rem,1.6vw,1.1rem)",
+                        color: "var(--text-muted)", marginTop: 4,
+                        overflowWrap: "anywhere",
+                      }}>
+                        {comp.club}
+                      </div>
+                    )}
+                    {(comp.especial || comp.empate) && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+                        {comp.especial && (
+                          <span className="badge badge-gold" style={{ fontSize: "clamp(0.6rem,1.2vw,0.85rem)" }}>
+                            Categoría Especial
+                          </span>
+                        )}
+                        {comp.empate && (
+                          <span className="badge" style={{
+                            fontSize: "clamp(0.6rem,1.2vw,0.85rem)",
+                            background: "rgba(255,140,0,0.12)",
+                            border: "1px solid rgba(255,140,0,0.4)",
+                            color: "var(--orange)",
+                          }}>
+                            Empate — comparten puesto
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div style={{
                     fontFamily: "var(--font-display)",
