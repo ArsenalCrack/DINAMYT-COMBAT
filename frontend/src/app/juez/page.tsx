@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { misTatamisAPI, verificarPinAPI, type UserData } from "@/lib/api";
+import LogoutButton from "@/components/LogoutButton";
 
 interface MiTatami {
   id: number;
@@ -83,12 +84,6 @@ export default function JuezPage() {
     router.push(`/tatami/${pinAccess.tatami.id}?rol=${rol}`);
   }
 
-  function handleLogout() {
-    localStorage.removeItem("dinamyt_token");
-    localStorage.removeItem("dinamyt_user");
-    router.replace("/login");
-  }
-
   if (!user) return null;
 
   const ROLES: Record<string, string> = {
@@ -112,7 +107,7 @@ export default function JuezPage() {
             Bienvenido, {user.nombre}
           </p>
         </div>
-        <button className="btn" onClick={handleLogout} style={{ fontSize: "0.8rem" }}>Salir</button>
+        <LogoutButton label="Salir" />
       </div>
 
       {/* My tatamis */}

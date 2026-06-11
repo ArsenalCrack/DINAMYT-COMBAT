@@ -1,0 +1,22 @@
+# ── Secretos y configuración local ──
+backend/.env
+.env
+.env.local
+
+# ── Base de datos local y estado de tatamis ──
+backend/instance/
+
+# ── Python ──
+__pycache__/
+*.pyc
+backend/venv/
+
+# ── Logs de desarrollo ──
+backend-dev.log
+backend-dev.err
+*.log
+*.err
+*.tsbuildinfo
+
+# ── Node (refuerzo del .gitignore del frontend) ──
+node_modules/

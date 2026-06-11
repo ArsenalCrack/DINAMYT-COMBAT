@@ -31,7 +31,6 @@ interface FigurasState {
   nombre_categoria: string;
   num_jueces: number;
   nombres_jueces: Record<string, string>;
-  podio_modo?: "manual" | "automatico";
   finalizado: boolean;
   log: { txt: string; color: string; ts: number }[];
   _categoria?: string;
@@ -99,7 +98,8 @@ function categoriaNombreValido(raw?: string) {
   return Boolean(value && /^[\p{L} ]+$/u.test(value));
 }
 
-const JUECES_FIGURAS = ["j1", "j2", "j3", "j4", "j5", "j6", "j7"];
+// Máximo 4 jueces de esquina por tatami
+const JUECES_FIGURAS = ["j1", "j2", "j3", "j4"];
 
 function juecesActivosFiguras(state: FigurasState) {
   return JUECES_FIGURAS
@@ -118,14 +118,11 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
 }
 
 function figurasConDatos(state: FigurasState) {
+  // Solo competidores o puntuaciones reales bloquean el cambio de categoría;
+  // el log o el nombre de la categoría no cuentan como "datos en curso".
   const tienePuntuaciones = Object.values(state.puntuaciones || {})
     .some((puntajes) => Object.keys(puntajes || {}).length > 0);
-  return Boolean(
-    state.competidores.length
-    || tienePuntuaciones
-    || state.finalizado
-    || state.log.length
-  );
+  return Boolean(state.competidores.length || tienePuntuaciones);
 }
 
 // ─── Category Selector ───────────────────────────────────────────────────────
@@ -161,8 +158,8 @@ function CatSelector({
 }
 
 // ─── Crono Display ────────────────────────────────────────────────────────────
-function CronoDisplay({ segundos, activo, segundosMax, big = false }: {
-  segundos: number; activo: boolean; segundosMax: number; big?: boolean;
+function CronoDisplay({ segundos, activo, big = false }: {
+  segundos: number; activo: boolean; segundosMax?: number; big?: boolean;
 }) {
   const cls = !activo ? "pause"
     : segundos <= 5 ? "urgente-5"
@@ -182,11 +179,12 @@ function CronoDisplay({ segundos, activo, segundosMax, big = false }: {
 // FIGURAS — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function FigurasArbitro({
-  state, enviarEvento, tatamiId,
+  state, enviarEvento, tatamiId, onShowConfirm,
 }: {
   state: FigurasState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   tatamiId: string;
+  onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
 }) {
   const [newComp, setNewComp] = useState({ nombre: "", club: "" });
   const [showAddComp, setShowAddComp] = useState(false);
@@ -197,14 +195,19 @@ function FigurasArbitro({
   const nombreCategoriaValido = categoriaNombreValido(categoriaDraft);
 
   useEffect(() => {
-    const serverName = state.nombre_categoria ?? "";
-    if (serverName === categoriaDraft) {
-      setCategoriaPendiente(false);
-      return;
-    }
-    if (!categoriaFocused && !categoriaPendiente) {
-      setCategoriaDraft(serverName);
-    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const serverName = state.nombre_categoria ?? "";
+      if (serverName === categoriaDraft) {
+        setCategoriaPendiente(false);
+        return;
+      }
+      if (!categoriaFocused && !categoriaPendiente) {
+        setCategoriaDraft(serverName);
+      }
+    });
+    return () => { cancelled = true; };
   }, [categoriaDraft, categoriaFocused, categoriaPendiente, state.nombre_categoria]);
 
   function commitNombreCategoria() {
@@ -244,8 +247,19 @@ function FigurasArbitro({
 
   const MAX_COMPETIDORES = 50;
   const puedeAgregar = state.competidores.length < MAX_COMPETIDORES;
-  const podioModo = state.podio_modo || "manual";
   const puntuacionesCompletas = figurasPuntuacionesCompletas(state);
+
+  // No se puede pasar el turno a otro competidor si al activo
+  // le falta alguna puntuación por confirmar.
+  const juecesActivos = juecesActivosFiguras(state);
+  const activoId = state.competidor_activo_id;
+  const activoIncompleto = Boolean(
+    activoId !== null
+    && juecesActivos.length > 0
+    && !juecesActivos.every(
+      (j) => state.puntuaciones_confirmadas?.[String(activoId)]?.[j]
+    )
+  );
 
   return (
     <div style={{ padding: 16, maxWidth: 800, margin: "0 auto" }}>
@@ -294,10 +308,10 @@ function FigurasArbitro({
         </div>
       )}
 
-      {/* Número de jueces */}
+      {/* Número de jueces (máximo 4 de esquina) */}
       <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexWrap: "wrap" }}>
         <span style={{ color: "var(--text-muted)", fontSize: "0.82rem", fontWeight: 700 }}>Jueces:</span>
-        {[2, 3, 4, 5, 6, 7].map((n) => (
+        {[2, 3, 4].map((n) => (
           <button key={n} className="btn btn-sm"
             onClick={() => {
               if (validarNombreCategoria()) enviarEvento("set_num_jueces", { num_jueces: n });
@@ -311,35 +325,15 @@ function FigurasArbitro({
             {n}
           </button>
         ))}
-      </div>
-
-      {/* Podio */}
-      <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Podio</div>
-          <div style={{ color: puntuacionesCompletas ? "var(--green)" : "var(--text-dim)", fontSize: "0.78rem", marginTop: 2 }}>
-            {puntuacionesCompletas ? "Puntuaciones completas" : "Puntuaciones pendientes"}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {(["manual", "automatico"] as const).map((modo) => (
-            <button
-              key={modo}
-              className="btn btn-sm"
-              onClick={() => {
-                if (validarNombreCategoria()) enviarEvento("set_podio_modo", { modo });
-              }}
-              style={{
-                background: podioModo === modo ? "var(--gold-bg)" : undefined,
-                borderColor: podioModo === modo ? "var(--gold-border)" : undefined,
-                color: podioModo === modo ? "var(--gold)" : undefined,
-                padding: "4px 10px",
-              }}
-            >
-              {modo === "manual" ? "Manual" : "Automático"}
-            </button>
-          ))}
-        </div>
+        <span style={{
+          marginLeft: "auto",
+          color: puntuacionesCompletas ? "var(--green)" : "var(--text-dim)",
+          fontSize: "0.78rem", fontWeight: 700,
+        }}>
+          {puntuacionesCompletas
+            ? "Puntuaciones completas — podio visible"
+            : "El podio aparece al completar todas las puntuaciones"}
+        </span>
       </div>
 
       {/* Competidores */}
@@ -411,10 +405,29 @@ function FigurasArbitro({
                 </div>
                 {!isActive && (
                   <button className="btn btn-sm"
+                    disabled={activoIncompleto}
+                    title={activoIncompleto
+                      ? "El competidor en turno aún tiene puntuaciones pendientes"
+                      : undefined}
                     onClick={() => {
-                      if (validarNombreCategoria()) enviarEvento("activar_competidor", { competidor_id: comp.id });
+                      if (!validarNombreCategoria()) return;
+                      if (activoIncompleto) {
+                        onShowConfirm({
+                          titulo: "TURNO EN CURSO",
+                          mensaje: "No puedes activar otro competidor: al competidor en turno le falta la puntuación de algún juez. Espera a que todos confirmen.",
+                          tipo: "advertencia",
+                          solo_ok: true,
+                          onConfirm: () => {},
+                        });
+                        return;
+                      }
+                      enviarEvento("activar_competidor", { competidor_id: comp.id });
                     }}
-                    style={{ padding: "4px 8px", fontSize: "0.7rem", background: "var(--bg-card)", borderColor: "var(--gold)" }}>
+                    style={{
+                      padding: "4px 8px", fontSize: "0.7rem",
+                      background: "var(--bg-card)", borderColor: "var(--gold)",
+                      opacity: activoIncompleto ? 0.45 : 1,
+                    }}>
                     ACTIVAR
                   </button>
                 )}
@@ -452,32 +465,48 @@ function FigurasArbitro({
         </div>
       </div>
 
-      {/* Acciones */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+      {/* Acciones — el podio se muestra automáticamente al completar */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
         <button className="btn btn-primary"
-          onClick={() => {
-            if (validarNombreCategoria()) enviarEvento("finalizar");
-          }}>
-          {state.finalizado ? "Podio Mostrado" : "Mostrar Podio"}
-        </button>
-        <button className="btn btn-primary"
+          style={{ whiteSpace: "normal", lineHeight: 1.25, padding: "12px 18px", minHeight: 48 }}
           onClick={() => {
             if (!validarNombreCategoria()) return;
             if (!state.competidores.length) {
               setCategoriaError("Agrega competidores antes de guardar.");
               return;
             }
-            enviarEvento("nuevo_combate");
+            onShowConfirm({
+              titulo: "GUARDAR Y NUEVA CATEGORÍA",
+              mensaje: `¿Guardar "${state.nombre_categoria || "Figuras"}" e iniciar una nueva categoría? El ranking y las puntuaciones quedarán registrados en el reporte.`,
+              tipo: "advertencia",
+              confirmLabel: "GUARDAR + NUEVO",
+              cancelLabel: "Cancelar",
+              onConfirm: () => enviarEvento("nuevo_combate"),
+            });
           }}>
           Guardar + Nuevo
         </button>
         <button className="btn btn-danger"
+          style={{ whiteSpace: "normal", lineHeight: 1.25, padding: "12px 18px", minHeight: 48 }}
           onClick={() => {
-            if (validarNombreCategoria()) enviarEvento("reset_figuras");
+            if (!validarNombreCategoria()) return;
+            onShowConfirm({
+              titulo: "RESETEAR FIGURAS",
+              mensaje: "¿Reiniciar la categoría de figuras? Se perderán los competidores y todas las puntuaciones. Usa 'Guardar + Nuevo' si quieres conservarlas.",
+              tipo: "peligro",
+              confirmLabel: "RESETEAR",
+              cancelLabel: "Cancelar",
+              onConfirm: () => enviarEvento("reset_figuras"),
+            });
           }}>
           Resetear
         </button>
       </div>
+      {!puntuacionesCompletas && state.competidores.length > 0 && (
+        <p style={{ color: "var(--text-dim)", fontSize: "0.76rem", marginTop: 8, textAlign: "center" }}>
+          El podio aparecerá automáticamente en la pantalla pública cuando todos los competidores hayan sido calificados en todos sus criterios.
+        </p>
+      )}
 
       {/* Log */}
       {state.log.length > 0 && (
@@ -619,51 +648,6 @@ function FigurasScoreCard({
           </button>
         )}
       </div>
-      <style>{`
-        .tatami-topbar {
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .tatami-topbar-center {
-          min-width: 0;
-          flex: 1 1 auto;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-        .tatami-topbar-right {
-          flex: 0 1 auto;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-        .tatami-active-btn {
-          min-width: 112px;
-          line-height: 1;
-        }
-        @media (max-width: 640px) {
-          .tatami-topbar {
-            align-items: stretch !important;
-          }
-          .tatami-topbar > .btn {
-            flex: 1 1 92px;
-          }
-          .tatami-topbar-center {
-            order: 3;
-            flex-basis: 100%;
-            justify-content: flex-start;
-            overflow-x: auto;
-            padding-bottom: 2px;
-          }
-          .tatami-topbar-right {
-            flex: 1 1 auto;
-            gap: 8px !important;
-          }
-          .tatami-active-btn {
-            min-height: 36px;
-            height: auto !important;
-            padding: 6px 9px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -675,7 +659,7 @@ function FigurasJuez({
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   juezId: string;
 }) {
-  const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3, j5: 4, j6: 5, j7: 6 };
+  const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3 };
   const idxCriterio = MAP_JUEZ[juezId as keyof typeof MAP_JUEZ];
   const miCriterio = idxCriterio !== undefined ? state.criterios[idxCriterio] : undefined;
 
@@ -749,8 +733,14 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
     .map((c) => ({ ...c, total: calcTotal(c) }))
     .sort((a, b) => b.total - a.total);
   const nombreCategoria = state._nombre_categoria || state.nombre_categoria || "Figuras";
-  const shouldShowPodio = state.finalizado || ((state.podio_modo || "manual") === "automatico" && figurasPuntuacionesCompletas(state));
+  const puntuacionesCompletas = figurasPuntuacionesCompletas(state);
+  // El podio aparece automáticamente cuando TODOS los competidores fueron
+  // calificados en todos sus criterios (el backend finaliza solo al completar).
+  const shouldShowPodio = state.finalizado || puntuacionesCompletas;
   const activeComp = state.competidores.find((c) => c.id === state.competidor_activo_id);
+  const juecesActivos = juecesActivosFiguras(state);
+  const activeCompId = activeComp ? String(activeComp.id) : "";
+  const activeTotal = activeComp ? calcTotal(activeComp) : 0;
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -780,22 +770,99 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
             <p style={{ fontSize: "1.6rem" }}>Esperando participantes...</p>
           </div>
         ) : !shouldShowPodio ? (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "var(--text-muted)" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2rem,5vw,4rem)", color: "var(--gold)", letterSpacing: "0.08em" }}>
-              Puntuaciones en curso
-            </div>
-            {activeComp && (
-              <div style={{ marginTop: 18 }}>
+          activeComp ? (
+            /* ── Competidor en turno: puntuación en vivo por criterio ── */
+            <div style={{
+              height: "100%", display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", textAlign: "center",
+              maxWidth: 1100, margin: "0 auto", gap: "clamp(10px, 2vh, 24px)",
+            }}>
+              <div>
                 <div style={{ fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "var(--text-dim)", fontWeight: 800 }}>
                   En turno
                 </div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.5rem,6vw,5rem)", color: "var(--text)", lineHeight: 1.05 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.2rem,5.5vw,4.5rem)", color: "var(--text)", lineHeight: 1.05 }}>
                   {activeComp.nombre}
                 </div>
-                {activeComp.club && <div style={{ marginTop: 6, color: "var(--text-muted)" }}>{activeComp.club}</div>}
+                {activeComp.club && (
+                  <div style={{ marginTop: 4, color: "var(--text-muted)", fontSize: "clamp(0.85rem,1.5vw,1.1rem)" }}>
+                    {activeComp.club}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Criterios según jueces activos */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(auto-fit, minmax(min(150px, 100%), 1fr))`,
+                gap: 12, width: "100%",
+              }}>
+                {juecesActivos.map((juezId) => {
+                  const idx = Number(juezId.slice(1)) - 1;
+                  const criterio = state.criterios[idx];
+                  if (!criterio) return null;
+                  const valor = state.puntuaciones[activeCompId]?.[juezId];
+                  const confirmado = Boolean(state.puntuaciones_confirmadas?.[activeCompId]?.[juezId]);
+                  const tieneNota = valor !== undefined && valor !== null;
+                  return (
+                    <div key={juezId} className="animate-fade" style={{
+                      padding: "clamp(10px, 2vh, 20px) 12px",
+                      background: confirmado ? "rgba(0, 212, 114, 0.08)" : "var(--bg-card)",
+                      border: `1.5px solid ${confirmado ? "var(--green-border)" : "var(--border)"}`,
+                      borderRadius: "var(--radius)",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.7rem,1.2vw,0.95rem)", fontWeight: 800,
+                        textTransform: "uppercase", letterSpacing: "0.1em",
+                        color: "var(--text-muted)",
+                      }}>
+                        {criterio.nombre}
+                      </div>
+                      <div style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: "clamp(2.2rem,4.5vw,4rem)", lineHeight: 1,
+                        color: tieneNota ? (confirmado ? "var(--green)" : "var(--text)") : "var(--text-dim)",
+                      }}>
+                        {tieneNota ? Number(valor).toFixed(2) : "—"}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                        {juezId.toUpperCase()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total acumulado */}
+              <div style={{
+                display: "flex", alignItems: "baseline", gap: 14,
+                padding: "clamp(8px,1.5vh,16px) clamp(20px,4vw,48px)",
+                background: "rgba(240,184,0,0.08)",
+                border: "1.5px solid var(--gold-border)",
+                borderRadius: "var(--radius-lg)",
+              }}>
+                <span style={{ fontSize: "clamp(0.8rem,1.4vw,1.1rem)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--text-muted)" }}>
+                  Total
+                </span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: "clamp(3rem,7vw,6rem)", color: "var(--gold)", lineHeight: 1 }}>
+                  {activeTotal.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* ── Sin competidor activo: esperando ── */
+            <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "var(--text-muted)" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2rem,5vw,4rem)", color: "var(--gold)", letterSpacing: "0.08em" }}>
+                Puntuaciones en curso
+              </div>
+              <div style={{ marginTop: 12, fontSize: "clamp(0.9rem,1.6vw,1.2rem)", color: "var(--text-dim)" }}>
+                {puntuacionesCompletas
+                  ? "Todas las puntuaciones registradas — esperando podio"
+                  : "Esperando al siguiente competidor"}
+              </div>
+            </div>
+          )
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 960, margin: "0 auto" }}>
             {ranking.map((comp, i) => {
@@ -971,10 +1038,9 @@ function CombateJuez({
   const miPuntaje = state.jueces?.[rol] || { hong: 0, chung: 0 };
   const nombresListos = competidoresConNombre(state);
   const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
-  const cronoClass = !state.activo ? "pause"
-    : state.segundos <= 5 ? "urgente-5"
-    : state.segundos <= 10 ? "urgente"
-    : "activo";
+  // Rol fuera de la configuración actual (ej: j3 en combate de 2 jueces)
+  const rolNum = rol.startsWith("j") ? Number(rol.slice(1)) : 0;
+  const rolInactivo = rolNum > (state.numJueces || 4);
 
   const PUNTOS = [
     { pts: 1, label: "CUERPO" },
@@ -989,6 +1055,20 @@ function CombateJuez({
     }
     onFlash(color === "hong" ? "🔴" : "🔵", `+${pts} JEUMSU`);
     enviarEvento("punto_juez", { juez: rol, color, pts, nombre: label });
+  }
+
+  if (rolInactivo) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>
+          {rol.toUpperCase()} no participa en este combate
+        </p>
+        <p style={{ fontSize: "0.85rem" }}>
+          El Juez Central configuró el combate con {state.numJueces} jueces de esquina.
+          Tus puntos no contarían en el marcador.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -1110,7 +1190,7 @@ function CombateJuez({
 // COMBATE — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function CombateArbitro({
-  state, enviarEvento, tatamiId,
+  state, enviarEvento,
   onFlash, onFaltaFlash, onShowConfirm, broadcast
 }: {
   state: CombateState;
@@ -1127,11 +1207,6 @@ function CombateArbitro({
   const esqChung = promedioEsquinas(state, "chung").toFixed(1);
   const nombresListos = competidoresConNombre(state);
   const accionesBloqueadas = !nombresListos || Boolean(state.ganadorPendienteCierre);
-
-  const cronoClass = !state.activo ? "pause"
-    : state.segundos <= 5 ? "urgente-5"
-    : state.segundos <= 10 ? "urgente"
-    : "activo";
 
   const PUNTOS_ARB = [
     { pts: 2, nombre: "Knock Down" },
@@ -1787,16 +1862,85 @@ function TatamiContent() {
                   enviarEvento("activar_tatami");
                 }
               }}
-              style={{ fontWeight: 800, padding: "4px 10px", fontSize: "0.7rem", height: 28 }}
+              style={{ fontWeight: 800, padding: "6px 12px", fontSize: "0.7rem", minHeight: 32 }}
             >
               {anyState._tatami_activo ? "ACTIVO" : "DESACTIVADO"}
             </button>
           )}
-          <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+          <span className="tatami-topbar-rol-label" style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
             {isArbitro ? "Juez Central" : rol.toUpperCase()}
           </span>
         </div>
       </div>
+
+      {/* Estilos del topbar — a nivel de página para que apliquen en
+          combate Y figuras (antes vivían dentro de FigurasScoreCard). */}
+      <style>{`
+        .tatami-topbar {
+          flex-wrap: wrap;
+          gap: 8px;
+          max-width: 100%;
+        }
+        .tatami-topbar > * {
+          min-width: 0;
+        }
+        .tatami-topbar-center {
+          min-width: 0;
+          flex: 1 1 auto;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+        .tatami-topbar-right {
+          flex: 0 1 auto;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          min-width: 0;
+        }
+        .tatami-active-btn {
+          min-width: 0;
+          max-width: 100%;
+          line-height: 1.1;
+          white-space: nowrap;
+          flex: 0 1 auto;
+        }
+        @media (max-width: 640px) {
+          .tatami-topbar {
+            align-items: stretch !important;
+            padding: 8px 10px !important;
+          }
+          .tatami-topbar > .btn {
+            flex: 0 1 auto;
+          }
+          .tatami-topbar-center {
+            order: 3;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+          .tatami-topbar-right {
+            flex: 1 1 auto;
+            gap: 8px !important;
+            align-items: center;
+          }
+          .tatami-topbar-rol-label {
+            display: none;
+          }
+          .tatami-active-btn {
+            min-height: 40px;
+            height: auto !important;
+            padding: 8px 10px !important;
+            flex: 1 1 auto;
+            font-size: 0.72rem !important;
+          }
+        }
+        @media (max-width: 380px) {
+          .tatami-active-btn {
+            white-space: normal;
+            word-break: break-word;
+          }
+        }
+      `}</style>
 
       {/* Content */}
       <div style={{ position: "relative", flex: 1 }}>
@@ -1815,7 +1959,12 @@ function TatamiContent() {
 
         {esFiguras ? (
           isArbitro
-            ? <FigurasArbitro state={anyState as FigurasState} enviarEvento={enviarEvento} tatamiId={tatamiId} />
+            ? <FigurasArbitro
+                state={anyState as FigurasState}
+                enviarEvento={enviarEvento}
+                tatamiId={tatamiId}
+                onShowConfirm={alertSystem.showConfirm}
+              />
             : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} />
         ) : (
           isArbitro

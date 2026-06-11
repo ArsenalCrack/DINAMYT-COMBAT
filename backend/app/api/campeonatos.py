@@ -30,6 +30,33 @@ def listar():
     return jsonify([c.to_dict() for c in campeonatos]), 200
 
 
+@campeonatos_bp.route("/publico", methods=["GET"])
+def listar_publico():
+    """
+    GET /api/campeonatos/publico — Campeonatos activos con sus tatamis.
+    Sin login: lo usa la pantalla pública para elegir a qué tatami entrar.
+    Solo expone datos mínimos (nunca PINs ni asignaciones).
+    """
+    campeonatos = (
+        Campeonato.query.filter_by(activo=True)
+        .order_by(Campeonato.created_at.desc())
+        .all()
+    )
+    result = []
+    for c in campeonatos:
+        tatamis = (
+            Tatami.query.filter_by(campeonato_id=c.id, activo=True)
+            .order_by(Tatami.numero)
+            .all()
+        )
+        result.append({
+            "id": c.id,
+            "nombre": c.nombre,
+            "tatamis": [{"id": t.id, "numero": t.numero} for t in tatamis],
+        })
+    return jsonify(result), 200
+
+
 @campeonatos_bp.route("/<int:camp_id>", methods=["GET"])
 @jwt_required()
 def obtener(camp_id):

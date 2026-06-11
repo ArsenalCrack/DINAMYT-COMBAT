@@ -12,9 +12,12 @@ Novedades v2:
 """
 
 import copy
+import json
+import os
 import re
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from flask import request
 from flask_socketio import ConnectionRefusedError, Namespace, emit, join_room, leave_room
 from flask_jwt_extended import decode_token
@@ -43,6 +46,69 @@ tatami_states = {}
 MAX_EVENTOS_VISTOS = 500
 
 _lock = threading.Lock()
+
+# ── Persistencia a disco: el estado sobrevive reinicios del backend ──
+_SNAPSHOT_PATH = Path(__file__).resolve().parents[2] / "instance" / "tatami_states.json"
+_snapshots_cargados = False
+
+
+def _serializar_ts(ts):
+    """Parte JSON-serializable del estado de un tatami."""
+    return {
+        "estado": ts.get("estado", {}),
+        "categoria_activa": ts.get("categoria_activa", "combate"),
+        "nombre_categoria": ts.get("nombre_categoria", "Figuras"),
+        "tatami_activo": ts.get("tatami_activo", False),
+        "secuencia": ts.get("secuencia", 0),
+        "sesion_id": ts.get("sesion_id"),
+        "jueces_meta": ts.get("jueces_meta", {}),
+    }
+
+
+def _persistir_estados():
+    """Escribe los estados de todos los tatamis a disco (reemplazo atómico)."""
+    try:
+        data = {tid: _serializar_ts(ts) for tid, ts in tatami_states.items()}
+        _SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _SNAPSHOT_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, _SNAPSHOT_PATH)
+    except Exception as e:
+        print(f"  [WARN] No se pudo persistir estado de tatamis: {e}")
+
+
+def _cargar_estados():
+    """Restaura los estados desde disco al primer acceso tras un reinicio."""
+    global _snapshots_cargados
+    if _snapshots_cargados:
+        return
+    _snapshots_cargados = True
+    try:
+        if not _SNAPSHOT_PATH.exists():
+            return
+        data = json.loads(_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        for tid, guardado in data.items():
+            estado = guardado.get("estado") or estado_inicial()
+            # El cronómetro vuelve pausado: el Juez Central decide reanudar.
+            if "activo" in estado:
+                estado["activo"] = False
+            tatami_states[tid] = {
+                "estado": estado,
+                "categoria_activa": guardado.get("categoria_activa", "combate"),
+                "nombre_categoria": guardado.get("nombre_categoria", "Figuras"),
+                "tatami_activo": guardado.get("tatami_activo", False),
+                "eventos_vistos": set(),
+                "secuencia": guardado.get("secuencia", 0),
+                "crono_thread": None,
+                "crono_activo": False,
+                "sesion_id": guardado.get("sesion_id"),
+                "jueces_meta": guardado.get("jueces_meta", {}),
+                "roles_activos": {},
+            }
+        if data:
+            print(f"  [OK] Estado de {len(data)} tatami(s) restaurado tras reinicio")
+    except Exception as e:
+        print(f"  [WARN] No se pudo restaurar estado de tatamis: {e}")
 
 # Acciones permitidas cuando tatami ESTÁ DESACTIVADO
 ACCIONES_SIN_ACTIVACION = {
@@ -105,27 +171,25 @@ ACCIONES_SOLO_ARBITRO = {
     "eliminar_competidor",
     "activar_competidor",
     "cerrar_puntuacion",
-    "set_podio_modo",
     "finalizar",
 }
 
 CATEGORIA_NOMBRE_MAX = 40
 CATEGORIA_NOMBRE_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$")
 
+# Máximo 4 jueces de esquina por tatami (más el Juez Central)
 ROL_LABELS = {
     "arbitro": "Juez Central",
     "j1": "Juez 1",
     "j2": "Juez 2",
     "j3": "Juez 3",
     "j4": "Juez 4",
-    "j5": "Juez 5",
-    "j6": "Juez 6",
-    "j7": "Juez 7",
 }
 
 
 def _get_tatami_state(tatami_id):
     """Obtiene o crea el estado de un tatami."""
+    _cargar_estados()
     tid = str(tatami_id)
     if tid not in tatami_states:
         tatami_states[tid] = {
@@ -228,7 +292,12 @@ class CombateNamespace(Namespace):
     def on_connect(self, auth=None):
         tatami_id = request.args.get("tatami_id")
         rol = request.args.get("rol", "pantalla")
-        token = request.args.get("token")
+        # El token viaja en el payload `auth` de Socket.IO (no queda en logs
+        # de URLs). Se acepta query string como compatibilidad hacia atrás.
+        token = None
+        if isinstance(auth, dict):
+            token = auth.get("token")
+        token = token or request.args.get("token")
 
         if not tatami_id:
             raise ConnectionRefusedError("tatami_id requerido")
@@ -429,14 +498,20 @@ class CombateNamespace(Namespace):
                 self._broadcast_estado(room, ts)
                 return
 
-            # ── Nuevo combate ──────────────────────────────────────────────
+            # ── Nuevo combate / nueva categoría ────────────────────────────
             if accion == "nuevo_combate":
                 self._guardar_combate_actual(tatami_id, ts)
                 categoria = ts.get("categoria_activa", "combate")
                 if categoria == "figuras":
+                    nombre_cat = ts.get("nombre_categoria", "Figuras")
                     nuevo = estado_inicial_figuras()
-                    nuevo["nombre_categoria"] = ts.get("nombre_categoria", "Figuras")
+                    nuevo["nombre_categoria"] = nombre_cat
                     ts["estado"] = nuevo
+                    _agregar_log(
+                        ts["estado"],
+                        f"[OK] {nombre_cat} guardada — Nueva categoría",
+                        "arb",
+                    )
                 else:
                     seg_max = ts["estado"].get("segundosMax", 120)
                     num_j = ts["estado"].get("numJueces", 4)
@@ -446,7 +521,7 @@ class CombateNamespace(Namespace):
                     ts["estado"]["segundos"] = seg_max
                     ts["estado"]["numJueces"] = num_j
                     ts["estado"]["nombresJueces"] = nombres_j
-                _agregar_log(ts["estado"], "[OK] Combate guardado — Nuevo combate", "arb")
+                    _agregar_log(ts["estado"], "[OK] Combate guardado — Nuevo combate", "arb")
                 self._detener_crono(tatami_id)
                 if ev_id:
                     emit("ack", {"evId": ev_id})
@@ -560,6 +635,9 @@ class CombateNamespace(Namespace):
         estado_copy = _build_estado_broadcast(ts)
         emit("estado", {"datos": estado_copy}, to=room)
         emit("estado_confirmado", {"datos": estado_copy})
+        # Cada cambio de estado por evento queda persistido en disco
+        # (los ticks del cronómetro no pasan por aquí, no saturan I/O).
+        _persistir_estados()
 
     def _inyectar_meta_juez(self, ts, ev, rol_conexion):
         accion = ev.get("accion")
@@ -630,7 +708,6 @@ class CombateNamespace(Namespace):
                 "criterios": snapshot.get("criterios", []),
                 "puntuaciones": snapshot.get("puntuaciones", {}),
                 "puntuaciones_confirmadas": snapshot.get("puntuaciones_confirmadas", {}),
-                "podio_modo": snapshot.get("podio_modo", "manual"),
                 "puntuaciones_completas": snapshot.get("puntuaciones_completas", False),
                 "finalizado": snapshot.get("finalizado", False),
                 "asignaciones": self._jueces_reporte(tatami_id, ts),
@@ -774,7 +851,6 @@ class CombateNamespace(Namespace):
                             ts["crono_activo"] = False
                         break
                     estado["segundos"] -= 1
-                    room = _room_name(tatami_id)
                 # Broadcast fuera del lock
                 socketio.emit(
                     "estado",

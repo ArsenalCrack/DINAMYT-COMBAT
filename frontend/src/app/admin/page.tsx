@@ -10,6 +10,7 @@ import {
   deleteUserAPI,
   type UserData,
 } from "@/lib/api";
+import LogoutButton from "@/components/LogoutButton";
 
 interface Campeonato {
   id: number;
@@ -98,12 +99,6 @@ export default function AdminPage() {
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem("dinamyt_token");
-    localStorage.removeItem("dinamyt_user");
-    router.replace("/login");
-  }
-
   if (!user) return null;
 
   return (
@@ -131,7 +126,7 @@ export default function AdminPage() {
           >
             Reportes
           </button>
-          <button className="btn" onClick={handleLogout}>Cerrar Sesion</button>
+          <LogoutButton />
         </div>
       </div>
 
@@ -166,11 +161,11 @@ export default function AdminPage() {
       {/* ══════════════ CAMPEONATOS TAB ══════════════ */}
       {tab === "campeonatos" && (
         <div className="animate-fade">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div className="admin-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
             <h2 style={{ fontFamily: "var(--font-body)", fontWeight: 700, fontSize: "1.1rem", color: "var(--gold)" }}>
               Campeonatos ({campeonatos.length})
             </h2>
-            <button className="btn btn-primary" onClick={() => setShowNewCamp(!showNewCamp)}>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowNewCamp(!showNewCamp)}>
               + Nuevo Campeonato
             </button>
           </div>
@@ -226,11 +221,11 @@ export default function AdminPage() {
       {/* ══════════════ JUECES TAB ══════════════ */}
       {tab === "jueces" && (
         <div className="animate-fade">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div className="admin-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
             <h2 style={{ fontFamily: "var(--font-body)", fontWeight: 700, fontSize: "1.1rem", color: "var(--gold)" }}>
               Usuarios ({users.length})
             </h2>
-            <button className="btn btn-primary" onClick={() => setShowNewUser(!showNewUser)}>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowNewUser(!showNewUser)}>
               + Crear Usuario
             </button>
           </div>
@@ -294,6 +289,18 @@ export default function AdminPage() {
         </div>
       )}
       <style>{`
+        .admin-section-header .btn {
+          flex: 0 0 auto;
+        }
+        @media (max-width: 420px) {
+          .admin-section-header {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .admin-section-header .btn {
+            width: 100%;
+          }
+        }
         @media (max-width: 640px) {
           .admin-page {
             padding: 14px !important;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   getCampeonatoAPI,
@@ -72,10 +72,18 @@ export default function CampeonatoDetailPage() {
     return () => { cancelled = true; };
   }, [loadData, router]);
 
+  const detailRef = useRef<HTMLDivElement | null>(null);
+
   async function loadTatamiDetail(tId: number) {
     try {
       const t = await getTatamiAPI(tId);
       setSelectedTatami(t);
+      // En móvil (una sola columna) llevar el detalle a la vista
+      if (typeof window !== "undefined" && window.innerWidth <= 820) {
+        setTimeout(() => {
+          detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 60);
+      }
     } catch { /* */ }
   }
 
@@ -145,40 +153,45 @@ export default function CampeonatoDetailPage() {
         {/* Tatamis list */}
         <div>
           <div className="card-title">Tatamis</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="tatami-list">
             {camp.tatamis?.map((t) => (
-              <div
+              <button
                 key={t.id}
-                className="card"
+                type="button"
+                className="card tatami-card"
                 style={{
                   cursor: "pointer",
+                  textAlign: "left",
+                  font: "inherit",
+                  color: "inherit",
+                  width: "100%",
                   borderColor: selectedTatami?.id === t.id ? "var(--gold)" : undefined,
+                  background: selectedTatami?.id === t.id ? "rgba(240,184,0,0.06)" : undefined,
                 }}
                 onClick={() => loadTatamiDetail(t.id)}
+                aria-pressed={selectedTatami?.id === t.id}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <span style={{ fontWeight: 700, fontSize: "1.1rem" }}>Tatami {t.numero}</span>
-                    {t.pin && (
-                      <span style={{
-                        marginLeft: 8, padding: "2px 8px",
-                        background: "var(--gold-bg)", border: "1px solid var(--gold-border)",
-                        borderRadius: "var(--radius-sm)", fontSize: "0.75rem", fontFamily: "var(--font-mono)",
-                        color: "var(--gold)",
-                      }}>PIN: {t.pin}</span>
-                    )}
-                  </div>
-                  <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>
+                <div className="tatami-card-row">
+                  <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>Tatami {t.numero}</span>
+                  <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
                     {t.num_asignaciones} jueces
                   </span>
                 </div>
-              </div>
+                {t.pin && (
+                  <span style={{
+                    display: "inline-block", marginTop: 6, padding: "2px 8px",
+                    background: "var(--gold-bg)", border: "1px solid var(--gold-border)",
+                    borderRadius: "var(--radius-sm)", fontSize: "0.75rem", fontFamily: "var(--font-mono)",
+                    color: "var(--gold)",
+                  }}>PIN: {t.pin}</span>
+                )}
+              </button>
             ))}
           </div>
         </div>
 
         {/* Tatami detail */}
-        <div>
+        <div ref={detailRef} style={{ scrollMarginTop: 12 }}>
           {selectedTatami ? (
             <div className="animate-fade">
               <div className="card-title">
@@ -188,11 +201,12 @@ export default function CampeonatoDetailPage() {
               {/* Current assignments */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 {selectedTatami.asignaciones?.map((a) => (
-                  <div key={a.id} className="card" style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12
+                  <div key={a.id} className="card asignacion-row" style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: 12, gap: 10, flexWrap: "wrap",
                   }}>
-                    <div>
-                      <div>
+                    <div style={{ minWidth: 0, flex: "1 1 200px" }}>
+                      <div style={{ overflowWrap: "anywhere" }}>
                         <span style={{ fontWeight: 700 }}>{a.nombre_display || a.usuario?.nombre}</span>
                         {a.usuario?.email && (
                           <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.78rem" }}>
@@ -212,8 +226,8 @@ export default function CampeonatoDetailPage() {
                       </div>
                     </div>
                     <button
-                      className="btn btn-danger"
-                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                      className="btn btn-danger btn-sm"
+                      style={{ padding: "6px 12px", fontSize: "0.75rem", flexShrink: 0 }}
                       onClick={() => handleUnassign(selectedTatami.id, a.usuario_id)}
                     >Quitar</button>
                   </div>
@@ -275,9 +289,6 @@ export default function CampeonatoDetailPage() {
                     <option value="j2">Juez Esquina 2</option>
                     <option value="j3">Juez Esquina 3</option>
                     <option value="j4">Juez Esquina 4</option>
-                    <option value="j5">Juez Esquina 5</option>
-                    <option value="j6">Juez Esquina 6</option>
-                    <option value="j7">Juez Esquina 7</option>
                   </select>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button type="submit" className="btn btn-primary" disabled={!assignData.usuario_id}>Asignar</button>
@@ -318,6 +329,25 @@ export default function CampeonatoDetailPage() {
         .campeonato-admin-grid {
           align-items: start;
         }
+        .tatami-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+          gap: 8px;
+        }
+        .tatami-card {
+          padding: 12px 14px;
+          min-height: var(--touch-min);
+        }
+        .tatami-card:hover {
+          border-color: var(--gold-border);
+          background: var(--bg-elevated);
+        }
+        .tatami-card-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
         @media (max-width: 820px) {
           .campeonato-admin-page {
             padding: 14px !important;
@@ -330,6 +360,9 @@ export default function CampeonatoDetailPage() {
           .campeonato-admin-grid {
             grid-template-columns: 1fr !important;
           }
+          .tatami-list {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          }
         }
         @media (max-width: 520px) {
           .campeonato-admin-grid .card {
@@ -337,6 +370,20 @@ export default function CampeonatoDetailPage() {
           }
           .campeonato-admin-grid .btn {
             white-space: normal;
+          }
+          .tatami-list {
+            grid-template-columns: 1fr 1fr;
+          }
+          .asignacion-row > div:first-child {
+            flex-basis: 100%;
+          }
+          .asignacion-row .btn {
+            margin-left: auto;
+          }
+        }
+        @media (max-width: 360px) {
+          .tatami-list {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>

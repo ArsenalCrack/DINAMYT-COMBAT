@@ -73,6 +73,16 @@ export async function listCampeonatosAPI() {
   return res.data;
 }
 
+export async function listCampeonatosPublicoAPI() {
+  // Sin login: campeonatos activos con sus tatamis para la pantalla pública
+  const res = await api.get("/campeonatos/publico");
+  return res.data as {
+    id: number;
+    nombre: string;
+    tatamis: { id: number; numero: number }[];
+  }[];
+}
+
 export async function getCampeonatoAPI(id: number) {
   const res = await api.get(`/campeonatos/${id}`);
   return res.data;

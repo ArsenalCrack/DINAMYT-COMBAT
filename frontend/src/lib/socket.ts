@@ -31,11 +31,13 @@ export function getSocket(
     tatami_id: String(tatamiId),
     rol,
   };
-  if (token) query.token = token;
   if (nombre) query.nombre = nombre;
 
   socket = io(`${SOCKET_URL}/combate`, {
     query,
+    // El token viaja en el payload `auth` (no en la URL, donde quedaría
+    // registrado en logs de servidores y proxies).
+    auth: token ? { token } : undefined,
     transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionDelay: 2000,

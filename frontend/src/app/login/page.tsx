@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tatamiPublic, setTatamiPublic] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,10 +28,6 @@ export default function LoginPage() {
     }
   }
 
-  function handlePublicAccess(e: React.FormEvent) {
-    e.preventDefault();
-    if (tatamiPublic) router.push(`/tatami/${tatamiPublic}?rol=pantalla`);
-  }
 
   return (
     <div className="login-page">
@@ -56,44 +51,26 @@ export default function LoginPage() {
             <h2 className="login-card-title">Pantalla Publica</h2>
             <p className="login-card-desc">
               Ve el marcador en tiempo real de cualquier tatami.<br />
-              No requiere cuenta.
+              Elige el campeonato y el tatami — no requiere cuenta.
             </p>
-            <form onSubmit={handlePublicAccess} className="login-public-form">
-              <input
-                className="input"
-                type="number"
-                min={1}
-                max={99}
-                placeholder="ID Tatami (ej: 1)"
-                value={tatamiPublic}
-                onChange={(e) => setTatamiPublic(e.target.value)}
-                required
-                id="public-tatami-id"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "1.4rem",
-                  textAlign: "center",
-                  letterSpacing: "0.2em",
-                }}
-              />
-              <button
-                type="submit"
-                className="btn btn-lg"
-                style={{
-                  width: "100%",
-                  background: "linear-gradient(135deg, #1c2e5e 0%, #0d1d42 100%)",
-                  border: "2px solid var(--chung-border)",
-                  color: "var(--chung-light)",
-                  fontWeight: 800,
-                  fontSize: "1rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-                id="public-access-btn"
-              >
-                Ver Pantalla
-              </button>
-            </form>
+            <button
+              type="button"
+              className="btn btn-lg"
+              onClick={() => router.push("/pantalla")}
+              style={{
+                width: "100%",
+                background: "linear-gradient(135deg, #1c2e5e 0%, #0d1d42 100%)",
+                border: "2px solid var(--chung-border)",
+                color: "var(--chung-light)",
+                fontWeight: 800,
+                fontSize: "1rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+              id="public-access-btn"
+            >
+              Elegir Tatami
+            </button>
             <p className="login-card-note">Cualquier persona puede acceder</p>
           </div>
 

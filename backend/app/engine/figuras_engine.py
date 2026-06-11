@@ -21,15 +21,12 @@ CRITERIOS_DEFAULT = [
     {"id": "presentacion", "nombre": "Presentación", "max_pts": 9.99},
 ]
 
-# Mapeo fijo juez → índice de criterio
+# Mapeo fijo juez → índice de criterio (máximo 4 jueces de esquina)
 JUEZ_CRITERIO_MAP = {
     "j1": 0,
     "j2": 1,
     "j3": 2,
     "j4": 3,
-    "j5": 4,
-    "j6": 5,
-    "j7": 6,
 }
 
 CATEGORIA_NOMBRE_MAX = 40
@@ -72,7 +69,6 @@ def estado_inicial_figuras(config=None):
         # Nombre personalizable de la categoría
         "nombre_categoria": "Figuras",
         "nombres_jueces": {"j1": "", "j2": "", "j3": "", "j4": ""},
-        "podio_modo": "manual",  # manual | automatico
         # Competidores
         "competidores": [],       # [{id, nombre, club}]
         # Puntuaciones: { comp_id: { juez_id: valor_float } }
@@ -180,17 +176,9 @@ def aplicar_evento_figuras(estado, ev):
     if accion == "cambiar_nombre_categoria":
         estado["nombre_categoria"] = _normalizar_nombre_categoria(ev.get("nombre", ""))
 
-    # ── Número de jueces ─────────────────────────────────────────────────────
+    # ── Número de jueces (máximo 4 de esquina) ──────────────────────────────
     elif accion == "set_num_jueces":
-        estado["num_jueces"] = max(2, min(7, int(ev.get("num_jueces", 4))))
-
-    elif accion == "set_podio_modo":
-        modo = ev.get("modo", "manual")
-        estado["podio_modo"] = "automatico" if modo == "automatico" else "manual"
-        _agregar_log_f(estado, f"[PODIO] Modo {estado['podio_modo']}", "arb")
-        if estado["podio_modo"] == "automatico" and puntuaciones_completas(estado):
-            estado["finalizado"] = True
-            estado["puntuacion_abierta"] = False
+        estado["num_jueces"] = max(2, min(4, int(ev.get("num_jueces", 4))))
 
     # ── Competidores ─────────────────────────────────────────────────────────
     elif accion == "agregar_competidor":
@@ -221,7 +209,7 @@ def aplicar_evento_figuras(estado, ev):
         if str(estado.get("competidor_activo_id")) == str(cid):
             estado["competidor_activo_id"] = None
             estado["puntuacion_abierta"] = False
-        _agregar_log_f(estado, f"[-] Competidor eliminado", "info")
+        _agregar_log_f(estado, "[-] Competidor eliminado", "info")
 
     # ── Control de turno (Juez Central) ─────────────────────────────────────
     elif accion == "activar_competidor":
@@ -232,6 +220,21 @@ def aplicar_evento_figuras(estado, ev):
             None
         )
         if comp:
+            # No se puede pasar a otro competidor si al activo le falta
+            # alguna puntuación por confirmar.
+            activo_id = estado.get("competidor_activo_id")
+            if activo_id is not None and str(activo_id) != str(comp["id"]):
+                jueces = _jueces_activos_figuras(estado)
+                confirmadas = estado.get("puntuaciones_confirmadas", {}).get(
+                    str(activo_id), {}
+                )
+                if jueces and not all(confirmadas.get(j) for j in jueces):
+                    _agregar_log_f(
+                        estado,
+                        "[TURNO] Bloqueado: el competidor en turno tiene puntuaciones pendientes",
+                        "arb",
+                    )
+                    return estado
             estado["competidor_activo_id"] = comp["id"]
             estado["puntuacion_abierta"] = True
             _agregar_log_f(estado, f"[TURNO] {comp['nombre']}", "arb")
@@ -313,10 +316,12 @@ def aplicar_evento_figuras(estado, ev):
             f"[✓] {comp_nombre} = {valor:.2f} CONFIRMADO · {_juez_log_label(ev, juez_id)}",
             "info",
         )
-        if estado.get("podio_modo") == "automatico" and puntuaciones_completas(estado):
+        # Podio automático: al confirmar la última puntuación pendiente
+        # se finaliza la categoría y el podio aparece en pantalla.
+        if puntuaciones_completas(estado):
             estado["finalizado"] = True
             estado["puntuacion_abierta"] = False
-            _agregar_log_f(estado, "[PODIO] Puntuaciones completas", "arb")
+            _agregar_log_f(estado, "[PODIO] Puntuaciones completas — Podio habilitado", "arb")
 
     # ── Nombre de juez ───────────────────────────────────────────────────────
     elif accion == "set_nombre_juez":
@@ -327,6 +332,15 @@ def aplicar_evento_figuras(estado, ev):
 
     # ── Finalizar sesión ─────────────────────────────────────────────────────
     elif accion == "finalizar":
+        # El podio solo se muestra cuando todos los competidores pasaron y
+        # fueron calificados en todos sus criterios.
+        if not puntuaciones_completas(estado):
+            _agregar_log_f(
+                estado,
+                "[PODIO] Bloqueado: faltan competidores o criterios por calificar",
+                "arb",
+            )
+            return estado
         estado["finalizado"] = True
         estado["puntuacion_abierta"] = False
         ranking = calcular_ranking(estado)
@@ -344,14 +358,13 @@ def aplicar_evento_figuras(estado, ev):
         nombre_cat = estado.get("nombre_categoria", "Figuras")
         num_j = estado.get("num_jueces", 4)
         criterios = estado.get("criterios", CRITERIOS_DEFAULT)
-        podio_modo = estado.get("podio_modo", "manual")
         nuevo = estado_inicial_figuras(config)
         nuevo["nombre_categoria"] = nombre_cat
         nuevo["num_jueces"] = num_j
-        nuevo["podio_modo"] = podio_modo
         if not config:
             nuevo["criterios"] = criterios
         estado.update(nuevo)
+        estado.pop("podio_modo", None)
 
     return estado
 
@@ -370,7 +383,6 @@ def guardar_figuras_snapshot(estado):
         ),
         "ranking": ranking,
         "num_jueces": estado["num_jueces"],
-        "podio_modo": estado.get("podio_modo", "manual"),
         "puntuaciones_completas": puntuaciones_completas(estado),
         "finalizado": estado["finalizado"],
         "log": copy.deepcopy(estado.get("log", [])),

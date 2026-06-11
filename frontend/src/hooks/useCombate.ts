@@ -97,7 +97,9 @@ function estadoInicial(): CombateState {
 export function promedioEsquinas(state: CombateState, color: "hong" | "chung") {
   if (!state.jueces) return 0;
   const n = state.numJueces || 4;
-  const sum = ["j1", "j2", "j3", "j4"].reduce(
+  // Solo cuentan los jueces activos (igual que calcular_marcador del backend)
+  const activos = ["j1", "j2", "j3", "j4"].slice(0, n);
+  const sum = activos.reduce(
     (s, id) => s + (state.jueces[id]?.[color] || 0),
     0
   );
@@ -131,6 +133,13 @@ export function useCombate(
   const [hasServerState, setHasServerState] = useState(false);
   const [pendingEvents, setPendingEvents] = useState(0);
   const [socketError, setSocketError] = useState("");
+  const [alerts, setAlerts] = useState<{
+    alerta12?: { hong: string; chung: string; lider: string; diferencia?: string; motivo?: string };
+    ganador?: { nombre: string; color: string; motivo?: string };
+    derrota?: { perdedor: string; razon: string };
+    faltaFlash?: { ico: string; titulo: string; sub: string; tipoFalta: string };
+    rechazo?: { message: string };
+  }>({});
   const socketRef = useRef<Socket | null>(null);
   const pendingMap = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -186,9 +195,10 @@ export function useCombate(
     // Pedir estado inicial
     sock.emit("pedir");
 
+    const pending = pendingMap.current;
     return () => {
-      pendingMap.current.forEach((timer) => clearTimeout(timer));
-      pendingMap.current.clear();
+      pending.forEach((timer) => clearTimeout(timer));
+      pending.clear();
       setPendingEvents(0);
       disconnectSocket();
       setConnected(false);
@@ -198,14 +208,6 @@ export function useCombate(
   }, [tatamiId, rol, token]);
 
   // Event-specific listeners (separate effect to avoid re-binding on state change)
-  const [alerts, setAlerts] = useState<{
-    alerta12?: { hong: string; chung: string; lider: string; diferencia?: string; motivo?: string };
-    ganador?: { nombre: string; color: string; motivo?: string };
-    derrota?: { perdedor: string; razon: string };
-    faltaFlash?: { ico: string; titulo: string; sub: string; tipoFalta: string };
-    rechazo?: { message: string };
-  }>({});
-
   useEffect(() => {
     const sock = socketRef.current;
     if (!sock) return;
@@ -263,12 +265,24 @@ export function useCombate(
       const evId = `${rol}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const evento = { accion, ...datos };
 
-      // Track pending
-      const timer = setTimeout(() => {
-        // Retry
-        sock.emit("evento", { evId, evento });
-      }, 2000);
-      pendingMap.current.set(evId, timer);
+      // Reintentos limitados: si nunca llega el ACK, soltar el evento para
+      // no bloquear indefinidamente las actualizaciones de estado del servidor.
+      const MAX_REINTENTOS = 3;
+      const scheduleRetry = (intento: number) => {
+        const timer = setTimeout(() => {
+          if (!pendingMap.current.has(evId)) return;
+          if (intento >= MAX_REINTENTOS) {
+            pendingMap.current.delete(evId);
+            setPendingEvents(pendingMap.current.size);
+            return;
+          }
+          socketRef.current?.emit("evento", { evId, evento });
+          scheduleRetry(intento + 1);
+        }, 2000);
+        pendingMap.current.set(evId, timer);
+      };
+
+      scheduleRetry(1);
       setPendingEvents(pendingMap.current.size);
 
       // The server will confirm with estado_confirmado.

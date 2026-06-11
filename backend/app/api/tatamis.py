@@ -9,10 +9,12 @@ from ..extensions import db
 from ..models.usuario import Usuario
 from ..models.tatami import Tatami
 from ..models.asignacion import AsignacionJuez
+from ..security import intento_bloqueado, limpiar_intentos, segundos_restantes
 
 tatamis_bp = Blueprint("tatamis", __name__)
 
-ROLES_PIN = ("arbitro", "j1", "j2", "j3", "j4", "j5", "j6", "j7")
+# Máximo 4 jueces de esquina por tatami (más el Juez Central)
+ROLES_PIN = ("arbitro", "j1", "j2", "j3", "j4")
 
 ROL_LABELS = {
     "arbitro": "Juez Central",
@@ -20,10 +22,12 @@ ROL_LABELS = {
     "j2": "Juez Esquina 2",
     "j3": "Juez Esquina 3",
     "j4": "Juez Esquina 4",
-    "j5": "Juez Esquina 5",
-    "j6": "Juez Esquina 6",
-    "j7": "Juez Esquina 7",
 }
+
+# Límite de intentos de PIN: 10 por usuario y 30 por IP cada 5 minutos
+PIN_MAX_POR_USUARIO = 10
+PIN_MAX_POR_IP = 30
+PIN_VENTANA_SEG = 300
 
 
 def _require_admin():
@@ -114,7 +118,7 @@ def asignar_juez(tatami_id):
     if user.rol != "juez" or not user.activo:
         return jsonify({"error": "Solo se pueden asignar jueces activos"}), 400
 
-    ROLES_VALIDOS = ("arbitro", "j1", "j2", "j3", "j4", "j5", "j6", "j7")
+    ROLES_VALIDOS = ROLES_PIN
     rol = data["rol_tatami"]
     if rol not in ROLES_VALIDOS:
         return jsonify({"error": "Rol inválido"}), 400
@@ -223,9 +227,25 @@ def verificar_pin():
     if not pin:
         return jsonify({"error": "PIN requerido"}), 400
 
+    # Límite de intentos: un PIN de 4 dígitos no debe poder adivinarse
+    ip = request.remote_addr or "?"
+    clave_usuario = f"pin:{uid}"
+    clave_ip = f"pin-ip:{ip}"
+    if (
+        intento_bloqueado(clave_usuario, PIN_MAX_POR_USUARIO, PIN_VENTANA_SEG)
+        or intento_bloqueado(clave_ip, PIN_MAX_POR_IP, PIN_VENTANA_SEG)
+    ):
+        espera = max(segundos_restantes(clave_usuario), segundos_restantes(clave_ip))
+        return jsonify({
+            "error": f"Demasiados intentos de PIN. Intenta de nuevo en {max(espera, 30)} segundos."
+        }), 429
+
     tatami = Tatami.query.filter_by(pin=pin, activo=True).first()
     if not tatami:
         return jsonify({"error": "PIN inválido o tatami inactivo"}), 404
+
+    # PIN correcto: limpiar contador de intentos fallidos
+    limpiar_intentos(clave_usuario)
 
     asignacion = AsignacionJuez.query.filter_by(
         tatami_id=tatami.id, usuario_id=int(uid)

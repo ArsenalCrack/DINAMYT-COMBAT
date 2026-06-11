@@ -143,6 +143,15 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
         if estado["ronda"] == "oro" and estado.get("oroResuelto"):
             return estado
 
+        # Solo puntúan los jueces activos según numJueces (j3 no puede
+        # puntuar en un combate configurado a 2 jueces).
+        if juez and juez.startswith("j"):
+            try:
+                if int(juez[1:]) > int(estado.get("numJueces", 4)):
+                    return estado
+            except ValueError:
+                return estado
+
         if juez in estado["jueces"]:
             estado["jueces"][juez][color] += pts
             estado["historial"].append({
@@ -429,12 +438,14 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
 def calcular_marcador(estado):
     """Calcula los marcadores finales del combate."""
     n = estado.get("numJueces", 4) or 4
+    # Solo cuentan los jueces activos: la suma y el divisor deben coincidir.
+    jueces_activos = [f"j{i}" for i in range(1, n + 1)]
 
     esq_hong = sum(
-        estado["jueces"][j]["hong"] for j in ["j1", "j2", "j3", "j4"]
+        estado["jueces"].get(j, {}).get("hong", 0) for j in jueces_activos
     ) / n
     esq_chung = sum(
-        estado["jueces"][j]["chung"] for j in ["j1", "j2", "j3", "j4"]
+        estado["jueces"].get(j, {}).get("chung", 0) for j in jueces_activos
     ) / n
 
     total_hong = esq_hong + estado["arbHong"]

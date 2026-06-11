@@ -14,8 +14,14 @@ from flask_jwt_extended import (
 from ..extensions import db
 from ..models.asignacion import AsignacionJuez
 from ..models.usuario import Usuario
+from ..security import intento_bloqueado, limpiar_intentos, segundos_restantes
 
 auth_bp = Blueprint("auth", __name__)
+
+# Límite de intentos de login: 5 por correo y 20 por IP cada 5 minutos
+LOGIN_MAX_POR_EMAIL = 5
+LOGIN_MAX_POR_IP = 20
+LOGIN_VENTANA_SEG = 300
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -35,9 +41,24 @@ def login():
     if not email or not password:
         return jsonify({"error": "Email y contraseña son requeridos"}), 400
 
+    ip = request.remote_addr or "?"
+    clave_email = f"login:{email}"
+    clave_ip = f"login-ip:{ip}"
+    if (
+        intento_bloqueado(clave_email, LOGIN_MAX_POR_EMAIL, LOGIN_VENTANA_SEG)
+        or intento_bloqueado(clave_ip, LOGIN_MAX_POR_IP, LOGIN_VENTANA_SEG)
+    ):
+        espera = max(segundos_restantes(clave_email), segundos_restantes(clave_ip))
+        return jsonify({
+            "error": f"Demasiados intentos de inicio de sesión. Intenta de nuevo en {max(espera, 30)} segundos."
+        }), 429
+
     user = Usuario.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         return jsonify({"error": "Credenciales inválidas"}), 401
+
+    # Login correcto: limpiar contador de intentos fallidos
+    limpiar_intentos(clave_email)
 
     if not user.activo:
         return jsonify({"error": "Usuario desactivado"}), 403

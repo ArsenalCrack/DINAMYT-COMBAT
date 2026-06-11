@@ -8,7 +8,8 @@ python-dotenv==1.1.0
 bcrypt==4.3.0
 openpyxl==3.1.5
 reportlab==4.4.1
-# psycopg2-binary — instalar manualmente para PostgreSQL en producción
-# pip install psycopg2-binary  (requiere C++ Build Tools en Windows)
+# psycopg2-binary: solo se instala en producción (Python <= 3.13, ej. Render).
+# En Windows local con Python 3.14 se omite automáticamente (SQLite local).
+psycopg2-binary==2.9.10; python_version < "3.14"
 eventlet==0.39.1
 gunicorn==23.0.0
