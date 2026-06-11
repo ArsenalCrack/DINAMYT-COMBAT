@@ -78,7 +78,15 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
   }
 
   function quitarCompetidor(idx: number) {
-    setCompetidores((prev) => prev.filter((_, i) => i !== idx));
+    const comp = competidores[idx];
+    if (!comp) return;
+    pedirConfirmacion({
+      titulo: "Quitar competidor",
+      mensaje: `¿Estás seguro de quitar a "${comp.nombre}"${comp.club ? ` (${comp.club})` : ""} de la lista de la llave?`,
+      tipo: "advertencia",
+      confirmLabel: "Quitar",
+      onConfirm: () => setCompetidores((prev) => prev.filter((_, i) => i !== idx)),
+    });
   }
 
   async function handleCrear(e: React.FormEvent) {

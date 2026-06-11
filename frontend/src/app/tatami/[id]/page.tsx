@@ -534,8 +534,18 @@ function FigurasArbitro({
                   );
                 })()}
                 <button className="btn btn-sm btn-danger"
+                  title="Eliminar competidor"
                   onClick={() => {
-                    if (validarNombreCategoria()) enviarEvento("eliminar_competidor", { competidor_id: comp.id });
+                    if (!validarNombreCategoria()) return;
+                    const tieneNotas = Object.keys(state.puntuaciones[String(comp.id)] || {}).length > 0;
+                    onShowConfirm({
+                      titulo: "ELIMINAR COMPETIDOR",
+                      mensaje: `¿Estás seguro de eliminar a "${comp.nombre}"${comp.club ? ` (${comp.club})` : ""}?${tieneNotas ? " Se perderán las puntuaciones que ya le registraron los jueces." : ""} Esta acción no se puede deshacer.`,
+                      tipo: "peligro",
+                      confirmLabel: "ELIMINAR",
+                      cancelLabel: "Cancelar",
+                      onConfirm: () => enviarEvento("eliminar_competidor", { competidor_id: comp.id }),
+                    });
                   }}
                   style={{ padding: "3px 8px", minHeight: 30, fontSize: "0.72rem" }}>
                   ✕
