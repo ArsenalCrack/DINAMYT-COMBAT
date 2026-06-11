@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   listCampeonatosAPI,
   createCampeonatoAPI,
+  updateCampeonatoAPI,
   listUsersAPI,
   registerUserAPI,
-  deleteUserAPI,
+  updateUserAPI,
   type UserData,
 } from "@/lib/api";
 import LogoutButton from "@/components/LogoutButton";
@@ -34,6 +35,10 @@ export default function AdminPage() {
   const [newCamp, setNewCamp] = useState({ nombre: "", descripcion: "", num_tatamis: 6 });
   const [newUser, setNewUser] = useState({ email: "", password: "", nombre: "", rol: "juez" });
   const [msg, setMsg] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "" });
 
   useEffect(() => {
     const saved = localStorage.getItem("dinamyt_user");
@@ -44,17 +49,72 @@ export default function AdminPage() {
     queueMicrotask(() => {
       if (cancelled) return;
       setUser(u);
-      void loadData();
+      void loadData(showInactive);
     });
     return () => { cancelled = true; };
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, showInactive]);
 
-  async function loadData() {
+  async function loadData(includeInactive = false) {
     try {
-      const [c, u] = await Promise.all([listCampeonatosAPI(), listUsersAPI()]);
+      const [c, u] = await Promise.all([
+        listCampeonatosAPI(),
+        listUsersAPI(includeInactive),
+      ]);
       setCampeonatos(c);
       setUsers(u);
     } catch { /* */ }
+  }
+
+  function flash(texto: string) {
+    setMsg(texto);
+    setTimeout(() => setMsg(""), 3500);
+  }
+
+  async function handleToggleCampActivo(c: Campeonato) {
+    try {
+      await updateCampeonatoAPI(c.id, { activo: !c.activo });
+      await loadData(showInactive);
+      flash(c.activo
+        ? `"${c.nombre}" desactivado: el público ya no lo verá.`
+        : `"${c.nombre}" activado: visible para el público.`);
+    } catch { flash("Error al cambiar el estado del campeonato"); }
+  }
+
+  async function handleSaveUserEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+    const payload: { nombre?: string; email?: string; password?: string } = {};
+    if (editUserData.nombre.trim()) payload.nombre = editUserData.nombre.trim();
+    if (editUserData.email.trim()) payload.email = editUserData.email.trim();
+    if (editUserData.password) payload.password = editUserData.password;
+    try {
+      await updateUserAPI(editingUser.id, payload);
+      setEditingUser(null);
+      await loadData(showInactive);
+      flash("Usuario actualizado correctamente");
+    } catch (err) {
+      const m = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+      flash(m || "Error al actualizar el usuario");
+    }
+  }
+
+  async function handleToggleUserActivo(target: UserData) {
+    if (target.id === user?.id) {
+      flash("No puedes desactivar tu propio usuario");
+      return;
+    }
+    if (target.activo) {
+      const ok = window.confirm(
+        `¿Desactivar a ${target.nombre}? No podrá iniciar sesión y se quitarán sus asignaciones de tatami.`
+      );
+      if (!ok) return;
+    }
+    try {
+      await updateUserAPI(target.id, { activo: !target.activo });
+      await loadData(showInactive);
+      flash(target.activo ? "Usuario desactivado" : "Usuario reactivado");
+    } catch { flash("Error al cambiar el estado del usuario"); }
   }
 
   async function handleCreateCamp(e: React.FormEvent) {
@@ -64,7 +124,7 @@ export default function AdminPage() {
       setMsg("Campeonato creado exitosamente");
       setShowNewCamp(false);
       setNewCamp({ nombre: "", descripcion: "", num_tatamis: 6 });
-      loadData();
+      loadData(showInactive);
       setTimeout(() => setMsg(""), 3000);
     } catch { setMsg("Error al crear campeonato"); }
   }
@@ -76,27 +136,9 @@ export default function AdminPage() {
       setMsg("Usuario creado exitosamente");
       setShowNewUser(false);
       setNewUser({ email: "", password: "", nombre: "", rol: "juez" });
-      loadData();
+      loadData(showInactive);
       setTimeout(() => setMsg(""), 3000);
     } catch { setMsg("Error al crear usuario"); }
-  }
-
-  async function handleDeleteUser(target: UserData) {
-    if (target.id === user?.id) {
-      setMsg("No puedes quitar tu propio usuario");
-      setTimeout(() => setMsg(""), 3000);
-      return;
-    }
-    const ok = window.confirm(`¿Quitar a ${target.nombre} de la aplicación? Se eliminarán sus asignaciones activas.`);
-    if (!ok) return;
-    try {
-      await deleteUserAPI(target.id);
-      setMsg("Usuario quitado correctamente");
-      loadData();
-      setTimeout(() => setMsg(""), 3000);
-    } catch {
-      setMsg("Error al quitar usuario");
-    }
   }
 
   if (!user) return null;
@@ -115,17 +157,6 @@ export default function AdminPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            className="btn btn-sm"
-            onClick={() => router.push("/admin/reportes")}
-            style={{
-              background: "rgba(0, 212, 114, 0.10)",
-              borderColor: "rgba(0, 212, 114, 0.30)",
-              color: "var(--green)",
-            }}
-          >
-            Reportes
-          </button>
           <LogoutButton />
         </div>
       </div>
@@ -201,15 +232,32 @@ export default function AdminPage() {
               {campeonatos.map((c) => (
                 <div key={c.id} className="card" style={{ cursor: "pointer" }}
                   onClick={() => router.push(`/admin/campeonato/${c.id}`)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <h3 style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: 4 }}>{c.nombre}</h3>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: 4 }}>
+                        {c.nombre}
+                        <span className={`badge ${c.activo ? "badge-green" : "badge-gray"}`} style={{ marginLeft: 8, verticalAlign: "middle" }}>
+                          {c.activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </h3>
                       <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                        {c.num_tatamis} tatamis &middot; {c.activo ? "Activo" : "Inactivo"}
+                        {c.num_tatamis} tatamis
                         {c.descripcion && ` · ${c.descripcion}`}
+                        {!c.activo && " · oculto para el público"}
                       </p>
                     </div>
-                    <span style={{ color: "var(--gold)", fontSize: "0.85rem" }}>Ver detalles →</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <button
+                        className={`btn btn-sm ${c.activo ? "btn-danger" : "btn-primary"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCampActivo(c);
+                        }}
+                      >
+                        {c.activo ? "Desactivar" : "Activar"}
+                      </button>
+                      <span style={{ color: "var(--gold)", fontSize: "0.85rem" }}>Ver detalles →</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -253,36 +301,114 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* Buscador y filtro de inactivos */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <input
+              className="input"
+              placeholder="Buscar por nombre o correo..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              style={{ flex: "1 1 220px", maxWidth: 380 }}
+            />
+            <label style={{
+              display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+              fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 700,
+              userSelect: "none", whiteSpace: "nowrap",
+            }}>
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                style={{ accentColor: "var(--gold)", width: 16, height: 16 }}
+              />
+              Mostrar inactivos
+            </label>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {users.map((u) => (
-              <div key={u.id} className="admin-user-row card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div>
-                    <span style={{ fontWeight: 700 }}>{u.nombre}</span>
-                    <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.85rem" }}>{u.email}</span>
+            {users
+              .filter((u) => {
+                const q = userSearch.trim().toLowerCase();
+                if (!q) return true;
+                return `${u.nombre} ${u.email}`.toLowerCase().includes(q);
+              })
+              .map((u) => (
+              <div key={u.id}>
+                <div className="admin-user-row card" style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  opacity: u.activo ? 1 : 0.55,
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ overflowWrap: "anywhere" }}>
+                      <span style={{ fontWeight: 700 }}>{u.nombre}</span>
+                      <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.85rem" }}>{u.email}</span>
+                      {!u.activo && (
+                        <span className="badge badge-gray" style={{ marginLeft: 8 }}>Inactivo</span>
+                      )}
+                    </div>
+                    <div style={{ color: "var(--text-dim)", fontSize: "0.76rem", marginTop: 4 }}>
+                      Agregado {u.created_at ? new Date(u.created_at).toLocaleDateString("es-CO") : "—"}
+                      {u.creado_por ? ` por ${u.creado_por.nombre}` : ""}
+                    </div>
                   </div>
-                  <div style={{ color: "var(--text-dim)", fontSize: "0.76rem", marginTop: 4 }}>
-                    Agregado {u.created_at ? new Date(u.created_at).toLocaleDateString("es-CO") : "—"}
-                    {u.creado_por ? ` por ${u.creado_por.nombre}` : ""}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span style={{
+                      padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: "0.75rem",
+                      fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
+                      background: u.rol === "admin" ? "var(--gold-bg)" : "var(--chung-bg)",
+                      color: u.rol === "admin" ? "var(--gold)" : "var(--chung-light)",
+                      border: `1px solid ${u.rol === "admin" ? "var(--gold-border)" : "var(--chung-border)"}`,
+                    }}>{u.rol}</span>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => {
+                        if (editingUser?.id === u.id) {
+                          setEditingUser(null);
+                        } else {
+                          setEditingUser(u);
+                          setEditUserData({ nombre: u.nombre, email: u.email, password: "" });
+                        }
+                      }}
+                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                    >
+                      {editingUser?.id === u.id ? "Cerrar" : "Editar"}
+                    </button>
+                    <button
+                      className={`btn btn-sm ${u.activo ? "btn-danger" : "btn-primary"}`}
+                      onClick={() => handleToggleUserActivo(u)}
+                      disabled={u.id === user.id}
+                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                    >
+                      {u.activo ? "Desactivar" : "Reactivar"}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{
-                    padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: "0.75rem",
-                    fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
-                    background: u.rol === "admin" ? "var(--gold-bg)" : "var(--chung-bg)",
-                    color: u.rol === "admin" ? "var(--gold)" : "var(--chung-light)",
-                    border: `1px solid ${u.rol === "admin" ? "var(--gold-border)" : "var(--chung-border)"}`,
-                  }}>{u.rol}</span>
-                  <button
-                    className="btn btn-danger btn-sm"
-                    onClick={() => handleDeleteUser(u)}
-                    disabled={u.id === user.id}
-                    style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-                  >
-                    Quitar
-                  </button>
-                </div>
+
+                {/* Edición: correo, nombre y restablecer contraseña (solo admin) */}
+                {editingUser?.id === u.id && (
+                  <form onSubmit={handleSaveUserEdit} className="card animate-slide" style={{
+                    display: "flex", flexDirection: "column", gap: 10,
+                    marginTop: 6, borderColor: "var(--gold-border)",
+                  }}>
+                    <div className="card-title">Editar a {u.nombre}</div>
+                    <input className="input" placeholder="Nombre completo" value={editUserData.nombre}
+                      onChange={(e) => setEditUserData({ ...editUserData, nombre: e.target.value })} />
+                    <input className="input" type="email" placeholder="Correo electrónico" value={editUserData.email}
+                      onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })} />
+                    <input className="input" type="password" autoComplete="new-password"
+                      placeholder="Nueva contraseña (dejar vacío para no cambiarla)"
+                      value={editUserData.password}
+                      onChange={(e) => setEditUserData({ ...editUserData, password: e.target.value })} />
+                    <p style={{ color: "var(--text-dim)", fontSize: "0.76rem", margin: 0 }}>
+                      Si el juez olvidó su contraseña, escríbele una nueva aquí y
+                      comunícasela: este restablecimiento solo lo puede hacer un administrador.
+                    </p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="submit" className="btn btn-primary btn-sm">Guardar cambios</button>
+                      <button type="button" className="btn btn-sm" onClick={() => setEditingUser(null)}>Cancelar</button>
+                    </div>
+                  </form>
+                )}
               </div>
             ))}
           </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import api, { listCampeonatosAPI, listTatamisAPI } from "@/lib/api";
+import { useRouter, useParams } from "next/navigation";
+import api, { getCampeonatoAPI, listTatamisAPI } from "@/lib/api";
 
 interface Combate {
   id: number;
@@ -17,23 +17,10 @@ interface Combate {
   rondas_resumen?: string;
   figuras_completas?: boolean | null;
   num_jueces: number;
-  duracion_segundos: number;
-  tatami_id?: number;
   tatami_numero: number;
-  campeonato_id?: number;
-  campeonato_nombre: string;
   created_at: string;
   jueces?: JuezReporte[];
-  jueces_resumen?: string;
-  ranking?: RankingFigura[];
-}
-
-interface RankingFigura {
-  id?: number;
-  puesto?: number;
-  nombre: string;
-  club?: string;
-  total: number;
+  ranking?: { nombre: string; total: number }[];
 }
 
 interface JuezReporte {
@@ -52,11 +39,6 @@ interface ReportData {
   per_page: number;
 }
 
-interface CampeonatoOption {
-  id: number;
-  nombre: string;
-}
-
 interface TatamiOption {
   id: number;
   numero: number;
@@ -68,12 +50,10 @@ const RONDAS: Record<string, string> = {
 
 function getExportFilename(disposition: string | null, fallback: string) {
   if (!disposition) return fallback;
-
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
     return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
   }
-
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
   return filenameMatch?.[1]?.trim() || fallback;
 }
@@ -82,7 +62,6 @@ async function getExportError(res: Response) {
   const fallback = `No se pudo generar el reporte (${res.status}).`;
   const text = await res.text();
   if (!text) return fallback;
-
   try {
     const parsed = JSON.parse(text) as { error?: string; message?: string };
     return parsed.error || parsed.message || fallback;
@@ -91,17 +70,20 @@ async function getExportError(res: Response) {
   }
 }
 
-export default function ReportesPage() {
+export default function ReportesCampeonatoPage() {
   const router = useRouter();
+  const params = useParams();
+  const campId = String(params.id);
+
+  const [campNombre, setCampNombre] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
   const [exportError, setExportError] = useState("");
-  const [campeonatos, setCampeonatos] = useState<CampeonatoOption[]>([]);
   const [tatamis, setTatamis] = useState<TatamiOption[]>([]);
   const [splitZip, setSplitZip] = useState(false);
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [filters, setFilters] = useState({
-    campeonato_id: "",
     tatami_id: "",
     tipo: "",
     desde: "",
@@ -116,64 +98,46 @@ export default function ReportesPage() {
     }
   }, [router]);
 
-  // Cargar lista de campeonatos para el selector
+  // Nombre del campeonato + sus tatamis
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(async () => {
       try {
-        const c = await listCampeonatosAPI();
-        if (!cancelled) {
-          setCampeonatos(
-            (c as CampeonatoOption[]).map((x) => ({ id: x.id, nombre: x.nombre }))
-          );
-        }
-      } catch { /* */ }
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Cargar tatamis del campeonato seleccionado
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(async () => {
-      if (cancelled) return;
-      if (!filters.campeonato_id) {
-        setTatamis([]);
-        return;
-      }
-      try {
-        const t = await listTatamisAPI(Number(filters.campeonato_id));
-        if (!cancelled) {
-          setTatamis(
-            (t as TatamiOption[]).map((x) => ({ id: x.id, numero: x.numero }))
-          );
-        }
+        const [c, t] = await Promise.all([
+          getCampeonatoAPI(Number(campId)),
+          listTatamisAPI(Number(campId)),
+        ]);
+        if (cancelled) return;
+        setCampNombre(c.nombre);
+        setTatamis((t as TatamiOption[]).map((x) => ({ id: x.id, numero: x.numero })));
       } catch {
-        if (!cancelled) setTatamis([]);
+        if (!cancelled) router.replace("/admin");
       }
     });
     return () => { cancelled = true; };
-  }, [filters.campeonato_id]);
+  }, [campId, router]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { per_page: "30" };
-      if (filters.campeonato_id) params.campeonato_id = filters.campeonato_id;
-      if (filters.tatami_id) params.tatami_id = filters.tatami_id;
-      if (filters.tipo) params.tipo = filters.tipo;
-      if (filters.desde) params.desde = filters.desde;
-      if (filters.hasta) params.hasta = filters.hasta;
-      params.page = String(filters.page);
+      const qp: Record<string, string> = {
+        per_page: "30",
+        campeonato_id: campId,
+        page: String(filters.page),
+      };
+      if (filters.tatami_id) qp.tatami_id = filters.tatami_id;
+      if (filters.tipo) qp.tipo = filters.tipo;
+      if (filters.desde) qp.desde = filters.desde;
+      if (filters.hasta) qp.hasta = filters.hasta;
 
-      const res = await api.get("/reportes/combates", { params });
+      const res = await api.get("/reportes/combates", { params: qp });
       setData(res.data);
     } catch {
       //
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, campId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,60 +147,46 @@ export default function ReportesPage() {
     return () => { cancelled = true; };
   }, [fetchData]);
 
-  async function handleExport(type: "pdf" | "excel") {
-    setExporting(type);
+  function toggleSeleccion(id: number) {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSeleccionTodos() {
+    if (!data) return;
+    setSeleccion((prev) => {
+      const visibles = data.combates.map((c) => c.id);
+      const todosMarcados = visibles.every((id) => prev.has(id));
+      const next = new Set(prev);
+      visibles.forEach((id) => (todosMarcados ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+
+  async function descargar(url: string, fallbackName: string, claveExporting: string) {
+    setExporting(claveExporting);
     setExportError("");
     try {
-      const params: Record<string, string> = {};
-      if (filters.campeonato_id) params.campeonato_id = filters.campeonato_id;
-      if (filters.tatami_id) params.tatami_id = filters.tatami_id;
-      if (filters.tipo) params.tipo = filters.tipo;
-      if (filters.desde) params.desde = filters.desde;
-      if (filters.hasta) params.hasta = filters.hasta;
-
       const token = localStorage.getItem("dinamyt_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
-      let url: string;
-      if (splitZip) {
-        params.formato = type;
-        const queryStr = new URLSearchParams(params).toString();
-        url = `${apiUrl}/api/reportes/combates/export/zip?${queryStr}`;
-      } else {
-        const queryStr = new URLSearchParams(params).toString();
-        url = `${apiUrl}/api/reportes/combates/export/${type}?${queryStr}`;
-      }
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        throw new Error(await getExportError(res));
-      }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(await getExportError(res));
 
       const contentType = res.headers.get("content-type") || "";
-      const expectedZip = splitZip && (
-        contentType.includes("application/zip")
-        || contentType.includes("application/octet-stream")
-      );
-      const expectedPdf = !splitZip && type === "pdf" && contentType.includes("application/pdf");
-      const expectedExcel = !splitZip && type === "excel" && (
-        contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        || contentType.includes("application/octet-stream")
-      );
-      if (!expectedZip && !expectedPdf && !expectedExcel) {
+      const esArchivo = contentType.includes("application/pdf")
+        || contentType.includes("spreadsheetml")
+        || contentType.includes("application/zip")
+        || contentType.includes("application/octet-stream");
+      if (!esArchivo) {
         throw new Error("El servidor no devolvió un archivo de reporte válido.");
       }
 
       const blob = await res.blob();
-      if (blob.size === 0) {
-        throw new Error("El reporte se generó vacío. Intenta de nuevo.");
-      }
+      if (blob.size === 0) throw new Error("El reporte se generó vacío. Intenta de nuevo.");
 
-      const fallbackName = splitZip
-        ? "dinamyt_reportes.zip"
-        : `dinamyt_resultados.${type === "pdf" ? "pdf" : "xlsx"}`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = getExportFilename(res.headers.get("content-disposition"), fallbackName);
@@ -246,8 +196,42 @@ export default function ReportesPage() {
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "No se pudo generar el reporte.");
+    } finally {
+      setExporting(null);
     }
-    finally { setExporting(null); }
+  }
+
+  function buildParams(extra: Record<string, string> = {}) {
+    const qp: Record<string, string> = { campeonato_id: campId, ...extra };
+    if (filters.tatami_id) qp.tatami_id = filters.tatami_id;
+    if (filters.tipo) qp.tipo = filters.tipo;
+    if (filters.desde) qp.desde = filters.desde;
+    if (filters.hasta) qp.hasta = filters.hasta;
+    return new URLSearchParams(qp).toString();
+  }
+
+  // Reporte GENERAL de todo el campeonato (con filtros aplicados)
+  function handleExportGeneral(type: "pdf" | "excel") {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const url = splitZip
+      ? `${apiUrl}/api/reportes/combates/export/zip?${buildParams({ formato: type })}`
+      : `${apiUrl}/api/reportes/combates/export/${type}?${buildParams()}`;
+    const ext = splitZip ? "zip" : (type === "pdf" ? "pdf" : "xlsx");
+    void descargar(url, `dinamyt_reporte_general.${ext}`, `general-${type}`);
+  }
+
+  // Reporte SOLO de los registros seleccionados con checkbox
+  function handleExportSeleccion(type: "pdf" | "excel") {
+    if (seleccion.size === 0) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const ids = Array.from(seleccion).sort((a, b) => a - b).join(",");
+    const qp = new URLSearchParams({ campeonato_id: campId, ids }).toString();
+    const url = `${apiUrl}/api/reportes/combates/export/${type}?${qp}`;
+    void descargar(
+      url,
+      `dinamyt_seleccion.${type === "pdf" ? "pdf" : "xlsx"}`,
+      `seleccion-${type}`,
+    );
   }
 
   function ganadorNombre(c: Combate) {
@@ -264,37 +248,38 @@ export default function ReportesPage() {
     return "badge-gray";
   }
 
-  function tipoLabel(c: Combate) {
-    return c.tipo === "figuras" ? "Figuras" : "Combate";
-  }
-
-  const splitHint = filters.campeonato_id
-    ? "Genera un ZIP con un archivo por cada tatami del campeonato seleccionado."
-    : "Genera un ZIP con un archivo por cada campeonato.";
+  const numCombates = data?.combates.filter((c) => c.tipo !== "figuras").length || 0;
+  const numFiguras = data?.combates.filter((c) => c.tipo === "figuras").length || 0;
+  const todosVisiblesMarcados = Boolean(
+    data && data.combates.length > 0 && data.combates.every((c) => seleccion.has(c.id))
+  );
 
   return (
     <div className="reportes-page">
       {/* Header */}
       <div className="reportes-header">
         <div>
-          <button className="btn btn-sm btn-ghost" onClick={() => router.push("/admin")}
+          <button className="btn btn-sm btn-ghost" onClick={() => router.push(`/admin/campeonato/${campId}`)}
             style={{ marginBottom: 8 }}>
-            ← Volver al Admin
+            ← Volver al campeonato
           </button>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 800 }}>
-            Reportes de Resultados
+            Reportes — {campNombre || "..."}
           </h1>
           <p className="text-muted" style={{ fontSize: "0.88rem" }}>
-            {data ? `${data.total} registros guardados` : "Cargando..."}
+            {data ? `${data.total} registros guardados en este campeonato` : "Cargando..."}
           </p>
         </div>
 
-        {/* Export buttons */}
+        {/* Reporte general del campeonato */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+          <span style={{ fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-muted)" }}>
+            Reporte general del campeonato
+          </span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               className="btn btn-sm"
-              onClick={() => handleExport("excel")}
+              onClick={() => handleExportGeneral("excel")}
               disabled={exporting !== null || loading}
               style={{
                 background: "rgba(0, 168, 107, 0.12)",
@@ -302,11 +287,11 @@ export default function ReportesPage() {
                 color: "#00D472",
               }}
             >
-              {exporting === "excel" ? "Generando..." : splitZip ? "Excel (ZIP)" : "Exportar Excel"}
+              {exporting === "general-excel" ? "Generando..." : splitZip ? "Excel (ZIP)" : "Excel completo"}
             </button>
             <button
               className="btn btn-sm"
-              onClick={() => handleExport("pdf")}
+              onClick={() => handleExportGeneral("pdf")}
               disabled={exporting !== null || loading}
               style={{
                 background: "rgba(255, 68, 68, 0.10)",
@@ -314,7 +299,7 @@ export default function ReportesPage() {
                 color: "#FF6666",
               }}
             >
-              {exporting === "pdf" ? "Generando..." : splitZip ? "PDF (ZIP)" : "Exportar PDF"}
+              {exporting === "general-pdf" ? "Generando..." : splitZip ? "PDF (ZIP)" : "PDF completo"}
             </button>
           </div>
           <label style={{
@@ -328,13 +313,8 @@ export default function ReportesPage() {
               onChange={(e) => setSplitZip(e.target.checked)}
               style={{ accentColor: "var(--gold)", width: 16, height: 16 }}
             />
-            Dividir en archivos (ZIP)
+            Dividir por tatami (ZIP)
           </label>
-          {splitZip && (
-            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", maxWidth: 280, textAlign: "right" }}>
-              {splitHint}
-            </span>
-          )}
         </div>
       </div>
 
@@ -344,107 +324,147 @@ export default function ReportesPage() {
         </div>
       )}
 
+      {/* Resumen */}
+      {data && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {[
+            { label: "Registros", valor: data.total, color: "var(--gold)" },
+            { label: "Combates (página)", valor: numCombates, color: "var(--hong-light)" },
+            { label: "Figuras (página)", valor: numFiguras, color: "var(--chung-light)" },
+            { label: "Seleccionados", valor: seleccion.size, color: "var(--green)" },
+          ].map((s) => (
+            <div key={s.label} className="card" style={{
+              padding: "10px 18px", display: "flex", flexDirection: "column",
+              alignItems: "center", flex: "1 1 120px",
+            }}>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", lineHeight: 1, color: s.color }}>
+                {s.valor}
+              </span>
+              <span style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-muted)", marginTop: 4 }}>
+                {s.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="reportes-filters">
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 200px" }}>
-              <label className="login-label" style={{ fontSize: "0.72rem" }}>Campeonato</label>
-              <select
-                className="input"
-                value={filters.campeonato_id}
-                onChange={(e) => setFilters(f => ({
-                  ...f, campeonato_id: e.target.value, tatami_id: "", page: 1,
-                }))}
-                style={{ padding: "8px 12px", minHeight: 36 }}
-              >
-                <option value="">Todos los campeonatos</option>
-                {campeonatos.map((c) => (
-                  <option key={c.id} value={String(c.id)}>{c.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
-              <label className="login-label" style={{ fontSize: "0.72rem" }}>Tatami</label>
-              <select
-                className="input"
-                value={filters.tatami_id}
-                disabled={!filters.campeonato_id}
-                onChange={(e) => setFilters(f => ({ ...f, tatami_id: e.target.value, page: 1 }))}
-                style={{ padding: "8px 12px", minHeight: 36 }}
-              >
-                <option value="">
-                  {filters.campeonato_id ? "Todos los tatamis" : "Elige campeonato"}
-                </option>
-                {tatamis.map((t) => (
-                  <option key={t.id} value={String(t.id)}>Tatami {t.numero}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px" }}>
-              <label className="login-label" style={{ fontSize: "0.72rem" }}>Tipo</label>
-              <select
-                className="input"
-                value={filters.tipo}
-                onChange={(e) => setFilters(f => ({ ...f, tipo: e.target.value, page: 1 }))}
-                style={{ padding: "8px 12px", minHeight: 36 }}
-              >
-                <option value="">Todos</option>
-                <option value="combate">Combates</option>
-                <option value="figuras">Figuras</option>
-              </select>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
-              <label className="login-label" style={{ fontSize: "0.72rem" }}>Desde</label>
-              <input
-                className="input" type="date"
-                value={filters.desde}
-                onChange={(e) => setFilters(f => ({ ...f, desde: e.target.value, page: 1 }))}
-                style={{ padding: "8px 12px", minHeight: 36, colorScheme: "dark" }}
-              />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
-              <label className="login-label" style={{ fontSize: "0.72rem" }}>Hasta</label>
-              <input
-                className="input" type="date"
-                value={filters.hasta}
-                onChange={(e) => setFilters(f => ({ ...f, hasta: e.target.value, page: 1 }))}
-                style={{ padding: "8px 12px", minHeight: 36, colorScheme: "dark" }}
-              />
-            </div>
-            <button
-              className="btn btn-sm"
-              onClick={() => setFilters({ campeonato_id: "", tatami_id: "", tipo: "", desde: "", hasta: "", page: 1 })}
-              style={{ alignSelf: "flex-end" }}
+      <div className="card" style={{ padding: "16px 20px" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Tatami</label>
+            <select
+              className="input"
+              value={filters.tatami_id}
+              onChange={(e) => setFilters(f => ({ ...f, tatami_id: e.target.value, page: 1 }))}
+              style={{ padding: "8px 12px", minHeight: 36 }}
             >
-              Limpiar
+              <option value="">Todos los tatamis</option>
+              {tatamis.map((t) => (
+                <option key={t.id} value={String(t.id)}>Tatami {t.numero}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Tipo</label>
+            <select
+              className="input"
+              value={filters.tipo}
+              onChange={(e) => setFilters(f => ({ ...f, tipo: e.target.value, page: 1 }))}
+              style={{ padding: "8px 12px", minHeight: 36 }}
+            >
+              <option value="">Todos</option>
+              <option value="combate">Combates</option>
+              <option value="figuras">Figuras</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Desde</label>
+            <input
+              className="input" type="date"
+              value={filters.desde}
+              onChange={(e) => setFilters(f => ({ ...f, desde: e.target.value, page: 1 }))}
+              style={{ padding: "8px 12px", minHeight: 36, colorScheme: "dark" }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px" }}>
+            <label className="login-label" style={{ fontSize: "0.72rem" }}>Hasta</label>
+            <input
+              className="input" type="date"
+              value={filters.hasta}
+              onChange={(e) => setFilters(f => ({ ...f, hasta: e.target.value, page: 1 }))}
+              style={{ padding: "8px 12px", minHeight: 36, colorScheme: "dark" }}
+            />
+          </div>
+          <button
+            className="btn btn-sm"
+            onClick={() => setFilters({ tatami_id: "", tipo: "", desde: "", hasta: "", page: 1 })}
+            style={{ alignSelf: "flex-end" }}
+          >
+            Limpiar
+          </button>
+        </div>
+      </div>
+
+      {/* Barra de selección */}
+      {seleccion.size > 0 && (
+        <div className="animate-fade" style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexWrap: "wrap", gap: 10, padding: "10px 16px",
+          background: "rgba(0, 212, 114, 0.08)",
+          border: "1px solid var(--green-border)", borderRadius: "var(--radius)",
+        }}>
+          <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--green)" }}>
+            {seleccion.size} registro(s) seleccionado(s)
+          </span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-sm" disabled={exporting !== null}
+              onClick={() => handleExportSeleccion("excel")}
+              style={{ background: "rgba(0,168,107,0.12)", borderColor: "rgba(0,168,107,0.35)", color: "#00D472" }}>
+              {exporting === "seleccion-excel" ? "Generando..." : "Descargar selección (Excel)"}
+            </button>
+            <button className="btn btn-sm" disabled={exporting !== null}
+              onClick={() => handleExportSeleccion("pdf")}
+              style={{ background: "rgba(255,68,68,0.10)", borderColor: "rgba(255,68,68,0.30)", color: "#FF6666" }}>
+              {exporting === "seleccion-pdf" ? "Generando..." : "Descargar selección (PDF)"}
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setSeleccion(new Set())}>
+              Limpiar selección
             </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }} className="animate-shimmer">
-            Cargando combates...
+            Cargando registros...
           </div>
         ) : !data || data.combates.length === 0 ? (
           <div style={{ padding: 48, textAlign: "center", color: "var(--text-dim)" }}>
             <p style={{ fontSize: "2rem", marginBottom: 8 }}>📋</p>
             <p>No hay registros con los filtros actuales.</p>
             <p style={{ fontSize: "0.85rem", marginTop: 6 }}>
-              Los resultados se guardan cuando el arbitro presiona &quot;Guardar + Nuevo&quot;
+              Los resultados se guardan cuando el Juez Central presiona &quot;Guardar + Nuevo&quot;
             </p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ minWidth: 980 }}>
+            <table className="table" style={{ minWidth: 960 }}>
               <thead>
                 <tr>
+                  <th style={{ width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={todosVisiblesMarcados}
+                      onChange={toggleSeleccionTodos}
+                      title="Seleccionar todos los visibles"
+                      style={{ accentColor: "var(--gold)", width: 16, height: 16, cursor: "pointer" }}
+                    />
+                  </th>
                   <th>#</th>
                   <th>Tipo</th>
-                  <th>Campeonato</th>
                   <th>Tatami</th>
                   <th>Categoría</th>
                   <th>Marcador</th>
@@ -456,19 +476,28 @@ export default function ReportesPage() {
               </thead>
               <tbody>
                 {data.combates.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} style={{
+                    background: seleccion.has(c.id) ? "rgba(240,184,0,0.05)" : undefined,
+                  }}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(c.id)}
+                        onChange={() => toggleSeleccion(c.id)}
+                        style={{ accentColor: "var(--gold)", width: 16, height: 16, cursor: "pointer" }}
+                      />
+                    </td>
                     <td className="text-muted font-mono" style={{ fontSize: "0.8rem" }}>{c.id}</td>
                     <td>
                       <span className={`badge ${c.tipo === "figuras" ? "badge-gold" : "badge-gray"}`}>
-                        {tipoLabel(c)}
+                        {c.tipo === "figuras" ? "Figuras" : "Combate"}
                       </span>
                     </td>
-                    <td>{c.campeonato_nombre || "—"}</td>
                     <td className="text-center">
                       {c.tatami_numero ? `T${c.tatami_numero}` : "—"}
                     </td>
                     <td style={{ fontWeight: 700 }}>
-                      {c.nombre_categoria || tipoLabel(c)}
+                      {c.nombre_categoria || (c.tipo === "figuras" ? "Figuras" : "Combate")}
                     </td>
                     <td className="text-center font-mono" style={{ fontSize: "1.05rem" }}>
                       {c.tipo === "figuras" ? (
@@ -506,7 +535,7 @@ export default function ReportesPage() {
                         )}
                       </div>
                     </td>
-                    <td style={{ minWidth: 240 }}>
+                    <td style={{ minWidth: 220 }}>
                       {c.jueces && c.jueces.length > 0 ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           {c.jueces.map((j) => (
@@ -581,7 +610,6 @@ export default function ReportesPage() {
           flex-wrap: wrap;
           gap: 12px;
         }
-        .reportes-filters {}
         .reportes-error {
           padding: 12px 14px;
           border: 1px solid rgba(255, 68, 68, 0.35);
@@ -602,7 +630,6 @@ export default function ReportesPage() {
           .reportes-page { padding: 14px; }
           .reportes-header { flex-direction: column; }
           .reportes-header > div:last-child { align-items: flex-start; }
-          .reportes-header > div:last-child span { text-align: left !important; }
         }
       `}</style>
     </div>

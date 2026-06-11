@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import {
   useCombate,
@@ -36,6 +36,8 @@ interface FigurasState {
   _categoria?: string;
   _tatami_activo?: boolean;
   _nombre_categoria?: string;
+  _tatami_numero?: number | null;
+  _campeonato_nombre?: string | null;
 }
 
 type AnyState = (CombateState & { _categoria?: string }) | (FigurasState & { _categoria?: string });
@@ -750,6 +752,12 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
         background: "var(--bg-card)",
       }}>
         <div className="logo" style={{ fontSize: "2rem" }}>DINA<em>MYT</em></div>
+        {state._campeonato_nombre && (
+          <div style={{
+            fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.12em", marginTop: 2,
+          }}>{state._campeonato_nombre}</div>
+        )}
         <div style={{
           fontFamily: "var(--font-display)", fontSize: "clamp(2rem,4vw,3.5rem)",
           color: "var(--gold)", letterSpacing: "0.15em", lineHeight: 1,
@@ -926,6 +934,46 @@ function CombatePantalla({
     : state.segundos <= 10 ? "urgente"
     : "activo";
 
+  // ── Sonido: gong al terminar el tiempo (requiere activarlo con un toque
+  // por la política de autoplay de los navegadores) ──
+  const [soundOn, setSoundOn] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const prevSegundosRef = useRef(state.segundos);
+
+  function toggleSound() {
+    if (!soundOn) {
+      type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
+      const Ctx = window.AudioContext || (window as AudioWindow).webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      void audioCtxRef.current.resume();
+    }
+    setSoundOn(!soundOn);
+  }
+
+  useEffect(() => {
+    const prev = prevSegundosRef.current;
+    prevSegundosRef.current = state.segundos;
+    if (!soundOn || !audioCtxRef.current) return;
+    // Gong cuando el cronómetro llega a 0 viniendo de un valor mayor
+    if (prev > 0 && state.segundos === 0) {
+      const ctx = audioCtxRef.current;
+      const ahora = ctx.currentTime;
+      [196, 98].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ahora);
+        gain.gain.exponentialRampToValueAtTime(i === 0 ? 0.5 : 0.3, ahora + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ahora + 2.2);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ahora);
+        osc.stop(ahora + 2.3);
+      });
+    }
+  }, [state.segundos, soundOn]);
+
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {/* Main scoreboard */}
@@ -959,6 +1007,15 @@ function CombatePantalla({
 
         {/* CENTER */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0 20px" }}>
+          {state._campeonato_nombre && (
+            <div style={{
+              fontSize: "clamp(0.65rem,1.2vw,0.9rem)", color: "var(--text-muted)",
+              fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em",
+              marginBottom: 4,
+            }}>
+              {state._campeonato_nombre}
+            </div>
+          )}
           <div style={{
             fontSize: "clamp(2rem,4vw,3.5rem)", fontFamily: "var(--font-display)",
             color: "var(--gold)", letterSpacing: "0.15em", marginBottom: 12,
@@ -1015,9 +1072,25 @@ function CombatePantalla({
       }}>
         <span className="logo" style={{ fontSize: "1.1rem" }}>DINA<em>MYT</em></span>
         <span>Tatami {tatamiId}</span>
-        <span>
-          <span className={`status-dot ${connected ? "online" : "offline"}`} />
-          {connected ? "En vivo" : "Desconectado"}
+        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            type="button"
+            onClick={toggleSound}
+            title={soundOn ? "Silenciar gong de fin de tiempo" : "Activar gong de fin de tiempo"}
+            style={{
+              background: "none", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)", padding: "3px 10px",
+              color: soundOn ? "var(--gold)" : "var(--text-dim)",
+              cursor: "pointer", fontSize: "0.75rem", fontFamily: "var(--font-body)",
+              fontWeight: 700,
+            }}
+          >
+            {soundOn ? "🔊 Sonido ON" : "🔇 Sonido OFF"}
+          </button>
+          <span>
+            <span className={`status-dot ${connected ? "online" : "offline"}`} />
+            {connected ? "En vivo" : "Desconectado"}
+          </span>
         </span>
       </div>
     </div>
@@ -1658,6 +1731,8 @@ function TatamiContent() {
   const categoria = anyState._categoria || "combate";
   const esFiguras = isFiguras(anyState);
   const nombreCategoria = anyState._nombre_categoria || (isFiguras(anyState) ? anyState.nombre_categoria : "") || "Figuras";
+  // Número visible del tatami dentro de su campeonato (no el ID interno)
+  const tatamiLabel = String(anyState._tatami_numero ?? tatamiId);
 
   const isArbitro = rol === "arbitro";
   const isPantalla = rol === "pantalla";
@@ -1774,7 +1849,7 @@ function TatamiContent() {
         <div style={{ height: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           <div className="logo" style={{ fontSize: "4rem", marginBottom: 16 }}>DINA<em>MYT</em></div>
           <div style={{ fontSize: "2.5rem", color: "var(--text-dim)", fontFamily: "var(--font-display)", letterSpacing: "0.15em", marginBottom: 8 }}>
-            TATAMI {tatamiId}
+            TATAMI {tatamiLabel}
           </div>
           <div style={{ color: "var(--orange)", fontSize: "1.2rem", fontWeight: 700, letterSpacing: "0.1em" }}>
             ESTE TATAMI SE ENCUENTRA DESACTIVADO
@@ -1795,10 +1870,10 @@ function TatamiContent() {
           canCloseGanador={false}
         />
         {esFiguras
-          ? <FigurasPantalla state={anyState as FigurasState} tatamiId={tatamiId} />
+          ? <FigurasPantalla state={anyState as FigurasState} tatamiId={tatamiLabel} />
           : <CombatePantalla
               state={state}
-              tatamiId={tatamiId}
+              tatamiId={tatamiLabel}
               connected={connected}
             />
         }
@@ -1835,7 +1910,7 @@ function TatamiContent() {
         {/* Center: estado + categoría selector */}
         <div className="tatami-topbar-center" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className={`status-dot ${connected ? "online" : "offline"}`} />
-          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>T{tatamiId}</span>
+          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>T{tatamiLabel}</span>
           {isArbitro && <CatSelector current={categoria} onSelect={handleChangeCategoria} figurasLabel={nombreCategoria} />}
           {!isArbitro && (
             <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
@@ -1962,7 +2037,7 @@ function TatamiContent() {
             ? <FigurasArbitro
                 state={anyState as FigurasState}
                 enviarEvento={enviarEvento}
-                tatamiId={tatamiId}
+                tatamiId={tatamiLabel}
                 onShowConfirm={alertSystem.showConfirm}
               />
             : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} />
@@ -1971,7 +2046,7 @@ function TatamiContent() {
             ? <CombateArbitro
                 state={state}
                 enviarEvento={enviarEvento}
-                tatamiId={tatamiId}
+                tatamiId={tatamiLabel}
                 onFlash={alertSystem.showFlash}
                 onFaltaFlash={alertSystem.showFaltaFlash}
                 onShowConfirm={alertSystem.showConfirm}

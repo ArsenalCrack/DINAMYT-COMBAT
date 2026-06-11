@@ -11,6 +11,7 @@ def register_blueprints(app):
     from .categorias import categorias_bp
     from .combates import combates_bp
     from .reportes import reportes_bp
+    from .llaves import llaves_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(campeonatos_bp, url_prefix="/api/campeonatos")
@@ -18,3 +19,4 @@ def register_blueprints(app):
     app.register_blueprint(categorias_bp, url_prefix="/api/categorias")
     app.register_blueprint(combates_bp, url_prefix="/api/combates")
     app.register_blueprint(reportes_bp, url_prefix="/api/reportes")
+    app.register_blueprint(llaves_bp, url_prefix="/api/llaves")

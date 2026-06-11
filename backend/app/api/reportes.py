@@ -49,6 +49,14 @@ def _build_query(args):
         q = q.filter(Tatami.campeonato_id == int(args["campeonato_id"]))
     if args.get("tatami_id"):
         q = q.filter(SesionTatami.tatami_id == int(args["tatami_id"]))
+    # Selección puntual de registros: ids=1,5,9 (descarga individual)
+    if args.get("ids"):
+        try:
+            ids = [int(x) for x in str(args["ids"]).split(",") if x.strip()]
+            if ids:
+                q = q.filter(Combate.id.in_(ids))
+        except ValueError:
+            pass
     if args.get("categoria_id"):
         q = q.filter(Combate.categoria_id == int(args["categoria_id"]))
     # Filtro por tipo: los registros de figuras siempre guardan

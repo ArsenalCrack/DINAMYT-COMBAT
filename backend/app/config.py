@@ -15,7 +15,8 @@ class Config:
     JWT_SECRET_KEY = os.getenv(
         "JWT_SECRET_KEY", "dinamyt-dev-secret-key"
     )
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    # 72 h: cubre un campeonato de fin de semana sin re-login de jueces
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=72)
     JWT_TOKEN_LOCATION = ["headers"]
     JWT_HEADER_NAME = "Authorization"
     JWT_HEADER_TYPE = "Bearer"

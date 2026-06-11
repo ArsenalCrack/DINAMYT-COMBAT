@@ -170,6 +170,61 @@ def list_users():
     return jsonify([u.to_dict(include_asignaciones=True) for u in users]), 200
 
 
+@auth_bp.route("/users/<int:user_id>", methods=["PUT"])
+@jwt_required()
+def update_user(user_id):
+    """
+    PUT /api/auth/users/:id (solo Admin)
+    Body opcional: { "nombre", "email", "password", "activo" }
+    Permite al administrador corregir correo, restablecer contraseña
+    o activar/desactivar un usuario.
+    """
+    current_user_id = get_jwt_identity()
+    current_user = Usuario.query.get(int(current_user_id))
+    if not current_user or current_user.rol != "admin":
+        return jsonify({"error": "Solo administradores"}), 403
+
+    user = Usuario.query.get(user_id)
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    data = request.get_json() or {}
+
+    if data.get("nombre"):
+        user.nombre = data["nombre"].strip()
+
+    if data.get("email"):
+        email = data["email"].strip().lower()
+        existente = Usuario.query.filter(
+            Usuario.email == email, Usuario.id != user.id
+        ).first()
+        if existente:
+            return jsonify({"error": f"El email '{email}' ya está registrado"}), 409
+        user.email = email
+
+    if data.get("password"):
+        if len(data["password"]) < 6:
+            return jsonify({"error": "La contraseña debe tener al menos 6 caracteres"}), 400
+        user.set_password(data["password"])
+
+    if "activo" in data:
+        if user.id == current_user.id and not data["activo"]:
+            return jsonify({"error": "No puedes desactivar tu propio usuario"}), 400
+        user.activo = bool(data["activo"])
+        if user.activo:
+            user.eliminado_at = None
+        else:
+            # Al desactivar, liberar sus asignaciones de tatami
+            AsignacionJuez.query.filter_by(usuario_id=user.id).delete()
+            user.eliminado_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+    return jsonify({
+        "message": "Usuario actualizado",
+        "user": user.to_dict(),
+    }), 200
+
+
 @auth_bp.route("/users/<int:user_id>", methods=["DELETE"])
 @jwt_required()
 def delete_user(user_id):

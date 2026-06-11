@@ -8,8 +8,12 @@ import {
   getTatamiAPI,
   asignarJuezAPI,
   desasignarJuezAPI,
+  updateCampeonatoAPI,
+  deleteCampeonatoAPI,
+  regenerarPinAPI,
   type UserData,
 } from "@/lib/api";
+import LlavesSection from "@/components/LlavesSection";
 
 interface Tatami {
   id: number;
@@ -51,6 +55,8 @@ export default function CampeonatoDetailPage() {
   const [assignData, setAssignData] = useState({ usuario_id: 0, rol_tatami: "j1" });
   const [judgeSearch, setJudgeSearch] = useState("");
   const [msg, setMsg] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState({ nombre: "", descripcion: "" });
 
   const loadData = useCallback(async () => {
     try {
@@ -112,6 +118,60 @@ export default function CampeonatoDetailPage() {
     } catch { /* */ }
   }
 
+  function flash(texto: string) {
+    setMsg(texto);
+    setTimeout(() => setMsg(""), 3500);
+  }
+
+  async function handleToggleActivo() {
+    if (!camp) return;
+    try {
+      await updateCampeonatoAPI(camp.id, { activo: !camp.activo });
+      await loadData();
+      flash(camp.activo
+        ? "Campeonato desactivado: el público ya no lo verá."
+        : "Campeonato activado: visible para el público.");
+    } catch { flash("Error al cambiar el estado del campeonato"); }
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!camp || !editData.nombre.trim()) return;
+    try {
+      await updateCampeonatoAPI(camp.id, {
+        nombre: editData.nombre.trim(),
+        descripcion: editData.descripcion.trim(),
+      });
+      setEditing(false);
+      await loadData();
+      flash("Campeonato actualizado");
+    } catch { flash("Error al actualizar el campeonato"); }
+  }
+
+  async function handleDeleteCampeonato() {
+    if (!camp) return;
+    const ok = window.confirm(
+      `¿Eliminar el campeonato "${camp.nombre}"? Se eliminarán sus tatamis, asignaciones y llaves. Los combates guardados en reportes NO se podrán filtrar por este campeonato.`
+    );
+    if (!ok) return;
+    try {
+      await deleteCampeonatoAPI(camp.id);
+      router.replace("/admin");
+    } catch { flash("Error al eliminar el campeonato"); }
+  }
+
+  async function handleRegenerarPin(tatamiId: number) {
+    const ok = window.confirm(
+      "¿Generar un PIN nuevo para este tatami? El PIN anterior dejará de funcionar."
+    );
+    if (!ok) return;
+    try {
+      const res = await regenerarPinAPI(tatamiId);
+      await Promise.all([loadData(), loadTatamiDetail(tatamiId)]);
+      flash(`Nuevo PIN: ${res.pin}`);
+    } catch { flash("Error al regenerar el PIN"); }
+  }
+
   const searchTerm = judgeSearch.trim().toLowerCase();
   const availableJudges = users.filter((u) => {
     if (!u.activo || u.rol !== "juez") return false;
@@ -130,16 +190,65 @@ export default function CampeonatoDetailPage() {
   return (
     <div className="campeonato-admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
       {/* Header */}
-      <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <button className="btn" onClick={() => router.push("/admin")}
+      <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
+        <div style={{ minWidth: 0 }}>
+          <button className="btn btn-sm" onClick={() => router.push("/admin")}
             style={{ marginBottom: 8, fontSize: "0.8rem" }}>&larr; Volver</button>
-          <h1 style={{ fontWeight: 700, fontSize: "1.4rem" }}>{camp.nombre}</h1>
+          <h1 style={{ fontWeight: 700, fontSize: "1.4rem", overflowWrap: "anywhere" }}>{camp.nombre}</h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            {camp.tatamis?.length || 0} tatamis &middot; {camp.activo ? "Activo" : "Inactivo"}
+            {camp.tatamis?.length || 0} tatamis &middot;{" "}
+            <span style={{ color: camp.activo ? "var(--green)" : "var(--orange)", fontWeight: 700 }}>
+              {camp.activo ? "Activo (visible al público)" : "Inactivo (oculto al público)"}
+            </span>
           </p>
         </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            className="btn btn-sm"
+            onClick={() => router.push(`/admin/campeonato/${camp.id}/reportes`)}
+            style={{
+              background: "rgba(0, 212, 114, 0.10)",
+              borderColor: "rgba(0, 212, 114, 0.30)",
+              color: "var(--green)",
+            }}
+          >
+            Reportes
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              setEditData({ nombre: camp.nombre, descripcion: camp.descripcion || "" });
+              setEditing(!editing);
+            }}
+          >
+            Editar
+          </button>
+          <button
+            className={`btn btn-sm ${camp.activo ? "btn-danger" : "btn-primary"}`}
+            onClick={handleToggleActivo}
+          >
+            {camp.activo ? "Desactivar" : "Activar"}
+          </button>
+          <button className="btn btn-sm btn-danger" onClick={handleDeleteCampeonato}>
+            Eliminar
+          </button>
+        </div>
       </div>
+
+      {editing && (
+        <form onSubmit={handleSaveEdit} className="card animate-slide"
+          style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+          <div className="card-title">Editar Campeonato</div>
+          <input className="input" placeholder="Nombre del campeonato" value={editData.nombre}
+            onChange={(e) => setEditData({ ...editData, nombre: e.target.value })} required />
+          <input className="input" placeholder="Descripción (opcional)" value={editData.descripcion}
+            onChange={(e) => setEditData({ ...editData, descripcion: e.target.value })} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" className="btn btn-primary">Guardar</button>
+            <button type="button" className="btn" onClick={() => setEditing(false)}>Cancelar</button>
+          </div>
+        </form>
+      )}
 
       {msg && (
         <div style={{
@@ -311,10 +420,14 @@ export default function CampeonatoDetailPage() {
               )}
 
               {/* Open tatami link */}
-              <div style={{ marginTop: 16, textAlign: "center" }}>
+              <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
                 <button className="btn btn-primary" style={{ width: "100%" }}
                   onClick={() => router.push(`/tatami/${selectedTatami.id}?rol=arbitro`)}>
                   Abrir como Juez Central
+                </button>
+                <button className="btn btn-sm" style={{ width: "100%" }}
+                  onClick={() => handleRegenerarPin(selectedTatami.id)}>
+                  Regenerar PIN del tatami
                 </button>
               </div>
             </div>
@@ -325,6 +438,10 @@ export default function CampeonatoDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Llaves de eliminación del campeonato */}
+      <LlavesSection campeonatoId={campId} />
+
       <style>{`
         .campeonato-admin-grid {
           align-items: start;

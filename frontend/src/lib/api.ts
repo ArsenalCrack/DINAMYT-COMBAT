@@ -57,13 +57,23 @@ export async function getMeAPI() {
   return res.data as UserData;
 }
 
-export async function listUsersAPI() {
-  const res = await api.get("/auth/users");
+export async function listUsersAPI(includeInactive = false) {
+  const res = await api.get("/auth/users", {
+    params: includeInactive ? { include_inactive: "1" } : {},
+  });
   return res.data as UserData[];
 }
 
 export async function deleteUserAPI(id: number) {
   const res = await api.delete(`/auth/users/${id}`);
+  return res.data;
+}
+
+export async function updateUserAPI(
+  id: number,
+  data: { nombre?: string; email?: string; password?: string; activo?: boolean }
+) {
+  const res = await api.put(`/auth/users/${id}`, data);
   return res.data;
 }
 
@@ -140,6 +150,65 @@ export async function asignarJuezAPI(
 
 export async function desasignarJuezAPI(tatamiId: number, usuarioId: number) {
   const res = await api.delete(`/tatamis/${tatamiId}/desasignar/${usuarioId}`);
+  return res.data;
+}
+
+export async function regenerarPinAPI(tatamiId: number) {
+  const res = await api.post(`/tatamis/${tatamiId}/regenerar-pin`);
+  return res.data as { pin: string; message: string };
+}
+
+// ── Llaves de eliminación (brackets) API ──
+export interface LlaveCompetidor {
+  id: number;
+  nombre: string;
+  club?: string;
+}
+
+export interface LlavePartido {
+  comp1: LlaveCompetidor | null;
+  comp2: LlaveCompetidor | null;
+  ganador: 1 | 2 | null;
+}
+
+export interface LlaveEstructura {
+  competidores: LlaveCompetidor[];
+  rondas: LlavePartido[][];
+  campeon: LlaveCompetidor | null;
+}
+
+export interface LlaveData {
+  id: number;
+  campeonato_id: number;
+  nombre: string;
+  estructura: LlaveEstructura;
+  created_at: string;
+}
+
+export async function createLlaveAPI(data: {
+  campeonato_id: number;
+  nombre: string;
+  competidores: { nombre: string; club?: string }[];
+}) {
+  const res = await api.post("/llaves", data);
+  return res.data as { message: string; llave: LlaveData };
+}
+
+export async function listLlavesAPI(campeonatoId: number) {
+  const res = await api.get(`/llaves/campeonato/${campeonatoId}`);
+  return res.data as LlaveData[];
+}
+
+export async function marcarGanadorLlaveAPI(
+  llaveId: number,
+  data: { ronda: number; partido: number; ganador: 1 | 2 | null }
+) {
+  const res = await api.put(`/llaves/${llaveId}/partido`, data);
+  return res.data as { message: string; llave: LlaveData };
+}
+
+export async function deleteLlaveAPI(llaveId: number) {
+  const res = await api.delete(`/llaves/${llaveId}`);
   return res.data;
 }
 

@@ -37,6 +37,8 @@ export interface CombateState {
   _categoria?: string;
   _tatami_activo?: boolean;
   _nombre_categoria?: string;
+  _tatami_numero?: number | null;
+  _campeonato_nombre?: string | null;
 }
 
 export interface HistorialEntry {
