@@ -3,11 +3,11 @@
 Con esta guía el software queda funcionando de verdad en la web, usando solo
 planes gratuitos:
 
-| Pieza | Herramienta | Costo |
-|---|---|---|
-| Frontend (Next.js) | [Vercel](https://vercel.com) | Gratis |
-| Backend (Flask + Socket.IO) | [Render](https://render.com) | Gratis |
-| Base de datos (PostgreSQL) | [Neon](https://neon.tech) | Gratis |
+| Pieza                         | Herramienta                            | Costo  |
+| ----------------------------- | -------------------------------------- | ------ |
+| Frontend (Next.js)            | [Vercel](https://vercel.com)           | Gratis |
+| Backend (Flask + Socket.IO)   | [Render](https://render.com)           | Gratis |
+| Base de datos (PostgreSQL)    | [Neon](https://neon.tech)              | Gratis |
 | Mantener el backend despierto | [UptimeRobot](https://uptimerobot.com) | Gratis |
 
 Tiempo estimado: **30–45 minutos**. Solo necesitas tu cuenta de GitHub
@@ -52,32 +52,32 @@ producción (fuerte: 12+ caracteres, letras, números y símbolo).
 2. **New → Web Service** → conecta el repositorio `DINAMYT-COMBAT`.
 3. Configura:
 
-   | Campo | Valor |
-   |---|---|
-   | Name | `dinamyt-backend` |
-   | Region | Ohio (igual que Neon) |
-   | Branch | `main` |
-   | **Root Directory** | `backend` |
-   | Runtime | Python 3 |
-   | Build Command | `pip install -r requirements.txt` |
-   | **Start Command** | `gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app` |
-   | Instance Type | **Free** |
+   | Campo              | Valor                                                 |
+   | ------------------ | ----------------------------------------------------- |
+   | Name               | `dinamyt-backend`                                     |
+   | Region             | Ohio (igual que Neon)                                 |
+   | Branch             | `main`                                                |
+   | **Root Directory** | `backend`                                             |
+   | Runtime            | Python 3                                              |
+   | Build Command      | `pip install -r requirements.txt`                     |
+   | **Start Command**  | `gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app` |
+   | Instance Type      | **Free**                                              |
 
    ⚠️ El `-w 1` (un solo worker) es **obligatorio**: el estado de los
    tatamis vive en memoria del proceso.
 
 4. En **Environment Variables** agrega:
 
-   | Variable | Valor |
-   |---|---|
-   | `PYTHON_VERSION` | `3.12.7` |
-   | `FLASK_ENV` | `production` |
-   | `DATABASE_URL` | la connection string de Neon (Paso 1) |
-   | `JWT_SECRET_KEY` | el secreto generado en el Paso 0 |
-   | `ADMIN_EMAIL` | `admin@dinamyt.com` (o el que prefieras) |
-   | `ADMIN_PASSWORD` | tu contraseña fuerte del Paso 0 |
-   | `ADMIN_NOMBRE` | `Administrador DINAMYT` |
-   | `FRONTEND_URL` | `http://localhost:3000` *(temporal — se cambia en el Paso 4)* |
+   | Variable         | Valor                                                         |
+   | ---------------- | ------------------------------------------------------------- |
+   | `PYTHON_VERSION` | `3.12.7`                                                      |
+   | `FLASK_ENV`      | `production`                                                  |
+   | `DATABASE_URL`   | la connection string de Neon (Paso 1)                         |
+   | `JWT_SECRET_KEY` | el secreto generado en el Paso 0                              |
+   | `ADMIN_EMAIL`    | `admin@dinamyt.com` (o el que prefieras)                      |
+   | `ADMIN_PASSWORD` | tu contraseña fuerte del Paso 0                               |
+   | `ADMIN_NOMBRE`   | `Administrador DINAMYT`                                       |
+   | `FRONTEND_URL`   | `http://localhost:3000` _(temporal — se cambia en el Paso 4)_ |
 
 5. **Create Web Service** y espera el primer deploy (~5 min).
 6. Copia la URL que te asigna, por ejemplo:
@@ -98,16 +98,16 @@ producción (fuerte: 12+ caracteres, letras, números y símbolo).
 2. **Add New → Project** → importa `DINAMYT-COMBAT`.
 3. Configura:
 
-   | Campo | Valor |
-   |---|---|
-   | **Root Directory** | `frontend` |
-   | Framework Preset | Next.js (lo detecta solo) |
+   | Campo              | Valor                     |
+   | ------------------ | ------------------------- |
+   | **Root Directory** | `frontend`                |
+   | Framework Preset   | Next.js (lo detecta solo) |
 
 4. En **Environment Variables** agrega (usando TU URL de Render del Paso 2):
 
-   | Variable | Valor |
-   |---|---|
-   | `NEXT_PUBLIC_API_URL` | `https://dinamyt-backend.onrender.com` |
+   | Variable                 | Valor                                  |
+   | ------------------------ | -------------------------------------- |
+   | `NEXT_PUBLIC_API_URL`    | `https://dinamyt-backend.onrender.com` |
    | `NEXT_PUBLIC_SOCKET_URL` | `https://dinamyt-backend.onrender.com` |
 
 5. **Deploy** y espera (~2 min).
@@ -179,20 +179,20 @@ Render y Vercel detectan el push y **se redespliegan solos** (~3-5 min).
 
 ## Limitaciones del plan gratis (y cuándo preocuparse)
 
-| Limitación | Impacto real |
-|---|---|
-| Render duerme tras 15 min idle | Resuelto con UptimeRobot (Paso 6) |
+| Limitación                            | Impacto real                                                                                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Render duerme tras 15 min idle        | Resuelto con UptimeRobot (Paso 6)                                                                                                             |
 | Disco de Render se borra al reiniciar | El respaldo en vivo de tatamis (`tatami_states.json`) se pierde en un redeploy, pero los combates **guardados** están en Neon y no se pierden |
-| Neon gratis: 0.5 GB | Miles de campeonatos; sobra |
-| Render gratis: 750 h/mes | Suficiente para un servicio siempre activo |
-| Sin escalado multi-proceso | Por diseño: 6 tatamis ≈ 80 conexiones, el proceso único lo maneja sobrado |
+| Neon gratis: 0.5 GB                   | Miles de campeonatos; sobra                                                                                                                   |
+| Render gratis: 750 h/mes              | Suficiente para un servicio siempre activo                                                                                                    |
+| Sin escalado multi-proceso            | Por diseño: 6 tatamis ≈ 80 conexiones, el proceso único lo maneja sobrado                                                                     |
 
 ## Solución de problemas
 
-| Síntoma | Causa probable | Solución |
-|---|---|---|
-| "Error de conexión con el servidor" en el login | Backend dormido o caído | Espera 1 min (despierta) o revisa logs en Render |
-| Errores CORS en la consola del navegador | `FRONTEND_URL` mal puesta | Debe ser EXACTAMENTE tu URL de Vercel, con `https://` y sin `/` final |
-| El deploy del backend falla con "[SEGURIDAD]" | Secretos débiles | Pon `JWT_SECRET_KEY` y `ADMIN_PASSWORD` fuertes en Render |
-| Pantalla pública no actualiza en vivo | `NEXT_PUBLIC_SOCKET_URL` mal puesta | Debe apuntar a la URL de Render, luego redeploy en Vercel |
-| Cambié variables en Vercel y no aplica | Las `NEXT_PUBLIC_*` se inyectan en build | Redeploy en Vercel después de cambiarlas |
+| Síntoma                                         | Causa probable                           | Solución                                                              |
+| ----------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------- |
+| "Error de conexión con el servidor" en el login | Backend dormido o caído                  | Espera 1 min (despierta) o revisa logs en Render                      |
+| Errores CORS en la consola del navegador        | `FRONTEND_URL` mal puesta                | Debe ser EXACTAMENTE tu URL de Vercel, con `https://` y sin `/` final |
+| El deploy del backend falla con "[SEGURIDAD]"   | Secretos débiles                         | Pon `JWT_SECRET_KEY` y `ADMIN_PASSWORD` fuertes en Render             |
+| Pantalla pública no actualiza en vivo           | `NEXT_PUBLIC_SOCKET_URL` mal puesta      | Debe apuntar a la URL de Render, luego redeploy en Vercel             |
+| Cambié variables en Vercel y no aplica          | Las `NEXT_PUBLIC_*` se inyectan en build | Redeploy en Vercel después de cambiarlas                              |

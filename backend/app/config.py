@@ -10,6 +10,13 @@ class Config:
         "DATABASE_URL", "sqlite:///dinamyt.db"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # El pooler de Supabase/Neon cierra conexiones inactivas; sin esto,
+    # la primera petición tras un rato de calma toma una conexión muerta
+    # del pool y devuelve 500. pre_ping la verifica antes de usarla.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
 
     # JWT
     JWT_SECRET_KEY = os.getenv(
