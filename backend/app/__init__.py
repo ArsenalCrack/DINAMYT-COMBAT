@@ -57,6 +57,9 @@ def create_app(config_name=None):
         app,
         resources={r"/api/*": {"origins": origins}},
         supports_credentials=True,
+        # Sin esto el navegador no puede leer el nombre de archivo de las
+        # descargas (Content-Disposition) y usa un nombre genérico.
+        expose_headers=["Content-Disposition"],
     )
     socketio.init_app(
         app,

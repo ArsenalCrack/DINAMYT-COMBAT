@@ -56,6 +56,21 @@ const RONDAS: Record<string, string> = {
   r1: "Round 1", r2: "Round 2", oro: "Punto de Oro", figuras: "Figuras",
 };
 
+function slugArchivo(texto: string, fallback = "reporte") {
+  const limpio = texto
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return limpio.slice(0, 40) || fallback;
+}
+
+function fechaArchivo() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
 function getExportFilename(disposition: string | null, fallback: string) {
   if (!disposition) return fallback;
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -228,7 +243,8 @@ export default function ReportesCampeonatoPage() {
       ? `${apiUrl}/api/reportes/combates/export/zip?${buildParams({ formato: type })}`
       : `${apiUrl}/api/reportes/combates/export/${type}?${buildParams()}`;
     const ext = splitZip ? "zip" : (type === "pdf" ? "pdf" : "xlsx");
-    void descargar(url, `dinamyt_reporte_general.${ext}`, `general-${type}`);
+    const fallback = `dinamyt_${slugArchivo(campNombre, "campeonato")}_general_${fechaArchivo()}.${ext}`;
+    void descargar(url, fallback, `general-${type}`);
   }
 
   // Reporte SOLO de los registros seleccionados con checkbox
@@ -238,11 +254,8 @@ export default function ReportesCampeonatoPage() {
     const ids = Array.from(seleccion).sort((a, b) => a - b).join(",");
     const qp = new URLSearchParams({ campeonato_id: campId, ids }).toString();
     const url = `${apiUrl}/api/reportes/combates/export/${type}?${qp}`;
-    void descargar(
-      url,
-      `dinamyt_seleccion.${type === "pdf" ? "pdf" : "xlsx"}`,
-      `seleccion-${type}`,
-    );
+    const fallback = `dinamyt_${slugArchivo(campNombre, "campeonato")}_seleccion-${seleccion.size}_${fechaArchivo()}.${type === "pdf" ? "pdf" : "xlsx"}`;
+    void descargar(url, fallback, `seleccion-${type}`);
   }
 
   function ganadorNombre(c: Combate) {

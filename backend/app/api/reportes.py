@@ -122,8 +122,14 @@ def _slug(texto, fallback="reporte"):
 
 
 def _contexto_filtros(args):
-    """Nombres de campeonato/tatami activos en los filtros (para titulos)."""
-    ctx = {"campeonato": None, "tatami": None}
+    """Filtros activos con nombres legibles (para títulos y nombre de archivo)."""
+    ctx = {
+        "campeonato": None,
+        "tatami": None,
+        "categoria": None,
+        "tipo": None,
+        "num_ids": 0,
+    }
     if args.get("campeonato_id"):
         camp = Campeonato.query.get(int(args["campeonato_id"]))
         if camp:
@@ -136,6 +142,14 @@ def _contexto_filtros(args):
                 camp = Campeonato.query.get(tatami.campeonato_id)
                 if camp:
                     ctx["campeonato"] = camp.nombre
+    if args.get("categoria"):
+        ctx["categoria"] = str(args["categoria"]).strip()
+    if args.get("tipo") == "combate":
+        ctx["tipo"] = "Puntuación Combate"
+    elif args.get("tipo") == "figuras":
+        ctx["tipo"] = "Puntuación Individual"
+    if args.get("ids"):
+        ctx["num_ids"] = len([x for x in str(args["ids"]).split(",") if x.strip()])
     return ctx
 
 
@@ -145,18 +159,35 @@ def _subtitulo_filtros(ctx):
         partes.append(f"Campeonato: {ctx['campeonato']}")
     if ctx.get("tatami"):
         partes.append(ctx["tatami"])
+    if ctx.get("categoria"):
+        partes.append(f"Categoría: {ctx['categoria']}")
+    elif ctx.get("tipo"):
+        partes.append(ctx["tipo"])
+    if ctx.get("num_ids"):
+        partes.append(f"Selección de {ctx['num_ids']} registro(s)")
     return " — ".join(partes)
 
 
 def _nombre_archivo(ctx, ext):
+    """
+    Nombre de descarga específico para identificar el documento de un vistazo:
+    dinamyt_<campeonato>_<tatami>_<categoría|tipo>_<selección-N>_<fecha_hora>.ext
+    La fecha con hora y segundos evita sobrescrituras y duplicados.
+    """
     partes = ["dinamyt"]
     if ctx.get("campeonato"):
         partes.append(_slug(ctx["campeonato"], "campeonato"))
     if ctx.get("tatami"):
         partes.append(_slug(ctx["tatami"], "tatami"))
+    if ctx.get("categoria"):
+        partes.append(_slug(ctx["categoria"], "categoria"))
+    elif ctx.get("tipo"):
+        partes.append("combates" if "Combate" in ctx["tipo"] else "individual")
+    if ctx.get("num_ids"):
+        partes.append(f"seleccion-{ctx['num_ids']}")
     if len(partes) == 1:
         partes.append("resultados")
-    partes.append(datetime.now().strftime("%Y%m%d_%H%M"))
+    partes.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
     return "_".join(partes) + f".{ext}"
 
 
