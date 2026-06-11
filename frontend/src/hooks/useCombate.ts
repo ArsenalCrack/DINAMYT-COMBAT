@@ -28,6 +28,12 @@ export interface CombateState {
   oroPendienteAprobacion: boolean;
   oroGanadorNombre?: string;
   oroGanadorColor?: "hong" | "chung" | "";
+  ganadorManualColor?: "hong" | "chung" | "";
+  ganadorManualMotivo?: string;
+  ganadorPendienteCierre?: boolean;
+  ganadorPendienteNombre?: string;
+  ganadorPendienteColor?: "hong" | "chung" | "";
+  ganadorPendienteMotivo?: string;
   _categoria?: string;
   _tatami_activo?: boolean;
   _nombre_categoria?: string;
@@ -78,6 +84,12 @@ function estadoInicial(): CombateState {
     ronda: "r1",
     oroResuelto: false,
     oroPendienteAprobacion: false,
+    ganadorManualColor: "",
+    ganadorManualMotivo: "",
+    ganadorPendienteCierre: false,
+    ganadorPendienteNombre: "",
+    ganadorPendienteColor: "",
+    ganadorPendienteMotivo: "",
   };
 }
 
@@ -118,6 +130,7 @@ export function useCombate(
   const [connected, setConnected] = useState(false);
   const [hasServerState, setHasServerState] = useState(false);
   const [pendingEvents, setPendingEvents] = useState(0);
+  const [socketError, setSocketError] = useState("");
   const socketRef = useRef<Socket | null>(null);
   const pendingMap = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -128,8 +141,15 @@ export function useCombate(
     const sock = getSocket(tatamiId, rol, token);
     socketRef.current = sock;
 
-    sock.on("connect", () => setConnected(true));
+    sock.on("connect", () => {
+      setConnected(true);
+      setSocketError("");
+    });
     sock.on("disconnect", () => setConnected(false));
+    sock.on("connect_error", (err: Error) => {
+      setConnected(false);
+      setSocketError(err.message || "No se pudo conectar al tatami");
+    });
 
     sock.on("estado", (data: { datos: CombateState }) => {
       setHasServerState(true);
@@ -145,6 +165,13 @@ export function useCombate(
       pendingMap.current.forEach((timer) => clearTimeout(timer));
       pendingMap.current.clear();
       setPendingEvents(0);
+    });
+
+    sock.on("accion_rechazada", (data: { message?: string }) => {
+      setAlerts((prev) => ({
+        ...prev,
+        rechazo: { message: data.message || "Acción rechazada" },
+      }));
     });
 
     sock.on("ack", (data: { evId: string }) => {
@@ -166,22 +193,24 @@ export function useCombate(
       disconnectSocket();
       setConnected(false);
       setHasServerState(false);
+      setSocketError("");
     };
   }, [tatamiId, rol, token]);
 
   // Event-specific listeners (separate effect to avoid re-binding on state change)
   const [alerts, setAlerts] = useState<{
-    alerta12?: { hong: string; chung: string; lider: string };
+    alerta12?: { hong: string; chung: string; lider: string; diferencia?: string; motivo?: string };
     ganador?: { nombre: string; color: string; motivo?: string };
     derrota?: { perdedor: string; razon: string };
     faltaFlash?: { ico: string; titulo: string; sub: string; tipoFalta: string };
+    rechazo?: { message: string };
   }>({});
 
   useEffect(() => {
     const sock = socketRef.current;
     if (!sock) return;
 
-    const onAlerta12 = (data: { hong: string; chung: string; lider: string }) => {
+    const onAlerta12 = (data: { hong: string; chung: string; lider: string; diferencia?: string; motivo?: string }) => {
       setAlerts((prev) => ({ ...prev, alerta12: data }));
     };
     const onGanador = (data: { nombre: string; color: string; motivo?: string }) => {
@@ -265,6 +294,7 @@ export function useCombate(
     state,
     connected,
     hasServerState,
+    socketError,
     pendingEvents,
     enviarEvento,
     broadcast,

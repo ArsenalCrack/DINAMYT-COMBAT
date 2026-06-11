@@ -107,9 +107,9 @@ export default function AdminPage() {
   if (!user) return null;
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
+    <div className="admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
       {/* Header */}
-      <div style={{
+      <div className="admin-header" style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--border)"
       }}>
@@ -145,7 +145,7 @@ export default function AdminPage() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+      <div className="admin-tabs" style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         {(["campeonatos", "jueces"] as const).map((t) => (
           <button
             key={t}
@@ -260,7 +260,7 @@ export default function AdminPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {users.map((u) => (
-              <div key={u.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div key={u.id} className="admin-user-row card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div>
                     <span style={{ fontWeight: 700 }}>{u.nombre}</span>
@@ -293,6 +293,34 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      <style>{`
+        @media (max-width: 640px) {
+          .admin-page {
+            padding: 14px !important;
+          }
+          .admin-header {
+            align-items: flex-start !important;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+          .admin-tabs {
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+          .admin-tabs .btn {
+            flex: 0 0 auto;
+          }
+          .admin-user-row {
+            align-items: flex-start !important;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+          .admin-user-row > div:last-child {
+            width: 100%;
+            justify-content: space-between;
+          }
+        }
+      `}</style>
     </div>
   );
 }

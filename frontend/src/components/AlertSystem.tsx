@@ -25,6 +25,8 @@ export interface Alerta12Data {
   hong: string;
   chung: string;
   lider: string;
+  diferencia?: string;
+  motivo?: string;
 }
 
 export interface DerrotaData {
@@ -129,6 +131,7 @@ interface AlertSystemProps {
   onClearDerrota: () => void;
   onClearConfirm: () => void;
   isPantalla?: boolean;
+  canCloseGanador?: boolean;
 }
 
 export default function AlertSystem({
@@ -138,6 +141,7 @@ export default function AlertSystem({
   onClearDerrota,
   onClearConfirm,
   isPantalla = false,
+  canCloseGanador = true,
 }: AlertSystemProps) {
   return (
     <>
@@ -153,6 +157,7 @@ export default function AlertSystem({
           data={alerts.ganador}
           onClose={onClearGanador}
           isPantalla={isPantalla}
+          canClose={canCloseGanador}
         />
       )}
 
@@ -295,10 +300,12 @@ function GanadorOverlay({
   data,
   onClose,
   isPantalla,
+  canClose,
 }: {
   data: GanadorData;
   onClose: () => void;
   isPantalla: boolean;
+  canClose: boolean;
 }) {
   const colorMap = {
     hong: "var(--hong-vivid)",
@@ -367,23 +374,37 @@ function GanadorOverlay({
             {data.motivo}
           </div>
         )}
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: 24,
-            background: "rgba(255,255,255,0.1)",
-            border: "1px solid rgba(255,255,255,0.2)",
-            borderRadius: "var(--radius)",
-            padding: "10px 32px",
-            fontFamily: "var(--font-display)",
-            fontSize: "1rem",
-            letterSpacing: "0.1em",
-            color: "rgba(255,255,255,0.6)",
-            cursor: "pointer",
-          }}
-        >
-          CERRAR
-        </button>
+        {canClose ? (
+          <button
+            onClick={onClose}
+            style={{
+              marginTop: 24,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: "var(--radius)",
+              padding: "10px 32px",
+              fontFamily: "var(--font-display)",
+              fontSize: "1rem",
+              letterSpacing: "0.1em",
+              color: "rgba(255,255,255,0.6)",
+              cursor: "pointer",
+            }}
+          >
+            CERRAR
+          </button>
+        ) : (
+          <div
+            style={{
+              marginTop: 24,
+              fontFamily: "var(--font-display)",
+              fontSize: isPantalla ? "1.4rem" : "0.95rem",
+              letterSpacing: "0.12em",
+              color: "rgba(255,255,255,0.45)",
+            }}
+          >
+            ESPERANDO CIERRE DEL JUEZ CENTRAL
+          </div>
+        )}
       </div>
     </div>
   );
@@ -433,7 +454,7 @@ function Alerta12Modal({
             marginTop: 6,
           }}
         >
-          DIFERENCIA DE 12 PUNTOS
+          {(data.motivo || "SUPERIORIDAD TÉCNICA").toUpperCase()}
         </div>
         <div
           style={{
@@ -442,7 +463,7 @@ function Alerta12Modal({
             margin: "8px 0 20px",
           }}
         >
-          {data.lider} lidera — El Juez Central evalúa
+          {data.lider} lidera por {data.diferencia || "12.0"} puntos — El Juez Central evalúa
         </div>
         <div
           style={{

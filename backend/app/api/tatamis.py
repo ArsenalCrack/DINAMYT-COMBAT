@@ -12,6 +12,19 @@ from ..models.asignacion import AsignacionJuez
 
 tatamis_bp = Blueprint("tatamis", __name__)
 
+ROLES_PIN = ("arbitro", "j1", "j2", "j3", "j4", "j5", "j6", "j7")
+
+ROL_LABELS = {
+    "arbitro": "Juez Central",
+    "j1": "Juez Esquina 1",
+    "j2": "Juez Esquina 2",
+    "j3": "Juez Esquina 3",
+    "j4": "Juez Esquina 4",
+    "j5": "Juez Esquina 5",
+    "j6": "Juez Esquina 6",
+    "j7": "Juez Esquina 7",
+}
+
 
 def _require_admin():
     uid = get_jwt_identity()
@@ -218,9 +231,34 @@ def verificar_pin():
         tatami_id=tatami.id, usuario_id=int(uid)
     ).first()
 
+    asignaciones = AsignacionJuez.query.filter_by(tatami_id=tatami.id).all()
+    roles_asignados = {a.rol_tatami for a in asignaciones if a.rol_tatami}
+    roles_ocupados = set()
+    try:
+        from ..sockets.combate_ns import roles_ocupados_para_tatami
+        roles_ocupados = roles_ocupados_para_tatami(tatami.id)
+    except Exception:
+        roles_ocupados = set()
+
+    if asignacion:
+        roles_disponibles = [asignacion.rol_tatami]
+        rol_sugerido = asignacion.rol_tatami
+        requiere_seleccion = False
+    else:
+        roles_bloqueados = roles_asignados | roles_ocupados
+        roles_disponibles = [r for r in ROLES_PIN if r not in roles_bloqueados]
+        rol_sugerido = next((r for r in roles_disponibles if r != "arbitro"), None)
+        rol_sugerido = rol_sugerido or (roles_disponibles[0] if roles_disponibles else None)
+        requiere_seleccion = True
+
     return jsonify({
         "tatami": tatami.to_dict(),
         "campeonato_nombre": tatami.campeonato.nombre if tatami.campeonato else None,
-        "rol_sugerido": asignacion.rol_tatami if asignacion else "j1",
+        "rol_sugerido": rol_sugerido,
+        "roles_disponibles": [
+            {"rol": rol, "label": ROL_LABELS.get(rol, rol)}
+            for rol in roles_disponibles
+        ],
+        "requiere_seleccion_rol": requiere_seleccion,
         "acceso_por_pin": True,
     }), 200

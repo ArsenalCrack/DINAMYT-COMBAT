@@ -60,6 +60,12 @@ function combateActivo(state: CombateState): boolean {
   return hayPuntos || cronoMovio;
 }
 
+function competidoresConNombre(state: CombateState): boolean {
+  const hong = state.nombreHong?.trim();
+  const chung = state.nombreChung?.trim();
+  return Boolean(hong && chung && hong !== "Hong" && chung !== "Chung");
+}
+
 function formatScoreValue(value: number | string) {
   const parsed = typeof value === "number"
     ? value
@@ -82,6 +88,17 @@ function isValidScore(raw: string) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 9.99;
 }
 
+const CATEGORIA_NOMBRE_MAX = 40;
+
+function sanitizeCategoryName(raw: string) {
+  return raw.replace(/[^\p{L} ]/gu, "").slice(0, CATEGORIA_NOMBRE_MAX);
+}
+
+function categoriaNombreValido(raw?: string) {
+  const value = (raw || "").trim();
+  return Boolean(value && /^[\p{L} ]+$/u.test(value));
+}
+
 const JUECES_FIGURAS = ["j1", "j2", "j3", "j4", "j5", "j6", "j7"];
 
 function juecesActivosFiguras(state: FigurasState) {
@@ -98,6 +115,17 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
     const compId = String(comp.id);
     return jueces.every((juezId) => state.puntuaciones_confirmadas?.[compId]?.[juezId]);
   });
+}
+
+function figurasConDatos(state: FigurasState) {
+  const tienePuntuaciones = Object.values(state.puntuaciones || {})
+    .some((puntajes) => Object.keys(puntajes || {}).length > 0);
+  return Boolean(
+    state.competidores.length
+    || tienePuntuaciones
+    || state.finalizado
+    || state.log.length
+  );
 }
 
 // ─── Category Selector ───────────────────────────────────────────────────────
@@ -162,6 +190,44 @@ function FigurasArbitro({
 }) {
   const [newComp, setNewComp] = useState({ nombre: "", club: "" });
   const [showAddComp, setShowAddComp] = useState(false);
+  const [categoriaError, setCategoriaError] = useState("");
+  const [categoriaDraft, setCategoriaDraft] = useState(state.nombre_categoria ?? "");
+  const [categoriaFocused, setCategoriaFocused] = useState(false);
+  const [categoriaPendiente, setCategoriaPendiente] = useState(false);
+  const nombreCategoriaValido = categoriaNombreValido(categoriaDraft);
+
+  useEffect(() => {
+    const serverName = state.nombre_categoria ?? "";
+    if (serverName === categoriaDraft) {
+      setCategoriaPendiente(false);
+      return;
+    }
+    if (!categoriaFocused && !categoriaPendiente) {
+      setCategoriaDraft(serverName);
+    }
+  }, [categoriaDraft, categoriaFocused, categoriaPendiente, state.nombre_categoria]);
+
+  function commitNombreCategoria() {
+    const nombre = sanitizeCategoryName(categoriaDraft);
+    if (nombre !== categoriaDraft) {
+      setCategoriaDraft(nombre);
+    }
+    if (nombre !== (state.nombre_categoria ?? "")) {
+      setCategoriaPendiente(true);
+      enviarEvento("cambiar_nombre_categoria", { nombre });
+    }
+    return nombre;
+  }
+
+  function validarNombreCategoria() {
+    const nombre = commitNombreCategoria();
+    if (!categoriaNombreValido(nombre)) {
+      setCategoriaError("Ingresa el nombre de la categoría usando solo letras y espacios.");
+      return false;
+    }
+    setCategoriaError("");
+    return true;
+  }
 
   function calcTotal(comp: Competidor) {
     const puntajes = state.puntuaciones[String(comp.id)] || {};
@@ -187,27 +253,55 @@ function FigurasArbitro({
         <span>
           <input
             className="input"
-            value={state.nombre_categoria || "Figuras"}
-            onChange={(e) => enviarEvento("cambiar_nombre_categoria", { nombre: e.target.value })}
-            onBlur={(e) => {
-              if (!e.target.value.trim()) enviarEvento("cambiar_nombre_categoria", { nombre: "Figuras" });
+            value={categoriaDraft}
+            placeholder="Nombre categoría"
+            maxLength={CATEGORIA_NOMBRE_MAX}
+            onChange={(e) => {
+              const nombre = sanitizeCategoryName(e.target.value);
+              setCategoriaDraft(nombre);
+              setCategoriaPendiente(true);
+              setCategoriaError("");
+              enviarEvento("cambiar_nombre_categoria", { nombre });
             }}
-            style={{ width: 180, fontWeight: 800, padding: "2px 6px", height: 28 }}
+            onFocus={() => setCategoriaFocused(true)}
+            onBlur={() => {
+              setCategoriaFocused(false);
+              const nombre = commitNombreCategoria();
+              if (nombre && !categoriaNombreValido(nombre)) {
+                setCategoriaError("Usa solo letras y espacios.");
+              }
+            }}
+            style={{
+              width: 220,
+              fontWeight: 800,
+              padding: "2px 6px",
+              height: 28,
+              borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
+            }}
           /> — Juez Central · Tatami {tatamiId}
         </span>
         {state.puntuacion_abierta && state.competidor_activo_id && (
-          <button className="btn btn-sm btn-danger" onClick={() => enviarEvento("cerrar_puntuacion")}>
+          <button className="btn btn-sm btn-danger" onClick={() => {
+            if (validarNombreCategoria()) enviarEvento("cerrar_puntuacion");
+          }}>
             Cerrar Puntuación
           </button>
         )}
       </div>
+      {categoriaError && (
+        <div style={{ color: "var(--orange)", fontWeight: 700, fontSize: "0.82rem", margin: "-8px 0 12px" }}>
+          {categoriaError}
+        </div>
+      )}
 
       {/* Número de jueces */}
       <div className="card" style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexWrap: "wrap" }}>
         <span style={{ color: "var(--text-muted)", fontSize: "0.82rem", fontWeight: 700 }}>Jueces:</span>
         {[2, 3, 4, 5, 6, 7].map((n) => (
           <button key={n} className="btn btn-sm"
-            onClick={() => enviarEvento("set_num_jueces", { num_jueces: n })}
+            onClick={() => {
+              if (validarNombreCategoria()) enviarEvento("set_num_jueces", { num_jueces: n });
+            }}
             style={{
               background: state.num_jueces === n ? "var(--gold-bg)" : undefined,
               borderColor: state.num_jueces === n ? "var(--gold-border)" : undefined,
@@ -232,7 +326,9 @@ function FigurasArbitro({
             <button
               key={modo}
               className="btn btn-sm"
-              onClick={() => enviarEvento("set_podio_modo", { modo })}
+              onClick={() => {
+                if (validarNombreCategoria()) enviarEvento("set_podio_modo", { modo });
+              }}
               style={{
                 background: podioModo === modo ? "var(--gold-bg)" : undefined,
                 borderColor: podioModo === modo ? "var(--gold-border)" : undefined,
@@ -253,7 +349,9 @@ function FigurasArbitro({
             Competidores ({state.competidores.length}/{MAX_COMPETIDORES})
           </div>
           <button className="btn btn-sm btn-primary"
-            onClick={() => setShowAddComp(!showAddComp)}
+            onClick={() => {
+              if (validarNombreCategoria()) setShowAddComp(!showAddComp);
+            }}
             disabled={!puedeAgregar}>
             + Agregar
           </button>
@@ -275,7 +373,7 @@ function FigurasArbitro({
               style={{ flex: "1 1 140px" }} />
             <button className="btn btn-primary"
               onClick={() => {
-                if (newComp.nombre.trim()) {
+                if (validarNombreCategoria() && newComp.nombre.trim()) {
                   enviarEvento("agregar_competidor", { nombre: newComp.nombre.trim(), club: newComp.club.trim() });
                   setNewComp({ nombre: "", club: "" });
                   setShowAddComp(false);
@@ -313,13 +411,17 @@ function FigurasArbitro({
                 </div>
                 {!isActive && (
                   <button className="btn btn-sm"
-                    onClick={() => enviarEvento("activar_competidor", { competidor_id: comp.id })}
+                    onClick={() => {
+                      if (validarNombreCategoria()) enviarEvento("activar_competidor", { competidor_id: comp.id });
+                    }}
                     style={{ padding: "4px 8px", fontSize: "0.7rem", background: "var(--bg-card)", borderColor: "var(--gold)" }}>
                     ACTIVAR
                   </button>
                 )}
                 <button className="btn btn-sm btn-danger"
-                  onClick={() => enviarEvento("eliminar_competidor", { competidor_id: comp.id })}
+                  onClick={() => {
+                    if (validarNombreCategoria()) enviarEvento("eliminar_competidor", { competidor_id: comp.id });
+                  }}
                   style={{ padding: "3px 8px", minHeight: 30, fontSize: "0.72rem" }}>
                   ✕
                 </button>
@@ -351,13 +453,28 @@ function FigurasArbitro({
       </div>
 
       {/* Acciones */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
         <button className="btn btn-primary"
-          onClick={() => enviarEvento("finalizar")}>
+          onClick={() => {
+            if (validarNombreCategoria()) enviarEvento("finalizar");
+          }}>
           {state.finalizado ? "Podio Mostrado" : "Mostrar Podio"}
         </button>
+        <button className="btn btn-primary"
+          onClick={() => {
+            if (!validarNombreCategoria()) return;
+            if (!state.competidores.length) {
+              setCategoriaError("Agrega competidores antes de guardar.");
+              return;
+            }
+            enviarEvento("nuevo_combate");
+          }}>
+          Guardar + Nuevo
+        </button>
         <button className="btn btn-danger"
-          onClick={() => enviarEvento("reset_figuras")}>
+          onClick={() => {
+            if (validarNombreCategoria()) enviarEvento("reset_figuras");
+          }}>
           Resetear
         </button>
       </div>
@@ -415,6 +532,10 @@ function FigurasScoreCard({
 
   function handleGuardar() {
     if (isConfirmed) return;
+    if (!categoriaNombreValido(state.nombre_categoria)) {
+      setError("El Juez Central debe ingresar un nombre de categoría válido.");
+      return;
+    }
     const formatted = normalizeScoreInput(nota);
     if (!formatted || !isValidScore(formatted)) {
       setError("Ingresa la puntuación con dos decimales, por ejemplo 8.75.");
@@ -498,6 +619,51 @@ function FigurasScoreCard({
           </button>
         )}
       </div>
+      <style>{`
+        .tatami-topbar {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .tatami-topbar-center {
+          min-width: 0;
+          flex: 1 1 auto;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+        .tatami-topbar-right {
+          flex: 0 1 auto;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .tatami-active-btn {
+          min-width: 112px;
+          line-height: 1;
+        }
+        @media (max-width: 640px) {
+          .tatami-topbar {
+            align-items: stretch !important;
+          }
+          .tatami-topbar > .btn {
+            flex: 1 1 92px;
+          }
+          .tatami-topbar-center {
+            order: 3;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+          .tatami-topbar-right {
+            flex: 1 1 auto;
+            gap: 8px !important;
+          }
+          .tatami-active-btn {
+            min-height: 36px;
+            height: auto !important;
+            padding: 6px 9px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -512,6 +678,15 @@ function FigurasJuez({
   const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3, j5: 4, j6: 5, j7: 6 };
   const idxCriterio = MAP_JUEZ[juezId as keyof typeof MAP_JUEZ];
   const miCriterio = idxCriterio !== undefined ? state.criterios[idxCriterio] : undefined;
+
+  if (!categoriaNombreValido(state.nombre_categoria)) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>Esperando nombre de categoría...</p>
+        <p style={{ fontSize: "0.85rem" }}>El Juez Central debe ingresar un nombre válido usando solo letras y espacios.</p>
+      </div>
+    );
+  }
 
   if (state.competidores.length === 0) {
     return (
@@ -794,6 +969,8 @@ function CombateJuez({
   onFlash: (ico: string, txt: string) => void;
 }) {
   const miPuntaje = state.jueces?.[rol] || { hong: 0, chung: 0 };
+  const nombresListos = competidoresConNombre(state);
+  const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
   const cronoClass = !state.activo ? "pause"
     : state.segundos <= 5 ? "urgente-5"
     : state.segundos <= 10 ? "urgente"
@@ -806,6 +983,10 @@ function CombateJuez({
   ];
 
   function anotar(color: "hong" | "chung", pts: number, label: string) {
+    if (!nombresListos) {
+      onFlash("⚠️", "NOMBRES REQUERIDOS");
+      return;
+    }
     onFlash(color === "hong" ? "🔴" : "🔵", `+${pts} JEUMSU`);
     enviarEvento("punto_juez", { juez: rol, color, pts, nombre: label });
   }
@@ -861,9 +1042,9 @@ function CombateJuez({
             <button
               key={`h${p.pts}`}
               className="combat-btn hong"
-              style={{ flex: 1, opacity: state.oroResuelto ? 0.5 : 1 }}
+              style={{ flex: 1, opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
               onClick={() => anotar("hong", p.pts, p.label)}
-              disabled={state.oroResuelto}
+              disabled={state.oroResuelto || juezBloqueado}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -871,8 +1052,8 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto ? 0.5 : 1 }}
-            disabled={state.oroResuelto}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
+            disabled={state.oroResuelto || juezBloqueado}
             onClick={() => {
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "hong");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "hong" });
@@ -892,9 +1073,9 @@ function CombateJuez({
             <button
               key={`c${p.pts}`}
               className="combat-btn chung"
-              style={{ flex: 1, opacity: state.oroResuelto ? 0.5 : 1 }}
+              style={{ flex: 1, opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
               onClick={() => anotar("chung", p.pts, p.label)}
-              disabled={state.oroResuelto}
+              disabled={state.oroResuelto || juezBloqueado}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -902,8 +1083,8 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto ? 0.5 : 1 }}
-            disabled={state.oroResuelto}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
+            disabled={state.oroResuelto || juezBloqueado}
             onClick={() => {
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "chung");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "chung" });
@@ -944,6 +1125,8 @@ function CombateArbitro({
   const totalChung = marcadorDisplay(state, "chung");
   const esqHong = promedioEsquinas(state, "hong").toFixed(1);
   const esqChung = promedioEsquinas(state, "chung").toFixed(1);
+  const nombresListos = competidoresConNombre(state);
+  const accionesBloqueadas = !nombresListos || Boolean(state.ganadorPendienteCierre);
 
   const cronoClass = !state.activo ? "pause"
     : state.segundos <= 5 ? "urgente-5"
@@ -962,9 +1145,7 @@ function CombateArbitro({
 
   // Validar nombres antes de iniciar crono
   function handleCronoStart() {
-    const nombresVacios = state.nombreHong === "Hong" || state.nombreChung === "Chung"
-      || !state.nombreHong.trim() || !state.nombreChung.trim();
-    if (nombresVacios) {
+    if (!nombresListos) {
       onShowConfirm({
         titulo: "NOMBRES REQUERIDOS",
         mensaje: "Debes ingresar el nombre de ambos competidores antes de iniciar el cronómetro. El nombre aparecerá en la pantalla pública y en los reportes.",
@@ -978,6 +1159,10 @@ function CombateArbitro({
   }
 
   function handleEspecial(color: "hong" | "chung", pts: number, nombre: string) {
+    if (!nombresListos) {
+      onFlash("⚠️", "NOMBRES REQUERIDOS");
+      return;
+    }
     if (state.oroResuelto) {
       onFlash("⚠️", "PUNTO DE ORO BLOQUEADO");
       return;
@@ -994,6 +1179,10 @@ function CombateArbitro({
   }
 
   function handleKyonggo(color: "hong" | "chung") {
+    if (!nombresListos) {
+      onFlash("⚠️", "NOMBRES REQUERIDOS");
+      return;
+    }
     const num = (color === "hong" ? state.kyongHong : state.kyongChung) + 1;
     const data: FaltaFlashData = {
       ico: "⚠️",
@@ -1007,6 +1196,10 @@ function CombateArbitro({
   }
 
   function handleGamjeum(color: "hong" | "chung") {
+    if (!nombresListos) {
+      onFlash("⚠️", "NOMBRES REQUERIDOS");
+      return;
+    }
     const num = (color === "hong" ? state.faltasHong : state.faltasChung) + 1;
     const data: FaltaFlashData = {
       ico: "🚫",
@@ -1017,6 +1210,29 @@ function CombateArbitro({
     onFaltaFlash(data);
     broadcast({ tipo: "falta-flash", ico: data.ico, titulo: data.titulo, sub: data.sub, tipoFalta: data.tipo });
     enviarEvento("gamjeum", { color });
+  }
+
+  function handleDeclararGanador(color: "hong" | "chung", motivo: string) {
+    if (!nombresListos) {
+      onShowConfirm({
+        titulo: "NOMBRES REQUERIDOS",
+        mensaje: "Debes ingresar el nombre de ambos competidores antes de declarar un ganador.",
+        tipo: "advertencia",
+        solo_ok: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
+
+    const nombre = color === "hong" ? state.nombreHong : state.nombreChung;
+    onShowConfirm({
+      titulo: motivo.toUpperCase(),
+      mensaje: `¿Declarar ganador a ${nombre}? Esta decisión pausará el combate y bloqueará todas las pantallas hasta que el Juez Central cierre la alerta.`,
+      tipo: "advertencia",
+      confirmLabel: "DECLARAR GANADOR",
+      cancelLabel: "Cancelar",
+      onConfirm: () => enviarEvento("declarar_ganador", { color, motivo }),
+    });
   }
 
   function handleNuevoCombate() {
@@ -1109,8 +1325,10 @@ function CombateArbitro({
           <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
             <button className="btn btn-sm"
               onClick={state.activo ? () => enviarEvento("crono_pause") : handleCronoStart}
+              disabled={Boolean(state.ganadorPendienteCierre)}
               style={{
                 padding: "5px 10px", fontWeight: 800,
+                opacity: state.ganadorPendienteCierre ? 0.45 : 1,
                 background: state.activo ? "rgba(255,68,68,0.15)" : "rgba(0,212,114,0.15)",
                 borderColor: state.activo ? "rgba(255,68,68,0.4)" : "rgba(0,212,114,0.4)",
                 color: state.activo ? "var(--red-alert)" : "var(--green)",
@@ -1119,7 +1337,8 @@ function CombateArbitro({
             </button>
             <button className="btn btn-sm"
               onClick={() => enviarEvento("crono_reset", { segundosMax: state.segundosMax })}
-              style={{ padding: "5px 8px" }}>RST</button>
+              disabled={accionesBloqueadas}
+              style={{ padding: "5px 8px", opacity: accionesBloqueadas ? 0.45 : 1 }}>RST</button>
           </div>
         </div>
 
@@ -1139,7 +1358,9 @@ function CombateArbitro({
         {RONDAS_BTN.map((r) => (
           <button key={r.id} className="btn btn-sm"
             onClick={() => enviarEvento("ronda", { ronda: r.id })}
+            disabled={accionesBloqueadas}
             style={{
+              opacity: accionesBloqueadas ? 0.45 : 1,
               background: state.ronda === r.id ? "var(--gold-bg)" : undefined,
               borderColor: state.ronda === r.id ? "var(--gold-border)" : undefined,
               color: state.ronda === r.id ? "var(--gold)" : undefined,
@@ -1150,7 +1371,9 @@ function CombateArbitro({
         {DURACIONES.map((d) => (
           <button key={d} className="btn btn-sm"
             onClick={() => enviarEvento("crono_reset", { segundosMax: d })}
+            disabled={accionesBloqueadas}
             style={{
+              opacity: accionesBloqueadas ? 0.45 : 1,
               background: state.segundosMax === d ? "var(--chung-bg)" : undefined,
               borderColor: state.segundosMax === d ? "var(--chung-border)" : undefined,
             }}>{d}s</button>
@@ -1160,7 +1383,9 @@ function CombateArbitro({
         {[2, 3, 4].map((n) => (
           <button key={n} className="btn btn-sm"
             onClick={() => enviarEvento("set_num_jueces", { numJueces: n })}
+            disabled={accionesBloqueadas}
             style={{
+              opacity: accionesBloqueadas ? 0.45 : 1,
               background: state.numJueces === n ? "var(--gold-bg)" : undefined,
               borderColor: state.numJueces === n ? "var(--gold-border)" : undefined,
               color: state.numJueces === n ? "var(--gold)" : undefined,
@@ -1176,8 +1401,8 @@ function CombateArbitro({
             <button
               className="combat-btn hong"
               onClick={() => handleEspecial("hong", p.pts, p.nombre)}
-              disabled={state.oroResuelto}
-              style={{ opacity: state.oroResuelto ? 0.5 : 1 }}
+              disabled={state.oroResuelto || accionesBloqueadas}
+              style={{ opacity: state.oroResuelto || accionesBloqueadas ? 0.5 : 1 }}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
@@ -1185,8 +1410,8 @@ function CombateArbitro({
             <button
               className="combat-btn chung"
               onClick={() => handleEspecial("chung", p.pts, p.nombre)}
-              disabled={state.oroResuelto}
-              style={{ opacity: state.oroResuelto ? 0.5 : 1 }}
+              disabled={state.oroResuelto || accionesBloqueadas}
+              style={{ opacity: state.oroResuelto || accionesBloqueadas ? 0.5 : 1 }}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
@@ -1198,37 +1423,78 @@ function CombateArbitro({
       {/* Faltas */}
       <div className="card-title">Faltas</div>
       <div className="grid-2" style={{ marginBottom: 8 }}>
-        <button className="combat-btn hong" onClick={() => handleKyonggo("hong")}>
+        <button className="combat-btn hong" onClick={() => handleKyonggo("hong")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−0.5</span><span className="label">KyongGo HONG</span>
         </button>
-        <button className="combat-btn chung" onClick={() => handleKyonggo("chung")}>
+        <button className="combat-btn chung" onClick={() => handleKyonggo("chung")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−0.5</span><span className="label">KyongGo CHUNG</span>
         </button>
-        <button className="combat-btn falta" onClick={() => handleGamjeum("hong")}>
+        <button className="combat-btn falta" onClick={() => handleGamjeum("hong")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−1</span><span className="label">GamJeum HONG</span>
         </button>
-        <button className="combat-btn falta" onClick={() => handleGamjeum("chung")}>
+        <button className="combat-btn falta" onClick={() => handleGamjeum("chung")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−1</span><span className="label">GamJeum CHUNG</span>
+        </button>
+      </div>
+
+      {/* Decisiones */}
+      <div className="card-title">Decisión del Juez Central</div>
+      <div className="grid-2" style={{ marginBottom: 8 }}>
+        <button
+          className="combat-btn hong"
+          onClick={() => handleDeclararGanador("hong", "Superioridad técnica")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">S.T.</span><span className="label">Superioridad Hong</span>
+        </button>
+        <button
+          className="combat-btn chung"
+          onClick={() => handleDeclararGanador("chung", "Superioridad técnica")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">S.T.</span><span className="label">Superioridad Chung</span>
+        </button>
+        <button
+          className="combat-btn hong"
+          onClick={() => handleDeclararGanador("hong", "Decisión del Juez Central")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">SUNG</span><span className="label">Ganador Hong</span>
+        </button>
+        <button
+          className="combat-btn chung"
+          onClick={() => handleDeclararGanador("chung", "Decisión del Juez Central")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">SUNG</span><span className="label">Ganador Chung</span>
         </button>
       </div>
 
       {/* Deshacer + Guardar */}
       <div className="grid-2" style={{ marginBottom: 8 }}>
         <button className="btn btn-sm btn-danger"
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
           onClick={() => enviarEvento("deshacer_arbitro", { color: "hong" })}>
           ↩ Deshacer Hong
         </button>
         <button className="btn btn-sm btn-danger"
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
           onClick={() => enviarEvento("deshacer_arbitro", { color: "chung" })}>
           ↩ Deshacer Chung
         </button>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 10 }}>
-        <button className="btn btn-primary" onClick={handleNuevoCombate}>
+        <button className="btn btn-primary" onClick={handleNuevoCombate} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           Guardar + Nuevo
         </button>
-        <button className="btn btn-danger" onClick={handleReset}>
+        <button className="btn btn-danger" onClick={handleReset} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
           Reset Total
         </button>
       </div>
@@ -1262,7 +1528,7 @@ function TatamiContent() {
   const rol = searchParams.get("rol") || "pantalla";
 
   const token = typeof window !== "undefined" ? localStorage.getItem("dinamyt_token") : null;
-  const { state, connected, hasServerState, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
+  const { state, connected, hasServerState, socketError, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
 
   const alertSystem = useAlertSystem();
 
@@ -1300,6 +1566,19 @@ function TatamiContent() {
     }
   }, [socketAlerts.derrota]);
 
+  useEffect(() => {
+    if (socketAlerts.rechazo) {
+      alertSystem.showConfirm({
+        titulo: "ACCIÓN RECHAZADA",
+        mensaje: socketAlerts.rechazo.message,
+        tipo: "advertencia",
+        solo_ok: true,
+        onConfirm: () => {},
+      });
+      clearAlert("rechazo");
+    }
+  }, [socketAlerts.rechazo]);
+
   const anyState = state as unknown as AnyState;
   const categoria = anyState._categoria || "combate";
   const esFiguras = isFiguras(anyState);
@@ -1307,6 +1586,27 @@ function TatamiContent() {
 
   const isArbitro = rol === "arbitro";
   const isPantalla = rol === "pantalla";
+
+  useEffect(() => {
+    if (
+      state.ganadorPendienteCierre
+      && state.ganadorPendienteNombre
+      && (state.ganadorPendienteColor === "hong" || state.ganadorPendienteColor === "chung")
+    ) {
+      alertSystem.showGanador({
+        nombre: state.ganadorPendienteNombre,
+        color: state.ganadorPendienteColor,
+        motivo: state.ganadorPendienteMotivo,
+      });
+    } else if (!state.ganadorPendienteCierre) {
+      alertSystem.clearGanador();
+    }
+  }, [
+    state.ganadorPendienteCierre,
+    state.ganadorPendienteNombre,
+    state.ganadorPendienteColor,
+    state.ganadorPendienteMotivo,
+  ]);
 
   // Auth check
   useEffect(() => {
@@ -1333,6 +1633,17 @@ function TatamiContent() {
   }
 
   function handleChangeCategoria(cat: string) {
+    if (cat === categoria) return;
+    if (esFiguras && figurasConDatos(anyState as FigurasState)) {
+      alertSystem.showConfirm({
+        titulo: "FIGURAS EN CURSO",
+        mensaje: "Guarda o resetea la categoría de figuras antes de cambiar a combate.",
+        tipo: "peligro",
+        solo_ok: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
     const combateState = state as CombateState;
     if (combateActivo(combateState)) {
       alertSystem.showConfirm({
@@ -1345,6 +1656,32 @@ function TatamiContent() {
       return;
     }
     enviarEvento("cambiar_categoria", { categoria: cat });
+  }
+
+  function handleClearGanador() {
+    if (isArbitro && state.ganadorPendienteCierre) {
+      enviarEvento("cerrar_ganador");
+    }
+    alertSystem.clearGanador();
+  }
+
+  if (socketError && !isPantalla) {
+    return (
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="card" style={{ maxWidth: 460, width: "100%", textAlign: "center" }}>
+          <div className="logo" style={{ fontSize: "2.4rem", marginBottom: 12 }}>DINA<em>MYT</em></div>
+          <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "1rem", marginBottom: 8 }}>
+            Rol no disponible
+          </div>
+          <p style={{ color: "var(--text-muted)", marginBottom: 16 }}>
+            {socketError}
+          </p>
+          <button className="btn btn-primary" onClick={() => router.push(getRolBack())}>
+            Volver
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!hasServerState) {
@@ -1375,11 +1712,12 @@ function TatamiContent() {
       <div style={{ position: "relative" }}>
         <AlertSystem
           alerts={alertSystem.alerts}
-          onClearGanador={alertSystem.clearGanador}
+          onClearGanador={handleClearGanador}
           onClearAlerta12={alertSystem.clearAlerta12}
           onClearDerrota={alertSystem.clearDerrota}
           onClearConfirm={alertSystem.clearConfirm}
           isPantalla
+          canCloseGanador={false}
         />
         {esFiguras
           ? <FigurasPantalla state={anyState as FigurasState} tatamiId={tatamiId} />
@@ -1399,14 +1737,15 @@ function TatamiContent() {
       {/* Global alert system */}
       <AlertSystem
         alerts={alertSystem.alerts}
-        onClearGanador={alertSystem.clearGanador}
+        onClearGanador={handleClearGanador}
         onClearAlerta12={alertSystem.clearAlerta12}
         onClearDerrota={alertSystem.clearDerrota}
         onClearConfirm={alertSystem.clearConfirm}
+        canCloseGanador={isArbitro}
       />
 
       {/* Top bar */}
-      <div style={{
+      <div className="tatami-topbar" style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "8px 14px",
         background: "var(--bg-card)", borderBottom: "1px solid var(--border)",
@@ -1419,7 +1758,7 @@ function TatamiContent() {
         </button>
 
         {/* Center: estado + categoría selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="tatami-topbar-center" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className={`status-dot ${connected ? "online" : "offline"}`} />
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>T{tatamiId}</span>
           {isArbitro && <CatSelector current={categoria} onSelect={handleChangeCategoria} figurasLabel={nombreCategoria} />}
@@ -1431,10 +1770,10 @@ function TatamiContent() {
         </div>
 
         {/* Right: rol label + tatami activo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="tatami-topbar-right" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {isArbitro && (
             <button
-              className={`btn btn-sm ${anyState._tatami_activo ? "btn-primary" : "btn-danger"}`}
+              className={`tatami-active-btn btn btn-sm ${anyState._tatami_activo ? "btn-primary" : "btn-danger"}`}
               onClick={() => {
                 if (anyState._tatami_activo) {
                   alertSystem.showConfirm({
@@ -1450,7 +1789,7 @@ function TatamiContent() {
               }}
               style={{ fontWeight: 800, padding: "4px 10px", fontSize: "0.7rem", height: 28 }}
             >
-              {anyState._tatami_activo ? "🟢 ACTIVO" : "🔴 DESACTIVADO"}
+              {anyState._tatami_activo ? "ACTIVO" : "DESACTIVADO"}
             </button>
           )}
           <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>

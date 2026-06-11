@@ -393,3 +393,302 @@ C:\Users\amirs\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jwt\api
 127.0.0.1 - - [10/Jun/2026 15:13:47] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 440 0.017572
 (5860) accepted ('127.0.0.1', 64188)
 (5860) accepted ('127.0.0.1', 65098)
+127.0.0.1 - - [10/Jun/2026 15:14:58] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 397.092922
+(5860) accepted ('127.0.0.1', 57199)
+(5860) accepted ('127.0.0.1', 53790)
+127.0.0.1 - - [10/Jun/2026 15:14:59] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.000735
+127.0.0.1 - - [10/Jun/2026 15:14:59] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001504
+127.0.0.1 - - [10/Jun/2026 15:14:59] "GET /api/campeonatos HTTP/1.1" 200 460 0.004005
+127.0.0.1 - - [10/Jun/2026 15:14:59] "GET /api/auth/users HTTP/1.1" 200 1405 0.002867
+(5860) accepted ('127.0.0.1', 55998)
+127.0.0.1 - - [10/Jun/2026 15:15:00] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.001230
+127.0.0.1 - - [10/Jun/2026 15:15:00] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.010288
+127.0.0.1 - - [10/Jun/2026 15:15:10] "OPTIONS /api/reportes/combates/export/pdf? HTTP/1.1" 200 379 0.000884
+127.0.0.1 - - [10/Jun/2026 15:15:10] "GET /api/reportes/combates/export/pdf? HTTP/1.1" 500 283 0.004093
+127.0.0.1 - - [10/Jun/2026 15:15:35] "OPTIONS /api/reportes/combates/export/excel? HTTP/1.1" 200 379 0.000619
+127.0.0.1 - - [10/Jun/2026 15:15:35] "GET /api/reportes/combates/export/excel? HTTP/1.1" 500 282 0.002954
+127.0.0.1 - - [10/Jun/2026 15:17:20] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.000744
+127.0.0.1 - - [10/Jun/2026 15:17:20] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000974
+127.0.0.1 - - [10/Jun/2026 15:17:20] "GET /api/campeonatos HTTP/1.1" 200 460 0.005757
+127.0.0.1 - - [10/Jun/2026 15:17:20] "GET /api/auth/users HTTP/1.1" 200 1405 0.002492
+127.0.0.1 - - [10/Jun/2026 15:17:21] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001216
+127.0.0.1 - - [10/Jun/2026 15:17:21] "GET /api/auth/users HTTP/1.1" 200 1405 0.003471
+127.0.0.1 - - [10/Jun/2026 15:17:21] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.013406
+127.0.0.1 - - [10/Jun/2026 15:17:22] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.000639
+127.0.0.1 - - [10/Jun/2026 15:17:22] "GET /api/tatamis/1 HTTP/1.1" 200 814 0.004941
+127.0.0.1 - - [10/Jun/2026 15:17:29] "OPTIONS /api/tatamis/1/asignar HTTP/1.1" 200 388 0.000619
+127.0.0.1 - - [10/Jun/2026 15:17:29] "POST /api/tatamis/1/asignar HTTP/1.1" 200 282 0.190387
+127.0.0.1 - - [10/Jun/2026 15:17:29] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.000657
+127.0.0.1 - - [10/Jun/2026 15:17:29] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000641
+127.0.0.1 - - [10/Jun/2026 15:17:29] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.000726
+127.0.0.1 - - [10/Jun/2026 15:17:29] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.009316
+127.0.0.1 - - [10/Jun/2026 15:17:29] "GET /api/auth/users HTTP/1.1" 200 1405 0.002555
+127.0.0.1 - - [10/Jun/2026 15:17:29] "GET /api/tatamis/1 HTTP/1.1" 200 819 0.004520
+(5860) accepted ('127.0.0.1', 49661)
+(5860) accepted ('127.0.0.1', 57221)
+(5860) accepted ('127.0.0.1', 57965)
+127.0.0.1 - - [10/Jun/2026 15:17:32] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001037
+127.0.0.1 - - [10/Jun/2026 15:17:32] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.005460
+(5860) accepted ('127.0.0.1', 54402)
+127.0.0.1 - - [10/Jun/2026 15:17:37] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 4.106162
+127.0.0.1 - - [10/Jun/2026 15:17:37] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.000907
+127.0.0.1 - - [10/Jun/2026 15:17:37] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.005334
+127.0.0.1 - - [10/Jun/2026 15:17:45] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001341
+127.0.0.1 - - [10/Jun/2026 15:17:45] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000840
+127.0.0.1 - - [10/Jun/2026 15:17:45] "GET /api/campeonatos HTTP/1.1" 200 460 0.007728
+127.0.0.1 - - [10/Jun/2026 15:17:45] "GET /api/auth/users HTTP/1.1" 200 1405 0.005287
+127.0.0.1 - - [10/Jun/2026 15:17:48] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.000901
+127.0.0.1 - - [10/Jun/2026 15:17:48] "GET /api/auth/users HTTP/1.1" 200 1405 0.004965
+127.0.0.1 - - [10/Jun/2026 15:17:49] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.010948
+127.0.0.1 - - [10/Jun/2026 15:17:49] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.001053
+127.0.0.1 - - [10/Jun/2026 15:17:49] "GET /api/tatamis/1 HTTP/1.1" 200 819 0.005622
+127.0.0.1 - - [10/Jun/2026 15:17:54] "OPTIONS /api/tatamis/1/asignar HTTP/1.1" 200 388 0.000673
+127.0.0.1 - - [10/Jun/2026 15:17:54] "POST /api/tatamis/1/asignar HTTP/1.1" 200 277 0.186889
+127.0.0.1 - - [10/Jun/2026 15:17:54] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.000619
+127.0.0.1 - - [10/Jun/2026 15:17:54] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.005999
+127.0.0.1 - - [10/Jun/2026 15:17:54] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001029
+127.0.0.1 - - [10/Jun/2026 15:17:54] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.010495
+127.0.0.1 - - [10/Jun/2026 15:17:54] "GET /api/auth/users HTTP/1.1" 200 1405 0.003181
+(5860) accepted ('127.0.0.1', 57185)
+server=localhost:5000//socket.io/ client=127.0.0.1:57185 socket shutdown error: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto127.0.0.1 - - [10/Jun/2026 15:52:58] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 1345.639153
+(5860) accepted ('127.0.0.1', 55403)
+127.0.0.1 - - [10/Jun/2026 15:54:55] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 116.585338
+(5860) accepted ('127.0.0.1', 53559)
+127.0.0.1 - - [10/Jun/2026 15:54:55] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001514
+127.0.0.1 - - [10/Jun/2026 15:54:55] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.010572
+(5860) accepted ('127.0.0.1', 54693)
+(5860) accepted ('127.0.0.1', 58355)
+127.0.0.1 - - [10/Jun/2026 15:55:43] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 46.418093
+(5860) accepted ('127.0.0.1', 64220)
+127.0.0.1 - - [10/Jun/2026 15:56:13] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 29.300883
+127.0.0.1 - - [10/Jun/2026 15:56:13] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001343
+127.0.0.1 - - [10/Jun/2026 15:56:13] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.007933
+127.0.0.1 - - [10/Jun/2026 15:56:23] "GET /socket.io/?tatami_id=1&rol=j2&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyMjA5MCwianRpIjoiZTFkZWFhOWQtNTI3MC00ZDkzLThkYjktMjcxMzFkOTIyODMyIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjIwOTAsImNzcmYiOiIxMGIzMTRhNy1kMjgzLTQyMzMtYTE3OC1hMDI2YWRmYTFhZjMiLCJleHAiOjE3ODEyMDg0OTAsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.uac2OwHRxRbUtWubFqGagajEeq-2IhcRhhdi66VofWQ&EIO=4&transport=websocket HTTP/1.1" 200 0 2890.277704
+(5860) accepted ('127.0.0.1', 53464)
+127.0.0.1 - - [10/Jun/2026 15:56:28] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000995
+127.0.0.1 - - [10/Jun/2026 15:56:28] "POST /api/auth/login HTTP/1.1" 200 851 0.338558
+127.0.0.1 - - [10/Jun/2026 15:56:28] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001945
+127.0.0.1 - - [10/Jun/2026 15:56:28] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.009094
+127.0.0.1 - - [10/Jun/2026 15:56:53] "OPTIONS /api/tatamis/verificar-pin HTTP/1.1" 200 388 0.000669
+127.0.0.1 - - [10/Jun/2026 15:56:53] "POST /api/tatamis/verificar-pin HTTP/1.1" 200 428 0.005709
+(5860) accepted ('127.0.0.1', 58041)
+(5860) accepted ('127.0.0.1', 62682)
+127.0.0.1 - - [10/Jun/2026 15:56:56] "OPTIONS /api/tatamis/4 HTTP/1.1" 200 379 0.001225
+127.0.0.1 - - [10/Jun/2026 15:56:56] "GET /api/tatamis/4 HTTP/1.1" 200 404 0.005750
+(5860) accepted ('127.0.0.1', 63690)
+(5860) accepted ('127.0.0.1', 59956)
+127.0.0.1 - - [10/Jun/2026 15:57:14] "GET /socket.io/?tatami_id=4&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 16.884785
+127.0.0.1 - - [10/Jun/2026 15:57:14] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001012
+127.0.0.1 - - [10/Jun/2026 15:57:14] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.002089
+127.0.0.1 - - [10/Jun/2026 15:57:14] "GET /api/campeonatos HTTP/1.1" 200 460 0.002533
+127.0.0.1 - - [10/Jun/2026 15:57:14] "GET /api/auth/users HTTP/1.1" 200 1405 0.002518
+127.0.0.1 - - [10/Jun/2026 15:57:24] "GET /socket.io/?tatami_id=1&rol=j2&EIO=4&transport=websocket HTTP/1.1" 200 0 59.938798
+(5860) accepted ('127.0.0.1', 64823)
+127.0.0.1 - - [10/Jun/2026 15:58:00] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001209
+127.0.0.1 - - [10/Jun/2026 15:58:00] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.010865
+127.0.0.1 - - [10/Jun/2026 15:58:00] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001282
+127.0.0.1 - - [10/Jun/2026 15:58:00] "GET /api/auth/users HTTP/1.1" 200 1405 0.008821
+127.0.0.1 - - [10/Jun/2026 15:58:01] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.000738
+127.0.0.1 - - [10/Jun/2026 15:58:01] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.004723
+127.0.0.1 - - [10/Jun/2026 15:58:06] "OPTIONS /api/tatamis/4 HTTP/1.1" 200 379 0.000592
+127.0.0.1 - - [10/Jun/2026 15:58:06] "GET /api/tatamis/4 HTTP/1.1" 200 404 0.003510
+127.0.0.1 - - [10/Jun/2026 15:58:46] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 2933.874145
+127.0.0.1 - - [10/Jun/2026 15:58:47] "GET /socket.io/?tatami_id=4&rol=j1&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 113.263493
+(5860) accepted ('127.0.0.1', 60299)
+(5860) accepted ('127.0.0.1', 59434)
+127.0.0.1 - - [10/Jun/2026 15:58:48] "GET /socket.io/?tatami_id=1&rol=j2&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 83.538893
+(5860) accepted ('127.0.0.1', 63661)
+127.0.0.1 - - [10/Jun/2026 15:58:53] "GET /socket.io/?tatami_id=4&rol=j1&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 6.317227
+127.0.0.1 - - [10/Jun/2026 15:58:54] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001715
+127.0.0.1 - - [10/Jun/2026 15:58:54] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.008851
+(5860) accepted ('127.0.0.1', 55738)
+127.0.0.1 - - [10/Jun/2026 16:01:45] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001701
+127.0.0.1 - - [10/Jun/2026 16:01:45] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001226
+127.0.0.1 - - [10/Jun/2026 16:01:45] "GET /api/campeonatos HTTP/1.1" 200 460 0.004657
+127.0.0.1 - - [10/Jun/2026 16:01:45] "GET /api/auth/users HTTP/1.1" 200 1405 0.002944
+127.0.0.1 - - [10/Jun/2026 16:02:23] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.001571
+127.0.0.1 - - [10/Jun/2026 16:02:23] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.013535
+127.0.0.1 - - [10/Jun/2026 16:02:32] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001308
+127.0.0.1 - - [10/Jun/2026 16:02:32] "GET /api/campeonatos HTTP/1.1" 200 460 0.004952
+127.0.0.1 - - [10/Jun/2026 16:02:32] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001147
+127.0.0.1 - - [10/Jun/2026 16:02:32] "GET /api/auth/users HTTP/1.1" 200 1405 0.004487
+127.0.0.1 - - [10/Jun/2026 16:02:35] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001128
+127.0.0.1 - - [10/Jun/2026 16:02:35] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.021354
+127.0.0.1 - - [10/Jun/2026 16:02:35] "GET /api/auth/users HTTP/1.1" 200 1405 0.006607
+127.0.0.1 - - [10/Jun/2026 16:02:36] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.001114
+127.0.0.1 - - [10/Jun/2026 16:02:36] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.010339
+(5860) accepted ('127.0.0.1', 65295)
+127.0.0.1 - - [10/Jun/2026 16:02:47] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 9.626364
+127.0.0.1 - - [10/Jun/2026 16:02:47] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.000932
+127.0.0.1 - - [10/Jun/2026 16:02:47] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001647
+127.0.0.1 - - [10/Jun/2026 16:02:47] "GET /api/campeonatos HTTP/1.1" 200 460 0.004905
+127.0.0.1 - - [10/Jun/2026 16:02:48] "GET /api/auth/users HTTP/1.1" 200 1405 0.005239
+(5860) accepted ('127.0.0.1', 62594)
+127.0.0.1 - - [10/Jun/2026 16:03:27] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 4.694031
+127.0.0.1 - - [10/Jun/2026 16:03:27] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001364
+127.0.0.1 - - [10/Jun/2026 16:03:27] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001215
+127.0.0.1 - - [10/Jun/2026 16:03:27] "GET /api/campeonatos HTTP/1.1" 200 460 0.006855
+127.0.0.1 - - [10/Jun/2026 16:03:27] "GET /api/auth/users HTTP/1.1" 200 1405 0.006549
+(5860) accepted ('127.0.0.1', 52741)
+127.0.0.1 - - [10/Jun/2026 16:20:41] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.002703
+127.0.0.1 - - [10/Jun/2026 16:20:41] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.011093
+(5860) accepted ('127.0.0.1', 62685)
+127.0.0.1 - - [10/Jun/2026 16:21:27] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 1360.717427
+127.0.0.1 - - [10/Jun/2026 16:21:27] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 1280.069660
+127.0.0.1 - - [10/Jun/2026 16:21:27] "GET /socket.io/?tatami_id=1&rol=j2&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 1359.483331
+(5860) accepted ('127.0.0.1', 58232)
+(5860) accepted ('127.0.0.1', 59000)
+(5860) accepted ('127.0.0.1', 50807)
+(5860) accepted ('127.0.0.1', 53547)
+127.0.0.1 - - [10/Jun/2026 16:23:45] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 10.025193
+(5860) accepted ('127.0.0.1', 49302)
+127.0.0.1 - - [10/Jun/2026 16:23:46] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 138.054826
+(5860) accepted ('127.0.0.1', 51802)
+127.0.0.1 - - [10/Jun/2026 16:23:47] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 138.980860
+(5860) accepted ('127.0.0.1', 49539)
+127.0.0.1 - - [10/Jun/2026 16:23:48] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 3.205049
+(5860) accepted ('127.0.0.1', 60098)
+127.0.0.1 - - [10/Jun/2026 16:23:49] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001337
+127.0.0.1 - - [10/Jun/2026 16:23:49] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.005938
+(5860) accepted ('127.0.0.1', 51797)
+127.0.0.1 - - [10/Jun/2026 16:23:49] "GET /api/campeonatos HTTP/1.1" 200 460 0.014033
+127.0.0.1 - - [10/Jun/2026 16:23:49] "GET /api/auth/users HTTP/1.1" 200 1405 0.010966
+127.0.0.1 - - [10/Jun/2026 16:23:49] "GET /socket.io/?tatami_id=1&rol=j2&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 140.929812
+(5860) accepted ('127.0.0.1', 58773)
+(5860) accepted ('127.0.0.1', 57714)
+127.0.0.1 - - [10/Jun/2026 16:24:02] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 15.908805
+(5860) accepted ('127.0.0.1', 59510)
+127.0.0.1 - - [10/Jun/2026 16:24:07] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 1.846235
+(5860) accepted ('127.0.0.1', 59341)
+127.0.0.1 - - [10/Jun/2026 16:24:13] "GET /socket.io/?tatami_id=2&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 3.286705
+127.0.0.1 - - [10/Jun/2026 16:28:49] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.001589
+127.0.0.1 - - [10/Jun/2026 16:28:49] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.011135
+127.0.0.1 - - [10/Jun/2026 16:29:15] "OPTIONS /api/reportes/combates/export/excel? HTTP/1.1" 200 379 0.000792
+127.0.0.1 - - [10/Jun/2026 16:29:16] "GET /api/reportes/combates/export/excel? HTTP/1.1" 200 10979 0.882940
+127.0.0.1 - - [10/Jun/2026 16:32:06] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001390
+127.0.0.1 - - [10/Jun/2026 16:32:06] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001362
+C:\Users\amirs\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jwt\api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 27 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+127.0.0.1 - - [10/Jun/2026 16:32:06] "GET /api/campeonatos HTTP/1.1" 200 460 0.009907
+127.0.0.1 - - [10/Jun/2026 16:32:06] "GET /api/auth/users HTTP/1.1" 200 1405 0.006382
+(5860) accepted ('127.0.0.1', 62368)
+(5860) accepted ('127.0.0.1', 56261)
+(5860) accepted ('127.0.0.1', 59880)
+127.0.0.1 - - [10/Jun/2026 16:32:07] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001390
+127.0.0.1 - - [10/Jun/2026 16:32:07] "GET /api/auth/users HTTP/1.1" 200 1405 0.005141
+127.0.0.1 - - [10/Jun/2026 16:32:07] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.017139
+127.0.0.1 - - [10/Jun/2026 16:32:08] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.000965
+127.0.0.1 - - [10/Jun/2026 16:32:08] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.010377
+(5860) accepted ('127.0.0.1', 56020)
+127.0.0.1 - - [10/Jun/2026 16:33:21] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTExNzI2MiwianRpIjoiMzc4NjA2NzItMTc3Yi00MjFmLThiMTctNWExMzg2NDVhMjBmIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMTcyNjIsImNzcmYiOiI5ODgxZDhhYy0wZmQyLTQ4ZTEtODM1Mi0wMDdlMTlkZjVmYzIiLCJleHAiOjE3ODEyMDM2NjIsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.OcHHbY6ItfI3MxjO9pNj2r8kjkRetCC7QFX7q3cGZgA&EIO=4&transport=websocket HTTP/1.1" 200 0 69.199080
+127.0.0.1 - - [10/Jun/2026 16:33:21] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001642
+127.0.0.1 - - [10/Jun/2026 16:33:21] "GET /api/auth/users HTTP/1.1" 200 1405 0.004255
+127.0.0.1 - - [10/Jun/2026 16:33:21] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.000848
+127.0.0.1 - - [10/Jun/2026 16:33:21] "GET /api/campeonatos HTTP/1.1" 200 460 0.004905
+127.0.0.1 - - [10/Jun/2026 16:33:23] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001562
+127.0.0.1 - - [10/Jun/2026 16:33:23] "GET /api/auth/users HTTP/1.1" 200 1405 0.005771
+127.0.0.1 - - [10/Jun/2026 16:33:23] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.037465
+127.0.0.1 - - [10/Jun/2026 16:33:25] "GET /api/campeonatos HTTP/1.1" 200 460 0.006771
+127.0.0.1 - - [10/Jun/2026 16:33:25] "GET /api/auth/users HTTP/1.1" 200 1405 0.006166
+127.0.0.1 - - [10/Jun/2026 16:33:26] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.001583
+127.0.0.1 - - [10/Jun/2026 16:33:26] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.010911
+127.0.0.1 - - [10/Jun/2026 16:33:28] "OPTIONS /api/reportes/combates/export/pdf? HTTP/1.1" 200 379 0.000845
+127.0.0.1 - - [10/Jun/2026 16:33:28] "GET /api/reportes/combates/export/pdf? HTTP/1.1" 200 14064 0.318928
+127.0.0.1 - - [10/Jun/2026 16:33:51] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.001375
+127.0.0.1 - - [10/Jun/2026 16:33:51] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.016058
+(5860) accepted ('127.0.0.1', 57533)
+(5860) accepted ('127.0.0.1', 52753)
+127.0.0.1 - - [10/Jun/2026 16:37:59] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.001247
+127.0.0.1 - - [10/Jun/2026 16:37:59] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000768
+127.0.0.1 - - [10/Jun/2026 16:37:59] "GET /api/campeonatos HTTP/1.1" 200 460 0.004935
+127.0.0.1 - - [10/Jun/2026 16:37:59] "GET /api/auth/users HTTP/1.1" 200 1405 0.004066
+(5860) accepted ('127.0.0.1', 61451)
+127.0.0.1 - - [10/Jun/2026 16:39:42] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.001491
+C:\Users\amirs\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 27 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+127.0.0.1 - - [10/Jun/2026 16:39:42] "POST /api/auth/login HTTP/1.1" 200 851 0.340375
+127.0.0.1 - - [10/Jun/2026 16:39:42] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001605
+127.0.0.1 - - [10/Jun/2026 16:39:42] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.005154
+(5860) accepted ('127.0.0.1', 65355)
+127.0.0.1 - - [10/Jun/2026 16:56:01] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 6.049344
+(5860) accepted ('127.0.0.1', 57663)
+127.0.0.1 - - [10/Jun/2026 16:56:16] "GET /socket.io/?tatami_id=2&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 12.798791
+(5860) accepted ('127.0.0.1', 53544)
+127.0.0.1 - - [10/Jun/2026 16:56:20] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000713
+127.0.0.1 - - [10/Jun/2026 16:56:20] "POST /api/auth/login HTTP/1.1" 200 858 0.339618
+(5860) accepted ('127.0.0.1', 54545)
+127.0.0.1 - - [10/Jun/2026 16:56:21] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.002026
+127.0.0.1 - - [10/Jun/2026 16:56:21] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000747
+127.0.0.1 - - [10/Jun/2026 16:56:21] "GET /api/campeonatos HTTP/1.1" 200 460 0.003498
+127.0.0.1 - - [10/Jun/2026 16:56:21] "GET /api/auth/users HTTP/1.1" 200 1405 0.004144
+127.0.0.1 - - [10/Jun/2026 16:57:05] "OPTIONS /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 379 0.003310
+127.0.0.1 - - [10/Jun/2026 16:57:05] "GET /api/reportes/combates?per_page=30&page=1 HTTP/1.1" 200 25903 0.013544
+127.0.0.1 - - [10/Jun/2026 16:57:24] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.000879
+127.0.0.1 - - [10/Jun/2026 16:57:24] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.001309
+127.0.0.1 - - [10/Jun/2026 16:57:24] "GET /api/campeonatos HTTP/1.1" 200 460 0.005750
+127.0.0.1 - - [10/Jun/2026 16:57:24] "GET /api/auth/users HTTP/1.1" 200 1405 0.006680
+127.0.0.1 - - [10/Jun/2026 16:57:26] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.001458
+127.0.0.1 - - [10/Jun/2026 16:57:26] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.017573
+127.0.0.1 - - [10/Jun/2026 16:57:27] "GET /api/auth/users HTTP/1.1" 200 1405 0.006053
+127.0.0.1 - - [10/Jun/2026 16:57:27] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.000788
+127.0.0.1 - - [10/Jun/2026 16:57:27] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.011472
+(5860) accepted ('127.0.0.1', 59032)
+(5860) accepted ('127.0.0.1', 52582)
+127.0.0.1 - - [10/Jun/2026 16:59:36] "GET /socket.io/?tatami_id=2&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 0.940578
+(5860) accepted ('127.0.0.1', 63310)
+127.0.0.1 - - [10/Jun/2026 16:59:49] "GET /socket.io/?tatami_id=1&rol=j2&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 2159.883128
+127.0.0.1 - - [10/Jun/2026 16:59:49] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyNDk4OCwianRpIjoiYzE5YWY5YTItNmUwNy00OWFlLWE2N2MtMTc3N2U2MzlkMzJiIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjQ5ODgsImNzcmYiOiI2NWU5NzJmMi1mYTkyLTQ5YmEtOTNiYS1kMjg3MzQyZmEwNmMiLCJleHAiOjE3ODEyMTEzODgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.gYQMHxd3TDRkvIdhRQE_wNIv2VCGqQZn5qH5vmX-6R0&EIO=4&transport=websocket HTTP/1.1" 200 0 2162.198524
+(5860) accepted ('127.0.0.1', 62486)
+(5860) accepted ('127.0.0.1', 59415)
+(5860) accepted ('127.0.0.1', 53774)
+127.0.0.1 - - [10/Jun/2026 17:00:17] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000773
+127.0.0.1 - - [10/Jun/2026 17:00:17] "POST /api/auth/login HTTP/1.1" 401 279 0.340164
+(5860) accepted ('127.0.0.1', 49441)
+127.0.0.1 - - [10/Jun/2026 17:00:21] "POST /api/auth/login HTTP/1.1" 401 279 0.337204
+127.0.0.1 - - [10/Jun/2026 17:00:28] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000921
+127.0.0.1 - - [10/Jun/2026 17:00:28] "POST /api/auth/login HTTP/1.1" 200 851 0.330695
+127.0.0.1 - - [10/Jun/2026 17:00:29] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001295
+127.0.0.1 - - [10/Jun/2026 17:00:29] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.006528
+(5860) accepted ('127.0.0.1', 58201)
+127.0.0.1 - - [10/Jun/2026 17:00:50] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyODU4MCwianRpIjoiZjU2MzBlN2QtZWNkMi00YTVjLWE5MDMtMjliYzQ4ZTZlMzViIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3ODExMjg1ODAsImNzcmYiOiIzNWIzNzg1YS04ZWM3LTRlOTMtODQwZS1iMTJjNTQ0ZmIyYzgiLCJleHAiOjE3ODEyMTQ5ODAsInJvbCI6ImFkbWluIiwibm9tYnJlIjoiQWRtaW5pc3RyYWRvciBESU5BTVlUIiwiZW1haWwiOiJhZG1pbkBkaW5hbXl0LmNvbSJ9.BQ-mRRRCTiEyM04VxANmHsoLmtDN96jb61mrbAFE_rI&EIO=4&transport=websocket HTTP/1.1" 200 0 190.956193
+127.0.0.1 - - [10/Jun/2026 17:00:50] "OPTIONS /api/campeonatos HTTP/1.1" 200 385 0.002480
+127.0.0.1 - - [10/Jun/2026 17:00:50] "OPTIONS /api/auth/users HTTP/1.1" 200 379 0.000993
+127.0.0.1 - - [10/Jun/2026 17:00:50] "GET /api/campeonatos HTTP/1.1" 200 460 0.005298
+127.0.0.1 - - [10/Jun/2026 17:00:50] "GET /api/auth/users HTTP/1.1" 200 1405 0.004176
+127.0.0.1 - - [10/Jun/2026 17:00:52] "OPTIONS /api/campeonatos/1 HTTP/1.1" 200 392 0.002576
+127.0.0.1 - - [10/Jun/2026 17:00:52] "GET /api/campeonatos/1 HTTP/1.1" 200 1618 0.012336
+127.0.0.1 - - [10/Jun/2026 17:00:52] "GET /api/auth/users HTTP/1.1" 200 1405 0.004719
+127.0.0.1 - - [10/Jun/2026 17:00:53] "OPTIONS /api/tatamis/1 HTTP/1.1" 200 379 0.001020
+127.0.0.1 - - [10/Jun/2026 17:00:53] "GET /api/tatamis/1 HTTP/1.1" 200 1204 0.007139
+127.0.0.1 - - [10/Jun/2026 17:01:00] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyODgyOCwianRpIjoiYTJjMWFmNzYtNTYyNS00ZDkyLTkxNDktNzhlMWQ0YjA1OGVjIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjg4MjgsImNzcmYiOiI3OWZiYTIxOC1lNDlhLTQzMTMtYWEyZi1mZTNmZDk3OTIyNDkiLCJleHAiOjE3ODEyMTUyMjgsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.dQJcanyC7HYk8MbxndUqXWLJFDjk4IAmm6ACfde6e0Q&EIO=4&transport=websocket HTTP/1.1" 200 0 29.404969
+127.0.0.1 - - [10/Jun/2026 17:01:00] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.004423
+127.0.0.1 - - [10/Jun/2026 17:01:00] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.010584
+127.0.0.1 - - [10/Jun/2026 17:01:06] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000776
+127.0.0.1 - - [10/Jun/2026 17:01:07] "POST /api/auth/login HTTP/1.1" 200 809 0.341108
+127.0.0.1 - - [10/Jun/2026 17:01:07] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001947
+127.0.0.1 - - [10/Jun/2026 17:01:07] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 440 0.010274
+(5860) accepted ('127.0.0.1', 50052)
+127.0.0.1 - - [10/Jun/2026 17:01:22] "GET /socket.io/?tatami_id=1&rol=arbitro&EIO=4&transport=websocket HTTP/1.1" 200 0 90.374023
+(5860) accepted ('127.0.0.1', 58010)
+127.0.0.1 - - [10/Jun/2026 17:01:24] "GET /socket.io/?tatami_id=1&rol=arbitro&EIO=4&transport=websocket HTTP/1.1" 200 0 0.054605
+127.0.0.1 - - [10/Jun/2026 17:01:25] "GET /socket.io/?tatami_id=1&rol=j1&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyODg2NywianRpIjoiYjA1MWZhNGMtODdhMC00YjRjLTkxY2ItYzg3MTQ0YzkwNDI0IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjciLCJuYmYiOjE3ODExMjg4NjcsImNzcmYiOiIwZWMyODFiMy0xNmYyLTRkYzUtOTU5Mi0xYmIyZWFkYTRmMTYiLCJleHAiOjE3ODEyMTUyNjcsInJvbCI6Imp1ZXoiLCJub21icmUiOiJDaHVzIiwiZW1haWwiOiJjaHVzQGdtYWlsLmNvbSJ9.mQ2uB5VEoHnL7bfffVq_CAd6tZT-CULC6ncfN7IOTD0&EIO=4&transport=websocket HTTP/1.1" 200 0 16.522570
+(5860) accepted ('127.0.0.1', 60300)
+(5860) accepted ('127.0.0.1', 57748)
+127.0.0.1 - - [10/Jun/2026 17:01:31] "OPTIONS /api/auth/login HTTP/1.1" 200 373 0.000739
+127.0.0.1 - - [10/Jun/2026 17:01:31] "POST /api/auth/login HTTP/1.1" 200 851 0.386257
+127.0.0.1 - - [10/Jun/2026 17:01:33] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001182
+(5860) accepted ('127.0.0.1', 61346)
+127.0.0.1 - - [10/Jun/2026 17:01:33] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.008912
+(5860) accepted ('127.0.0.1', 64471)
+127.0.0.1 - - [10/Jun/2026 17:01:39] "GET /socket.io/?tatami_id=1&rol=j2&EIO=4&transport=websocket HTTP/1.1" 200 0 109.546169
+127.0.0.1 - - [10/Jun/2026 17:01:39] "GET /socket.io/?tatami_id=1&rol=pantalla&EIO=4&transport=websocket HTTP/1.1" 200 0 121.665478
+(5860) accepted ('127.0.0.1', 55238)
+(5860) accepted ('127.0.0.1', 65219)
+127.0.0.1 - - [10/Jun/2026 17:09:16] "GET /socket.io/?tatami_id=1&rol=j1&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyODg2NywianRpIjoiYjA1MWZhNGMtODdhMC00YjRjLTkxY2ItYzg3MTQ0YzkwNDI0IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjciLCJuYmYiOjE3ODExMjg4NjcsImNzcmYiOiIwZWMyODFiMy0xNmYyLTRkYzUtOTU5Mi0xYmIyZWFkYTRmMTYiLCJleHAiOjE3ODEyMTUyNjcsInJvbCI6Imp1ZXoiLCJub21icmUiOiJDaHVzIiwiZW1haWwiOiJjaHVzQGdtYWlsLmNvbSJ9.mQ2uB5VEoHnL7bfffVq_CAd6tZT-CULC6ncfN7IOTD0&EIO=4&transport=websocket HTTP/1.1" 200 0 469.912999
+(5860) accepted ('127.0.0.1', 64722)
+(5860) accepted ('127.0.0.1', 52191)
+127.0.0.1 - - [10/Jun/2026 17:28:07] "GET /socket.io/?tatami_id=1&rol=arbitro&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc4MTEyODg5MSwianRpIjoiNzNlNGFhY2YtOTkxMC00MWVmLWE2YmYtZTMzNmYxYWU3ZjdhIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3ODExMjg4OTEsImNzcmYiOiIyMjMzOTMyMi03ZjhiLTRmNDktYTVhNS0yNzIzMWMyNDZiZjUiLCJleHAiOjE3ODEyMTUyOTEsInJvbCI6Imp1ZXoiLCJub21icmUiOiJKdWV6IEl2YW4iLCJlbWFpbCI6ImFtaXJzYXJtaWVudG8wNDMwQGdtYWlsLmNvbSJ9.nvc0Rj4BEymhc4y2OYY43TUySRWZtgdbaPdWbKfzD3c&EIO=4&transport=websocket HTTP/1.1" 200 0 1594.099433
+(5860) accepted ('127.0.0.1', 60144)
+127.0.0.1 - - [10/Jun/2026 17:28:08] "OPTIONS /api/tatamis/mis-tatamis HTTP/1.1" 200 379 0.001167
+127.0.0.1 - - [10/Jun/2026 17:28:08] "GET /api/tatamis/mis-tatamis HTTP/1.1" 200 445 0.004100
+(5860) accepted ('127.0.0.1', 58837)

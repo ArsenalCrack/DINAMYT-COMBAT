@@ -120,9 +120,9 @@ export default function CampeonatoDetailPage() {
   );
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
+    <div className="campeonato-admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <button className="btn" onClick={() => router.push("/admin")}
             style={{ marginBottom: 8, fontSize: "0.8rem" }}>&larr; Volver</button>
@@ -141,7 +141,7 @@ export default function CampeonatoDetailPage() {
         }} className="animate-fade">{msg}</div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="campeonato-admin-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         {/* Tatamis list */}
         <div>
           <div className="card-title">Tatamis</div>
@@ -314,6 +314,32 @@ export default function CampeonatoDetailPage() {
           )}
         </div>
       </div>
+      <style>{`
+        .campeonato-admin-grid {
+          align-items: start;
+        }
+        @media (max-width: 820px) {
+          .campeonato-admin-page {
+            padding: 14px !important;
+          }
+          .campeonato-admin-header {
+            align-items: flex-start !important;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+          .campeonato-admin-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 520px) {
+          .campeonato-admin-grid .card {
+            padding: 12px !important;
+          }
+          .campeonato-admin-grid .btn {
+            white-space: normal;
+          }
+        }
+      `}</style>
     </div>
   );
 }

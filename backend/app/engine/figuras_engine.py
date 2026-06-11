@@ -32,6 +32,20 @@ JUEZ_CRITERIO_MAP = {
     "j7": 6,
 }
 
+CATEGORIA_NOMBRE_MAX = 40
+CATEGORIA_NOMBRE_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$")
+
+
+def _normalizar_nombre_categoria(nombre):
+    raw = str(nombre or "")
+    limpio = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]", "", raw)
+    return limpio[:CATEGORIA_NOMBRE_MAX]
+
+
+def nombre_categoria_valido(nombre):
+    valor = str(nombre or "").strip()
+    return bool(valor and CATEGORIA_NOMBRE_RE.fullmatch(valor))
+
 
 def criterio_para_juez(estado, juez_id):
     """Retorna el criterio asignado a un juez según su posición."""
@@ -164,8 +178,7 @@ def aplicar_evento_figuras(estado, ev):
 
     # ── Nombre de categoría ──────────────────────────────────────────────────
     if accion == "cambiar_nombre_categoria":
-        nombre = ev.get("nombre", "Figuras").strip() or "Figuras"
-        estado["nombre_categoria"] = nombre[:40]  # Max 40 chars
+        estado["nombre_categoria"] = _normalizar_nombre_categoria(ev.get("nombre", ""))
 
     # ── Número de jueces ─────────────────────────────────────────────────────
     elif accion == "set_num_jueces":

@@ -12,12 +12,29 @@ interface MiTatami {
   mi_rol: string;
 }
 
+interface PinRole {
+  rol: string;
+  label: string;
+}
+
+interface PinAccess {
+  tatami: {
+    id: number;
+    numero: number;
+  };
+  campeonato_nombre?: string;
+  rol_sugerido?: string | null;
+  roles_disponibles?: PinRole[];
+  requiere_seleccion_rol?: boolean;
+}
+
 export default function JuezPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [tatamis, setTatamis] = useState<MiTatami[]>([]);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
+  const [pinAccess, setPinAccess] = useState<PinAccess | null>(null);
 
   const loadTatamis = useCallback(async () => {
     try {
@@ -42,12 +59,28 @@ export default function JuezPage() {
   async function handlePinAccess(e: React.FormEvent) {
     e.preventDefault();
     setPinError("");
+    setPinAccess(null);
     try {
       const data = await verificarPinAPI(pin);
-      router.push(`/tatami/${data.tatami.id}?rol=${data.rol_sugerido || "j1"}`);
-    } catch {
-      setPinError("PIN invalido o tatami inactivo");
+      if (!data.requiere_seleccion_rol && data.rol_sugerido) {
+        router.push(`/tatami/${data.tatami.id}?rol=${data.rol_sugerido}`);
+        return;
+      }
+      if (!data.roles_disponibles?.length) {
+        setPinError("No hay roles disponibles en este tatami");
+        return;
+      }
+      setPinAccess(data);
+    } catch (err) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })
+        .response?.data?.error;
+      setPinError(errorMsg || "PIN invalido o tatami inactivo");
     }
+  }
+
+  function openPinRole(rol: string) {
+    if (!pinAccess) return;
+    router.push(`/tatami/${pinAccess.tatami.id}?rol=${rol}`);
   }
 
   function handleLogout() {
@@ -132,7 +165,11 @@ export default function JuezPage() {
             className="input"
             placeholder="PIN (4 digitos)"
             value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            onChange={(e) => {
+              setPin(e.target.value.replace(/\D/g, "").slice(0, 4));
+              setPinAccess(null);
+              setPinError("");
+            }}
             maxLength={4}
             style={{ fontFamily: "var(--font-mono)", fontSize: "1.2rem", textAlign: "center", letterSpacing: "0.3em" }}
           />
@@ -144,6 +181,26 @@ export default function JuezPage() {
           <p style={{ color: "var(--red-alert)", fontSize: "0.85rem", marginTop: 8 }} className="animate-fade">
             {pinError}
           </p>
+        )}
+        {pinAccess && (
+          <div style={{ marginTop: 14 }} className="animate-fade">
+            <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+              Tatami {pinAccess.tatami.numero} · Selecciona rol
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8 }}>
+              {pinAccess.roles_disponibles?.map((role) => (
+                <button
+                  key={role.rol}
+                  type="button"
+                  className={`btn btn-sm ${role.rol === pinAccess.rol_sugerido ? "btn-primary" : ""}`}
+                  onClick={() => openPinRole(role.rol)}
+                  style={{ minHeight: 42 }}
+                >
+                  {role.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 

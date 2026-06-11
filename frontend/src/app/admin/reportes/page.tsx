@@ -6,6 +6,8 @@ import api from "@/lib/api";
 
 interface Combate {
   id: number;
+  tipo?: "combate" | "figuras" | string;
+  nombre_categoria?: string;
   nombre_hong: string;
   nombre_chung: string;
   marcador_hong: number;
@@ -19,6 +21,15 @@ interface Combate {
   created_at: string;
   jueces?: JuezReporte[];
   jueces_resumen?: string;
+  ranking?: RankingFigura[];
+}
+
+interface RankingFigura {
+  id?: number;
+  puesto?: number;
+  nombre: string;
+  club?: string;
+  total: number;
 }
 
 interface JuezReporte {
@@ -38,14 +49,40 @@ interface ReportData {
 }
 
 const RONDAS: Record<string, string> = {
-  r1: "Round 1", r2: "Round 2", oro: "Punto de Oro",
+  r1: "Round 1", r2: "Round 2", oro: "Punto de Oro", figuras: "Figuras",
 };
+
+function getExportFilename(disposition: string | null, fallback: string) {
+  if (!disposition) return fallback;
+
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+  }
+
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1]?.trim() || fallback;
+}
+
+async function getExportError(res: Response) {
+  const fallback = `No se pudo generar el reporte (${res.status}).`;
+  const text = await res.text();
+  if (!text) return fallback;
+
+  try {
+    const parsed = JSON.parse(text) as { error?: string; message?: string };
+    return parsed.error || parsed.message || fallback;
+  } catch {
+    return text.slice(0, 180) || fallback;
+  }
+}
 
 export default function ReportesPage() {
   const router = useRouter();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
+  const [exportError, setExportError] = useState("");
   const [filters, setFilters] = useState({
     campeonato_id: "",
     tatami_id: "",
@@ -90,6 +127,7 @@ export default function ReportesPage() {
 
   async function handleExport(type: "pdf" | "excel") {
     setExporting(type);
+    setExportError("");
     try {
       const params: Record<string, string> = {};
       if (filters.campeonato_id) params.campeonato_id = filters.campeonato_id;
@@ -105,26 +143,56 @@ export default function ReportesPage() {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (!res.ok) {
+        throw new Error(await getExportError(res));
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      const expectedPdf = type === "pdf" && contentType.includes("application/pdf");
+      const expectedExcel = type === "excel" && (
+        contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        || contentType.includes("application/octet-stream")
+      );
+      if (!expectedPdf && !expectedExcel) {
+        throw new Error("El servidor no devolvió un archivo de reporte válido.");
+      }
+
       const blob = await res.blob();
+      if (blob.size === 0) {
+        throw new Error("El reporte se generó vacío. Intenta de nuevo.");
+      }
+
+      const fallbackName = `dinamyt_resultados.${type === "pdf" ? "pdf" : "xlsx"}`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `dinamyt_combates.${type === "pdf" ? "pdf" : "xlsx"}`;
+      a.download = getExportFilename(res.headers.get("content-disposition"), fallbackName);
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(a.href);
-    } catch { /* */ }
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "No se pudo generar el reporte.");
+    }
     finally { setExporting(null); }
   }
 
   function ganadorNombre(c: Combate) {
+    if (c.tipo === "figuras") return c.ranking?.[0]?.nombre || c.nombre_hong || "—";
     if (c.ganador === "hong") return c.nombre_hong;
     if (c.ganador === "chung") return c.nombre_chung;
     return "Empate";
   }
 
-  function ganadorColor(g: string) {
-    if (g === "hong") return "badge-hong";
-    if (g === "chung") return "badge-chung";
+  function ganadorColor(c: Combate) {
+    if (c.tipo === "figuras") return "badge-gold";
+    if (c.ganador === "hong") return "badge-hong";
+    if (c.ganador === "chung") return "badge-chung";
     return "badge-gray";
+  }
+
+  function tipoLabel(c: Combate) {
+    return c.tipo === "figuras" ? "Figuras" : "Combate";
   }
 
   return (
@@ -137,10 +205,10 @@ export default function ReportesPage() {
             ← Volver al Admin
           </button>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 800 }}>
-            Reportes de Combates
+            Reportes de Resultados
           </h1>
           <p className="text-muted" style={{ fontSize: "0.88rem" }}>
-            {data ? `${data.total} combates registrados` : "Cargando..."}
+            {data ? `${data.total} registros guardados` : "Cargando..."}
           </p>
         </div>
 
@@ -172,6 +240,12 @@ export default function ReportesPage() {
           </button>
         </div>
       </div>
+
+      {exportError && (
+        <div className="reportes-error" role="alert">
+          {exportError}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="reportes-filters">
@@ -224,21 +298,23 @@ export default function ReportesPage() {
         ) : !data || data.combates.length === 0 ? (
           <div style={{ padding: 48, textAlign: "center", color: "var(--text-dim)" }}>
             <p style={{ fontSize: "2rem", marginBottom: 8 }}>📋</p>
-            <p>No hay combates registrados con los filtros actuales.</p>
+            <p>No hay registros con los filtros actuales.</p>
             <p style={{ fontSize: "0.85rem", marginTop: 6 }}>
-              Los combates se guardan cuando el arbitro presiona &quot;Guardar + Nuevo&quot;
+              Los resultados se guardan cuando el arbitro presiona &quot;Guardar + Nuevo&quot;
             </p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ minWidth: 980 }}>
+            <table className="table" style={{ minWidth: 1120 }}>
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Tipo</th>
                   <th>Campeonato</th>
                   <th>Tatami</th>
-                  <th style={{ color: "var(--hong-light)" }}>Hong (Rojo)</th>
-                  <th style={{ color: "var(--chung-light)" }}>Chung (Azul)</th>
+                  <th>Categoría</th>
+                  <th style={{ color: "var(--hong-light)" }}>Rojo / Competidor</th>
+                  <th style={{ color: "var(--chung-light)" }}>Azul / Categoría</th>
                   <th>Marcador</th>
                   <th>Ganador</th>
                   <th>Jueces</th>
@@ -250,9 +326,17 @@ export default function ReportesPage() {
                 {data.combates.map((c) => (
                   <tr key={c.id}>
                     <td className="text-muted font-mono" style={{ fontSize: "0.8rem" }}>{c.id}</td>
+                    <td>
+                      <span className={`badge ${c.tipo === "figuras" ? "badge-gold" : "badge-gray"}`}>
+                        {tipoLabel(c)}
+                      </span>
+                    </td>
                     <td>{c.campeonato_nombre || "—"}</td>
                     <td className="text-center">
                       {c.tatami_numero ? `T${c.tatami_numero}` : "—"}
+                    </td>
+                    <td style={{ fontWeight: 700 }}>
+                      {c.nombre_categoria || tipoLabel(c)}
                     </td>
                     <td>
                       <span style={{ color: "var(--hong-light)", fontWeight: 700 }}>
@@ -265,16 +349,27 @@ export default function ReportesPage() {
                       </span>
                     </td>
                     <td className="text-center font-mono" style={{ fontSize: "1.05rem" }}>
-                      <span style={{ color: c.ganador === "hong" ? "var(--hong-light)" : "var(--text-muted)" }}>
-                        {c.marcador_hong.toFixed(1)}
-                      </span>
-                      {" — "}
-                      <span style={{ color: c.ganador === "chung" ? "var(--chung-light)" : "var(--text-muted)" }}>
-                        {c.marcador_chung.toFixed(1)}
-                      </span>
+                      {c.tipo === "figuras" ? (
+                        <span style={{ color: "var(--gold)" }}>
+                          {c.marcador_hong.toFixed(2)}
+                          <span style={{ color: "var(--text-muted)", fontSize: "0.72rem", marginLeft: 6 }}>
+                            {c.ranking?.length || 0} comp.
+                          </span>
+                        </span>
+                      ) : (
+                        <>
+                          <span style={{ color: c.ganador === "hong" ? "var(--hong-light)" : "var(--text-muted)" }}>
+                            {c.marcador_hong.toFixed(1)}
+                          </span>
+                          {" — "}
+                          <span style={{ color: c.ganador === "chung" ? "var(--chung-light)" : "var(--text-muted)" }}>
+                            {c.marcador_chung.toFixed(1)}
+                          </span>
+                        </>
+                      )}
                     </td>
                     <td>
-                      <span className={`badge ${ganadorColor(c.ganador)}`}>
+                      <span className={`badge ${ganadorColor(c)}`}>
                         {ganadorNombre(c)}
                       </span>
                     </td>
@@ -346,6 +441,15 @@ export default function ReportesPage() {
           gap: 12px;
         }
         .reportes-filters {}
+        .reportes-error {
+          padding: 12px 14px;
+          border: 1px solid rgba(255, 68, 68, 0.35);
+          background: rgba(255, 68, 68, 0.10);
+          color: #ff9a9a;
+          border-radius: var(--radius);
+          font-size: 0.88rem;
+          font-weight: 700;
+        }
         .login-label {
           font-size: 0.72rem;
           font-weight: 800;

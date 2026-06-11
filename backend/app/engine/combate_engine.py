@@ -8,6 +8,18 @@ import time
 from datetime import datetime, timezone
 
 
+ALERTA_SUPERIORIDAD_DIFERENCIA = 12
+ACCIONES_MARCADOR = {
+    "punto_juez",
+    "deshacer_juez",
+    "especial",
+    "deshacer_arbitro",
+    "kyonggo",
+    "gamjeum",
+    "set_num_jueces",
+}
+
+
 def estado_inicial():
     """Retorna el estado inicial de un combate (equivale a estadoInicial() en server.js)."""
     return {
@@ -38,6 +50,12 @@ def estado_inicial():
         "oroPendienteAprobacion": False,
         "oroGanadorNombre": "",
         "oroGanadorColor": "",
+        "ganadorManualColor": "",
+        "ganadorManualMotivo": "",
+        "ganadorPendienteCierre": False,
+        "ganadorPendienteNombre": "",
+        "ganadorPendienteColor": "",
+        "ganadorPendienteMotivo": "",
     }
 
 
@@ -72,7 +90,35 @@ def _juez_log_label(ev, juez_fallback):
     return f"{base} <{email}>" if email else base
 
 
-def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
+def verificar_superioridad_tecnica(estado):
+    """Dispara una sola alerta cuando la diferencia llega a 12 puntos."""
+    if estado.get("alerta12Lanzada"):
+        return None
+
+    marcador = calcular_marcador(estado)
+    total_hong = marcador["total_hong"]
+    total_chung = marcador["total_chung"]
+    diff = abs(total_hong - total_chung)
+    if diff < ALERTA_SUPERIORIDAD_DIFERENCIA:
+        return None
+
+    lider = "Hong" if total_hong > total_chung else "Chung"
+    estado["alerta12Lanzada"] = True
+    _agregar_log(
+        estado,
+        f"[ALERTA] Superioridad técnica — {lider} lidera por {diff:.1f} puntos",
+        "arb",
+    )
+    return {
+        "hong": f"{total_hong:.1f}",
+        "chung": f"{total_chung:.1f}",
+        "lider": lider,
+        "diferencia": f"{diff:.1f}",
+        "motivo": "Superioridad técnica",
+    }
+
+
+def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=None):
     """
     Aplica un evento delta al estado del combate.
     Traducción directa de aplicarEvento() en server.js.
@@ -81,6 +127,7 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
         estado: dict con el estado actual del combate
         ev: dict con {accion: str, ...datos}
         broadcast_ganador_cb: callback(nombre, color) para emitir ganador en Punto de Oro
+        broadcast_alerta_cb: callback(payload) para emitir Superioridad técnica
 
     Returns:
         estado modificado
@@ -303,9 +350,51 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
             estado["oroPendienteAprobacion"] = False
             winner = estado.get("oroGanadorNombre", "")
             color = estado.get("oroGanadorColor", "")
+            estado["ganadorManualColor"] = color
+            estado["ganadorManualMotivo"] = "Punto de Oro"
+            estado["ganadorPendienteCierre"] = True
+            estado["ganadorPendienteNombre"] = winner
+            estado["ganadorPendienteColor"] = color
+            estado["ganadorPendienteMotivo"] = "Punto de Oro"
             _agregar_log(estado, f"🏆 SUNG — {winner.upper()} GANA (Punto de Oro)", "arb")
             if broadcast_ganador_cb:
                 broadcast_ganador_cb(winner, color)
+
+    elif accion == "declarar_ganador":
+        color = ev.get("color")
+        if color in ("hong", "chung"):
+            winner = estado["nombreHong"] if color == "hong" else estado["nombreChung"]
+            motivo = ev.get("motivo") or "Decisión del Juez Central"
+            estado["ganadorManualColor"] = color
+            estado["ganadorManualMotivo"] = motivo
+            estado["ganadorPendienteCierre"] = True
+            estado["ganadorPendienteNombre"] = winner
+            estado["ganadorPendienteColor"] = color
+            estado["ganadorPendienteMotivo"] = motivo
+            estado["activo"] = False
+            estado["oroPendienteAprobacion"] = False
+            estado["historial"].append({
+                "juez": "arbitro",
+                "color": color,
+                "pts": 0,
+                "nombre": motivo,
+                "esDecision": True,
+                "tiempo": estado["segundos"],
+                "ronda": estado["ronda"],
+                "momento": _momento_evento(),
+                **_juez_meta_evento(ev, "arbitro"),
+            })
+            _agregar_log(estado, f"🏆 SUNG — {winner.upper()} GANA ({motivo})", "arb")
+            if broadcast_ganador_cb:
+                broadcast_ganador_cb(winner, color, motivo)
+
+    elif accion == "cerrar_ganador":
+        if estado.get("ganadorPendienteCierre"):
+            estado["ganadorPendienteCierre"] = False
+            estado["ganadorPendienteNombre"] = ""
+            estado["ganadorPendienteColor"] = ""
+            estado["ganadorPendienteMotivo"] = ""
+            _agregar_log(estado, "Ganador reconocido por el Juez Central", "arb")
 
     elif accion == "rechazar_oro":
         # Permite continuar si el Juez Central no valida el primer punto marcado.
@@ -324,6 +413,11 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None):
         estado["segundos"] = seg_max
         estado["oroResuelto"] = False
         _agregar_log(estado, "↺ Reset", "arb")
+
+    if accion in ACCIONES_MARCADOR:
+        alerta = verificar_superioridad_tecnica(estado)
+        if alerta and broadcast_alerta_cb:
+            broadcast_alerta_cb(alerta)
 
     # Limitar historial a 200 entradas
     if len(estado["historial"]) > 200:
@@ -378,5 +472,11 @@ def guardar_combate_snapshot(estado):
         "jueces_detalle": {
             "jueces": copy.deepcopy(estado["jueces"]),
             "nombres": copy.deepcopy(estado.get("nombresJueces", {})),
+            "resultado": {
+                "ganador_manual": estado.get("ganadorManualColor") or None,
+                "motivo": estado.get("ganadorManualMotivo") or None,
+            },
         },
+        "ganador_manual": estado.get("ganadorManualColor") or None,
+        "motivo_ganador": estado.get("ganadorManualMotivo") or None,
     }

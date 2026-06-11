@@ -12,10 +12,11 @@ Novedades v2:
 """
 
 import copy
+import re
 import threading
 from datetime import datetime, timezone
 from flask import request
-from flask_socketio import Namespace, emit, join_room, leave_room
+from flask_socketio import ConnectionRefusedError, Namespace, emit, join_room, leave_room
 from flask_jwt_extended import decode_token
 
 from ..engine.combate_engine import (
@@ -51,6 +52,66 @@ ACCIONES_SIN_ACTIVACION = {
     "cambiar_nombre_categoria",
 }
 
+ACCIONES_DURANTE_GANADOR_PENDIENTE = {"cerrar_ganador"}
+
+ACCIONES_REQUIEREN_COMPETIDORES = {
+    "punto_juez",
+    "deshacer_juez",
+    "especial",
+    "deshacer_arbitro",
+    "kyonggo",
+    "gamjeum",
+    "ronda",
+    "set_num_jueces",
+    "crono_reset",
+    "crono_start",
+    "crono_pause",
+    "nuevo_combate",
+    "reset",
+    "aprobar_oro",
+    "rechazar_oro",
+    "declarar_ganador",
+}
+
+ACCIONES_FIGURAS_SIN_NOMBRE_CATEGORIA = {
+    "activar_tatami",
+    "desactivar_tatami",
+    "cambiar_categoria",
+    "cambiar_nombre_categoria",
+}
+
+ACCIONES_SOLO_ARBITRO = {
+    "activar_tatami",
+    "desactivar_tatami",
+    "cambiar_categoria",
+    "cambiar_nombre_categoria",
+    "nuevo_combate",
+    "reset",
+    "reset_figuras",
+    "crono_start",
+    "crono_pause",
+    "crono_reset",
+    "ronda",
+    "set_num_jueces",
+    "especial",
+    "deshacer_arbitro",
+    "kyonggo",
+    "gamjeum",
+    "aprobar_oro",
+    "rechazar_oro",
+    "declarar_ganador",
+    "cerrar_ganador",
+    "agregar_competidor",
+    "eliminar_competidor",
+    "activar_competidor",
+    "cerrar_puntuacion",
+    "set_podio_modo",
+    "finalizar",
+}
+
+CATEGORIA_NOMBRE_MAX = 40
+CATEGORIA_NOMBRE_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$")
+
 ROL_LABELS = {
     "arbitro": "Juez Central",
     "j1": "Juez 1",
@@ -78,6 +139,7 @@ def _get_tatami_state(tatami_id):
             "crono_activo": False,
             "sesion_id": None,
             "jueces_meta": {},
+            "roles_activos": {},
         }
     return tatami_states[tid]
 
@@ -97,6 +159,33 @@ def _build_estado_broadcast(ts):
 
 def _rol_label(rol):
     return ROL_LABELS.get(rol, rol or "-")
+
+
+def roles_ocupados_para_tatami(tatami_id):
+    """Roles actualmente conectados en un tatami."""
+    tid = str(tatami_id)
+    with _lock:
+        ts = tatami_states.get(tid)
+        if not ts:
+            return set()
+        return set(ts.get("roles_activos", {}).keys())
+
+
+def _competidores_con_nombre(estado):
+    hong = (estado.get("nombreHong") or "").strip()
+    chung = (estado.get("nombreChung") or "").strip()
+    return bool(hong and chung and hong != "Hong" and chung != "Chung")
+
+
+def _normalizar_nombre_categoria(nombre):
+    raw = str(nombre or "")
+    limpio = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]", "", raw)
+    return limpio[:CATEGORIA_NOMBRE_MAX]
+
+
+def _nombre_categoria_valido(nombre):
+    valor = str(nombre or "").strip()
+    return bool(valor and CATEGORIA_NOMBRE_RE.fullmatch(valor))
 
 
 def _meta_desde_asignacion(asig):
@@ -142,8 +231,10 @@ class CombateNamespace(Namespace):
         token = request.args.get("token")
 
         if not tatami_id:
-            emit("error", {"message": "tatami_id requerido"})
-            return False
+            raise ConnectionRefusedError("tatami_id requerido")
+
+        if rol not in {"pantalla", *ROL_LABELS.keys()}:
+            raise ConnectionRefusedError("Rol de juez inválido")
 
         # Autenticación opcional
         user_id = None
@@ -157,6 +248,21 @@ class CombateNamespace(Namespace):
                 user_email = decoded.get("email", "")
             except Exception:
                 pass
+
+        with _lock:
+            ts = _get_tatami_state(tatami_id)
+            if rol != "pantalla":
+                activo = ts.setdefault("roles_activos", {}).get(rol)
+                if activo and activo.get("sid") != request.sid:
+                    raise ConnectionRefusedError(
+                        f"{_rol_label(rol)} ya está conectado en este tatami"
+                    )
+                ts["roles_activos"][rol] = {
+                    "sid": request.sid,
+                    "usuario_id": int(user_id) if user_id else None,
+                    "nombre": user_nombre,
+                    "email": user_email,
+                }
 
         # Registrar acceso
         try:
@@ -175,7 +281,6 @@ class CombateNamespace(Namespace):
         join_room(_room_name(tatami_id))
 
         # Enviar estado completo CON metadatos desde el primer momento
-        ts = _get_tatami_state(tatami_id)
         try:
             asignacion = (
                 AsignacionJuez.query.filter_by(
@@ -199,7 +304,17 @@ class CombateNamespace(Namespace):
         print(f"  [CONN] [{_room_name(tatami_id)}] {rol} conectado (sid={request.sid})")
 
     def on_disconnect(self):
-        pass
+        tatami_id = request.args.get("tatami_id")
+        rol = request.args.get("rol", "pantalla")
+        if not tatami_id or rol == "pantalla":
+            return
+        with _lock:
+            ts = tatami_states.get(str(tatami_id))
+            if not ts:
+                return
+            activo = ts.get("roles_activos", {}).get(rol)
+            if activo and activo.get("sid") == request.sid:
+                ts["roles_activos"].pop(rol, None)
 
     def on_pedir(self, data=None):
         """Cliente solicita estado completo (reconexión)."""
@@ -217,6 +332,7 @@ class CombateNamespace(Namespace):
         tatami_id = request.args.get("tatami_id")
         if not tatami_id:
             return
+        rol = request.args.get("rol", "pantalla")
 
         ev = data.get("evento", {})
         ev_id = data.get("evId")
@@ -236,11 +352,53 @@ class CombateNamespace(Namespace):
 
             accion = ev.get("accion")
 
+            if accion in ACCIONES_SOLO_ARBITRO and rol != "arbitro":
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                emit("accion_rechazada", {
+                    "message": "Esta acción requiere Juez Central."
+                })
+                return
+
             # ── Bloqueo si tatami desactivado ──────────────────────────────
             if not ts.get("tatami_activo", False) and accion not in ACCIONES_SIN_ACTIVACION:
                 if ev_id:
                     emit("ack", {"evId": ev_id})
                 return  # Silently ignore
+
+            if ts["estado"].get("ganadorPendienteCierre") and accion not in ACCIONES_DURANTE_GANADOR_PENDIENTE:
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                return
+
+            if accion == "cerrar_ganador" and rol != "arbitro":
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                return
+
+            if (
+                ts.get("categoria_activa", "combate") == "combate"
+                and accion in ACCIONES_REQUIEREN_COMPETIDORES
+                and not _competidores_con_nombre(ts["estado"])
+            ):
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                emit("accion_rechazada", {
+                    "message": "Ingresa los nombres de ambos competidores antes de continuar."
+                })
+                return
+
+            if (
+                ts.get("categoria_activa") == "figuras"
+                and accion not in ACCIONES_FIGURAS_SIN_NOMBRE_CATEGORIA
+                and not _nombre_categoria_valido(ts["estado"].get("nombre_categoria"))
+            ):
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                emit("accion_rechazada", {
+                    "message": "Ingresa un nombre de categoría válido usando solo letras y espacios."
+                })
+                return
 
             # ── Activar / Desactivar tatami ────────────────────────────────
             if accion == "activar_tatami":
@@ -262,10 +420,10 @@ class CombateNamespace(Namespace):
 
             # ── Cambio de nombre de categoría ─────────────────────────────
             if accion == "cambiar_nombre_categoria":
-                nombre = ev.get("nombre", "Figuras").strip() or "Figuras"
-                ts["nombre_categoria"] = nombre[:40]
+                nombre = _normalizar_nombre_categoria(ev.get("nombre", ""))
+                ts["nombre_categoria"] = nombre
                 if ts.get("categoria_activa") == "figuras" and "nombre_categoria" in ts["estado"]:
-                    ts["estado"]["nombre_categoria"] = nombre[:40]
+                    ts["estado"]["nombre_categoria"] = nombre
                 if ev_id:
                     emit("ack", {"evId": ev_id})
                 self._broadcast_estado(room, ts)
@@ -296,15 +454,18 @@ class CombateNamespace(Namespace):
                 return
 
             # ── Callback ganador Punto de Oro ──────────────────────────────
-            def ganador_cb(nombre, color):
+            def ganador_cb(nombre, color, motivo="Punto de Oro"):
                 payload = {
                     "tipo": "ganador-flash",
                     "nombre": nombre,
                     "color": color,
-                    "motivo": "Punto de Oro",
+                    "motivo": motivo,
                 }
                 socketio.emit("ganador-flash", payload, namespace="/combate", to=room)
                 self._detener_crono(tatami_id)
+
+            def alerta_superioridad_cb(payload):
+                socketio.emit("alerta12", payload, namespace="/combate", to=room)
 
             # ── Cambio de categoría ────────────────────────────────────────
             if accion == "cambiar_categoria":
@@ -328,12 +489,12 @@ class CombateNamespace(Namespace):
             if categoria == "figuras":
                 aplicar_evento_figuras(ts["estado"], ev)
             else:
-                aplicar_evento(ts["estado"], ev, ganador_cb)
+                aplicar_evento(ts["estado"], ev, ganador_cb, alerta_superioridad_cb)
 
             # ── Manejar cronómetro ─────────────────────────────────────────
             if accion == "crono_start":
                 self._iniciar_crono(tatami_id)
-            elif accion in ("crono_pause", "crono_reset", "reset"):
+            elif accion in ("crono_pause", "crono_reset", "reset", "declarar_ganador"):
                 self._detener_crono(tatami_id)
 
             # Si Punto de Oro resuelto, detener crono
@@ -409,7 +570,7 @@ class CombateNamespace(Namespace):
             actor_rol = ev.get("juez_id")
         elif accion in (
             "especial", "kyonggo", "gamjeum", "deshacer_arbitro",
-            "aprobar_oro", "rechazar_oro",
+            "aprobar_oro", "rechazar_oro", "declarar_ganador",
         ):
             actor_rol = "arbitro"
 
@@ -426,6 +587,29 @@ class CombateNamespace(Namespace):
         ev["juez_rol"] = meta.get("rol_tatami") or actor_rol
         ev["juez_acceso"] = meta.get("origen") or "pin"
 
+    def _obtener_sesion_categoria(self, tatami_id, slug):
+        from ..models.categoria import Categoria
+
+        cat = Categoria.query.filter_by(slug=slug).first()
+        if not cat:
+            return None, None
+
+        sesion = SesionTatami.query.filter_by(
+            tatami_id=int(tatami_id),
+            categoria_id=cat.id,
+            estado="en_curso",
+        ).first()
+        if not sesion:
+            sesion = SesionTatami(
+                tatami_id=int(tatami_id),
+                categoria_id=cat.id,
+                estado="en_curso",
+                inicio=datetime.now(timezone.utc),
+            )
+            db.session.add(sesion)
+            db.session.flush()
+        return sesion, cat
+
     def _guardar_combate_actual(self, tatami_id, ts):
         """Guarda el combate actual en la base de datos."""
         estado = ts["estado"]
@@ -436,8 +620,60 @@ class CombateNamespace(Namespace):
             if not estado.get("competidores"):
                 return
             snapshot = guardar_figuras_snapshot(estado)
-            # TODO: guardar figuras en DB — por ahora solo log
-            print(f"  [OK] Figuras guardadas tatami {tatami_id}")
+            ranking = snapshot.get("ranking") or []
+            ganador = ranking[0] if ranking else None
+            jueces_detalle = {
+                "tipo": "figuras",
+                "nombre_categoria": snapshot.get("nombre_categoria", "Figuras"),
+                "ranking": ranking,
+                "competidores": snapshot.get("competidores", []),
+                "criterios": snapshot.get("criterios", []),
+                "puntuaciones": snapshot.get("puntuaciones", {}),
+                "puntuaciones_confirmadas": snapshot.get("puntuaciones_confirmadas", {}),
+                "podio_modo": snapshot.get("podio_modo", "manual"),
+                "puntuaciones_completas": snapshot.get("puntuaciones_completas", False),
+                "finalizado": snapshot.get("finalizado", False),
+                "asignaciones": self._jueces_reporte(tatami_id, ts),
+            }
+
+            try:
+                sesion, cat = self._obtener_sesion_categoria(tatami_id, "figuras")
+                if not sesion:
+                    print(f"  [ERR] No existe categoría 'figuras' para guardar tatami {tatami_id}")
+                    return
+
+                combate = Combate(
+                    sesion_tatami_id=sesion.id,
+                    categoria_id=cat.id if cat else sesion.categoria_id,
+                    nombre_hong=ganador.get("nombre") if ganador else snapshot.get("nombre_categoria", "Figuras"),
+                    nombre_chung=snapshot.get("nombre_categoria", "Figuras"),
+                    marcador_hong=float(ganador.get("total", 0)) if ganador else 0.0,
+                    marcador_chung=0.0,
+                    esq_hong=float(ganador.get("total", 0)) if ganador else 0.0,
+                    esq_chung=0.0,
+                    arb_hong=0.0,
+                    arb_chung=0.0,
+                    kyong_hong=0,
+                    kyong_chung=0,
+                    faltas_hong=0,
+                    faltas_chung=0,
+                    num_jueces=snapshot.get("num_jueces", 4),
+                    duracion_segundos=0,
+                    ronda_final="figuras",
+                    historial_completo=snapshot.get("log", []),
+                    jueces_detalle=jueces_detalle,
+                    ganador="hong" if ganador else "empate",
+                    fin=datetime.now(timezone.utc),
+                )
+                db.session.add(combate)
+                db.session.commit()
+                print(
+                    f"  [OK] Figuras guardadas tatami {tatami_id}: "
+                    f"{snapshot.get('nombre_categoria', 'Figuras')}"
+                )
+            except Exception as e:
+                db.session.rollback()
+                print(f"  [ERR] Error guardando figuras: {e}")
             return
 
         if not estado.get("historial"):
@@ -447,25 +683,15 @@ class CombateNamespace(Namespace):
         snapshot["jueces_detalle"]["asignaciones"] = self._jueces_reporte(tatami_id, ts)
 
         try:
-            sesion = SesionTatami.query.filter_by(
-                tatami_id=int(tatami_id), estado="en_curso"
-            ).first()
+            sesion, cat = self._obtener_sesion_categoria(tatami_id, "combate")
             if not sesion:
-                from ..models.categoria import Categoria
-                cat = Categoria.query.filter_by(slug="combate").first()
-                sesion = SesionTatami(
-                    tatami_id=int(tatami_id),
-                    categoria_id=cat.id if cat else None,
-                    estado="en_curso",
-                    inicio=datetime.now(timezone.utc),
-                )
-                db.session.add(sesion)
-                db.session.flush()
-                ts["sesion_id"] = sesion.id
+                print(f"  [ERR] No existe categoría 'combate' para guardar tatami {tatami_id}")
+                return
+            ts["sesion_id"] = sesion.id
 
             combate = Combate(
                 sesion_tatami_id=sesion.id,
-                categoria_id=sesion.categoria_id,
+                categoria_id=cat.id if cat else sesion.categoria_id,
                 nombre_hong=snapshot["nombre_hong"],
                 nombre_chung=snapshot["nombre_chung"],
                 marcador_hong=snapshot["marcador_hong"],
@@ -483,7 +709,7 @@ class CombateNamespace(Namespace):
                 ronda_final=snapshot["ronda_final"],
                 historial_completo=snapshot["historial_completo"],
                 jueces_detalle=snapshot["jueces_detalle"],
-                ganador=(
+                ganador=snapshot.get("ganador_manual") or (
                     "hong" if snapshot["marcador_hong"] > snapshot["marcador_chung"]
                     else "chung" if snapshot["marcador_chung"] > snapshot["marcador_hong"]
                     else "empate"
