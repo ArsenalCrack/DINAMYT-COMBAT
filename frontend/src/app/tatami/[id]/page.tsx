@@ -40,6 +40,7 @@ interface FigurasState {
   num_jueces: number;
   nombres_jueces: Record<string, string>;
   finalizado: boolean;
+  en_desempate?: number[];
   log: { txt: string; color: string; ts: number }[];
   _categoria?: string;
   _tatami_activo?: boolean;
@@ -130,9 +131,10 @@ function figurasPuntuacionesCompletas(state: FigurasState) {
 
 /**
  * Ranking de figuras (espejo de calcular_ranking del backend):
- * - Categoría especial primero, con su propio podio (no desplaza al normal).
- * - Empate de totales = empate REAL: comparten puesto (1, 2, 2, 4) y se
- *   resuelve con una presentación de desempate (botón Reevaluar del JC).
+ * - TODOS los de categoría especial reciben el puesto 1 sin importar su
+ *   puntuación: comparten el primer puesto con el 1° normal.
+ * - Empate de totales en el podio normal = empate REAL: comparten puesto
+ *   (1, 2, 2, 4) y se resuelve con presentación de desempate (Reevaluar).
  */
 function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
   function totalDe(comp: Competidor): number {
@@ -140,10 +142,11 @@ function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
     return Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
   }
 
-  function ordenar(lista: Competidor[]): CompetidorRankeado[] {
+  function ordenar(lista: Competidor[], todosPrimero: boolean): CompetidorRankeado[] {
     const items = lista
-      .map((c) => ({ ...c, total: totalDe(c), puesto: 0, empate: false }))
+      .map((c) => ({ ...c, total: totalDe(c), puesto: 1, empate: false }))
       .sort((a, b) => b.total - a.total);
+    if (todosPrimero) return items;
     let puesto = 0;
     items.forEach((item, idx) => {
       if (idx === 0 || item.total !== items[idx - 1].total) puesto = idx + 1;
@@ -157,7 +160,7 @@ function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
 
   const especiales = state.competidores.filter((c) => c.especial);
   const normales = state.competidores.filter((c) => !c.especial);
-  return [...ordenar(especiales), ...ordenar(normales)];
+  return [...ordenar(especiales, true), ...ordenar(normales, false)];
 }
 
 function colorPuesto(puesto: number, especial?: boolean) {
@@ -292,6 +295,9 @@ function FigurasArbitro({
   const empatadosNormales = (puntuacionesCompletas || state.finalizado)
     ? ranking.filter((r) => r.empate && !r.especial)
     : [];
+
+  // Presentación de desempate en curso: solo los empatados se activan
+  const enDesempate = state.en_desempate || [];
 
   function handleReevaluarEmpate() {
     if (!validarNombreCategoria() || empatadosNormales.length === 0) return;
@@ -482,7 +488,10 @@ function FigurasArbitro({
                   <div style={{ fontWeight: 700, color: isActive ? "var(--gold)" : "inherit", overflowWrap: "anywhere" }}>
                     {comp.nombre}
                     {comp.especial && <span className="badge badge-gold" style={{ marginLeft: 8, verticalAlign: "middle" }}>Especial</span>}
-                    {comp.empate && <span className="badge badge-gray" style={{ marginLeft: 8, verticalAlign: "middle", color: "var(--orange)", borderColor: "rgba(255,140,0,0.4)" }}>Empate</span>}
+                    {comp.empate && <span className="badge badge-gray" style={{ marginLeft: 8, verticalAlign: "middle", color: "var(--orange)", borderColor: "rgba(255,140,0,0.4)" }}>Desempate</span>}
+                    {enDesempate.includes(comp.id) && !comp.empate && (
+                      <span className="badge badge-gray" style={{ marginLeft: 8, verticalAlign: "middle", color: "var(--orange)", borderColor: "rgba(255,140,0,0.4)" }}>Reevaluando</span>
+                    )}
                     {isActive && <span style={{ marginLeft: 8, fontSize: "0.7rem", background: "var(--gold)", color: "#000", padding: "2px 6px", borderRadius: 4 }}>EN TURNO</span>}
                   </div>
                   {comp.club && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{comp.club}</div>}
@@ -490,34 +499,40 @@ function FigurasArbitro({
                 <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: esPrimero || isActive ? "var(--gold)" : "var(--text)" }}>
                   {comp.total.toFixed(2)}
                 </div>
-                {!isActive && (
-                  <button className="btn btn-sm"
-                    disabled={activoIncompleto}
-                    title={activoIncompleto
-                      ? "El competidor en turno aún tiene puntuaciones pendientes"
-                      : undefined}
-                    onClick={() => {
-                      if (!validarNombreCategoria()) return;
-                      if (activoIncompleto) {
-                        onShowConfirm({
-                          titulo: "TURNO EN CURSO",
-                          mensaje: "No puedes activar otro competidor: al competidor en turno le falta la puntuación de algún juez. Espera a que todos confirmen.",
-                          tipo: "advertencia",
-                          solo_ok: true,
-                          onConfirm: () => {},
-                        });
-                        return;
-                      }
-                      enviarEvento("activar_competidor", { competidor_id: comp.id });
-                    }}
-                    style={{
-                      padding: "4px 8px", fontSize: "0.7rem",
-                      background: "var(--bg-card)", borderColor: "var(--gold)",
-                      opacity: activoIncompleto ? 0.45 : 1,
-                    }}>
-                    ACTIVAR
-                  </button>
-                )}
+                {!isActive && (() => {
+                  const fueraDelDesempate = enDesempate.length > 0 && !enDesempate.includes(comp.id);
+                  const bloqueado = activoIncompleto || fueraDelDesempate;
+                  return (
+                    <button className="btn btn-sm"
+                      disabled={bloqueado}
+                      title={fueraDelDesempate
+                        ? "Desempate en curso: solo los empatados pueden presentarse"
+                        : activoIncompleto
+                          ? "El competidor en turno aún tiene puntuaciones pendientes"
+                          : undefined}
+                      onClick={() => {
+                        if (!validarNombreCategoria()) return;
+                        if (activoIncompleto) {
+                          onShowConfirm({
+                            titulo: "TURNO EN CURSO",
+                            mensaje: "No puedes activar otro competidor: al competidor en turno le falta la puntuación de algún juez. Espera a que todos confirmen.",
+                            tipo: "advertencia",
+                            solo_ok: true,
+                            onConfirm: () => {},
+                          });
+                          return;
+                        }
+                        enviarEvento("activar_competidor", { competidor_id: comp.id });
+                      }}
+                      style={{
+                        padding: "4px 8px", fontSize: "0.7rem",
+                        background: "var(--bg-card)", borderColor: "var(--gold)",
+                        opacity: bloqueado ? 0.45 : 1,
+                      }}>
+                      ACTIVAR
+                    </button>
+                  );
+                })()}
                 <button className="btn btn-sm btn-danger"
                   onClick={() => {
                     if (validarNombreCategoria()) enviarEvento("eliminar_competidor", { competidor_id: comp.id });
@@ -563,7 +578,7 @@ function FigurasArbitro({
         }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ color: "var(--orange)", fontWeight: 800, fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Empate en el puesto {empatadosNormales[0].puesto}
+              Empate en el puesto {empatadosNormales[0].puesto} — deben desempatar
             </div>
             <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: 2, overflowWrap: "anywhere" }}>
               {empatadosNormales.map((r) => r.nombre).join(" · ")}
@@ -858,6 +873,11 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
   const juecesActivos = juecesActivosFiguras(state);
   const activeCompId = activeComp ? String(activeComp.id) : "";
   const activeTotal = ranking.find((r) => r.id === activeComp?.id)?.total ?? 0;
+  // "Comparten puesto" solo cuando hay categoría especial: la comparten los
+  // especiales y el 1° del podio normal
+  const hayEspeciales = ranking.some((r) => r.especial);
+  // En la vista de puntuación en vivo el logo va sobre "EN TURNO", no arriba
+  const vistaEnVivo = !shouldShowPodio && Boolean(activeComp) && ranking.length > 0;
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -866,7 +886,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
         borderBottom: "1px solid var(--border)",
         background: "var(--bg-card)",
       }}>
-        <Logo fontSize="clamp(1.5rem, 4vw, 2rem)" />
+        {!vistaEnVivo && <Logo fontSize="clamp(1.5rem, 4vw, 2rem)" />}
         {state._campeonato_nombre && (
           <div style={{
             fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 700,
@@ -901,6 +921,12 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
               maxWidth: 1100, margin: "0 auto", gap: "clamp(10px, 2vh, 24px)",
             }}>
               <div>
+                {/* Logo protagonista, como en el marcador de combates */}
+                <Logo
+                  soloImagen
+                  fontSize="clamp(3.2rem, 16vh, 10.5rem)"
+                  style={{ marginBottom: 8 }}
+                />
                 <div style={{ fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "0.16em", color: "var(--text-dim)", fontWeight: 800 }}>
                   En turno
                 </div>
@@ -1024,11 +1050,16 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
                         {comp.club}
                       </div>
                     )}
-                    {(comp.especial || comp.empate) && (
+                    {(comp.especial || comp.empate || (hayEspeciales && comp.puesto === 1)) && (
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
                         {comp.especial && (
                           <span className="badge badge-gold" style={{ fontSize: "clamp(0.6rem,1.2vw,0.85rem)" }}>
                             Categoría Especial
+                          </span>
+                        )}
+                        {hayEspeciales && comp.puesto === 1 && (
+                          <span className="badge badge-gold" style={{ fontSize: "clamp(0.6rem,1.2vw,0.85rem)" }}>
+                            Comparten puesto
                           </span>
                         )}
                         {comp.empate && (
@@ -1038,7 +1069,7 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
                             border: "1px solid rgba(255,140,0,0.4)",
                             color: "var(--orange)",
                           }}>
-                            Empate — comparten puesto
+                            Desempate pendiente
                           </span>
                         )}
                       </div>

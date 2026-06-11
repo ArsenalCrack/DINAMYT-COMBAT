@@ -82,6 +82,8 @@ def estado_inicial_figuras(config=None):
         "finalizado": False,
         # Constancia de reevaluaciones por empate (para reportes)
         "desempates": [],
+        # IDs en presentación de desempate: solo ellos se pueden activar
+        "en_desempate": [],
         "log": [],
 }
 
@@ -143,12 +145,15 @@ def calcular_total_competidor(estado, competidor_id):
     return round(sum(puntajes.values()), 2)
 
 
-def _ordenar_con_puestos(estado, comps):
+def _ordenar_con_puestos(estado, comps, todos_primer_puesto=False):
     """
     Ordena por total. Un empate de totales es un empate REAL: comparten
     puesto (1, 2, 2, 4) y quedan marcados con empate=True. La resolución
     es una presentación de desempate (acción reevaluar_empate), no un
     criterio automático.
+
+    Con todos_primer_puesto=True (categoría especial), TODOS reciben el
+    puesto 1 sin importar su puntuación y nunca quedan en empate.
     """
     items = []
     for comp in comps:
@@ -157,6 +162,12 @@ def _ordenar_con_puestos(estado, comps):
         items.append({**comp, "total": total})
 
     items.sort(key=lambda x: x["total"], reverse=True)
+
+    if todos_primer_puesto:
+        for item in items:
+            item["puesto"] = 1
+            item["empate"] = False
+        return items
 
     # Puestos con ranking estándar de competencia: los empatados comparten
     # puesto y el siguiente se salta (dos terceros puestos → no hay cuarto).
@@ -179,13 +190,15 @@ def _ordenar_con_puestos(estado, comps):
 def calcular_ranking(estado):
     """
     Ranking completo:
-    - Los competidores de categoría especial van primero, con su propio
-      podio (su 1er puesto no desplaza al 1er puesto normal).
-    - El resto compite en el podio normal con desempate automático.
+    - TODOS los competidores de categoría especial reciben el puesto 1 sin
+      importar su puntuación, sin desplazar el podio normal: comparten el
+      primer puesto con el 1° normal.
+    - El resto compite en el podio normal; los empates reales se resuelven
+      con presentación de desempate.
     """
     especiales = [c for c in estado["competidores"] if c.get("especial")]
     normales = [c for c in estado["competidores"] if not c.get("especial")]
-    ranking_especial = _ordenar_con_puestos(estado, especiales)
+    ranking_especial = _ordenar_con_puestos(estado, especiales, todos_primer_puesto=True)
     for item in ranking_especial:
         item["especial"] = True
     return ranking_especial + _ordenar_con_puestos(estado, normales)
@@ -270,6 +283,16 @@ def aplicar_evento_figuras(estado, ev):
             None
         )
         if comp:
+            # Durante una presentación de desempate solo se pueden activar
+            # los competidores empatados.
+            en_desempate = estado.get("en_desempate") or []
+            if en_desempate and comp["id"] not in en_desempate:
+                _agregar_log_f(
+                    estado,
+                    "[TURNO] Bloqueado: desempate en curso — solo los empatados pueden presentarse",
+                    "arb",
+                )
+                return estado
             # No se puede pasar a otro competidor si al activo le falta
             # alguna puntuación por confirmar.
             activo_id = estado.get("competidor_activo_id")
@@ -371,6 +394,7 @@ def aplicar_evento_figuras(estado, ev):
         if puntuaciones_completas(estado):
             estado["finalizado"] = True
             estado["puntuacion_abierta"] = False
+            estado["en_desempate"] = []  # el desempate terminó
             _agregar_log_f(estado, "[PODIO] Puntuaciones completas — Podio habilitado", "arb")
             for (ambito, puesto), nombres in empates_en_ranking(calcular_ranking(estado)).items():
                 etiqueta = " (Especial)" if ambito == "especial" else ""
@@ -436,6 +460,8 @@ def aplicar_evento_figuras(estado, ev):
         estado["finalizado"] = False
         estado["puntuacion_abierta"] = False
         estado["competidor_activo_id"] = None
+        # Solo los empatados se pueden activar hasta resolver el desempate
+        estado["en_desempate"] = [r["id"] for r in empatados]
         estado.setdefault("desempates", []).append({
             "nombres": nombres,
             "ts": int(time.time() * 1000),

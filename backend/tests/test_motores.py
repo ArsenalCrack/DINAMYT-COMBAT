@@ -218,6 +218,20 @@ class TestRankingFiguras:
         # El especial va primero en la lista
         assert ranking[0]["nombre"] == "Esp"
 
+    def test_dos_especiales_ambos_primer_puesto(self):
+        # TODOS los especiales quedan de primeros sin importar su puntuación
+        e = self._base([("EspA", True), ("EspB", True), ("Ana", False)])
+        for cid, valor in ((1, "9.00"), (2, "4.00"), (3, "7.00")):
+            _puntuar(e, cid, "j1", valor)
+            _puntuar(e, cid, "j2", valor)
+        ranking = calcular_ranking(e)
+        puestos = {r["nombre"]: r["puesto"] for r in ranking}
+        assert puestos["EspA"] == 1
+        assert puestos["EspB"] == 1, "el especial con menor nota también es 1°"
+        assert puestos["Ana"] == 1, "el podio normal no se afecta"
+        # Los especiales nunca quedan marcados en empate (no se reevalúan)
+        assert all(not r["empate"] for r in ranking if r.get("especial"))
+
     def test_mismo_total_es_empate_real(self):
         # Mismo total (16.00) aunque la distribución de notas difiera:
         # NO se desempata por la nota más alta, es empate real
@@ -280,6 +294,12 @@ class TestRankingFiguras:
         # Queda constancia para el reporte
         assert len(e["desempates"]) == 1
         assert sorted(e["desempates"][0]["nombres"]) == ["Ana", "Luis"]
+        # Solo los empatados se pueden activar durante el desempate
+        assert sorted(e["en_desempate"]) == [2, 3]
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 4})
+        assert e["competidor_activo_id"] is None, "Caro no participa del desempate"
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 1})
+        assert e["competidor_activo_id"] is None, "la especial tampoco"
 
         # Reevaluación: ahora Ana gana — el podio vuelve resuelto
         _puntuar(e, 2, "j1", "9.00")
@@ -287,6 +307,7 @@ class TestRankingFiguras:
         _puntuar(e, 3, "j1", "8.00")
         _puntuar(e, 3, "j2", "8.00")
         assert e["finalizado"] is True
+        assert e["en_desempate"] == [], "el desempate quedó resuelto"
         ranking = calcular_ranking(e)
         puestos = {r["nombre"]: r["puesto"] for r in ranking if not r.get("especial")}
         assert puestos == {"Ana": 1, "Luis": 2, "Caro": 3}
