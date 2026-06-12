@@ -28,6 +28,8 @@ export interface CombateState {
   oroPendienteAprobacion: boolean;
   oroGanadorNombre?: string;
   oroGanadorColor?: "hong" | "chung" | "";
+  /** Descripción del punto de oro en espera (técnica, puntos y juez) */
+  oroPuntoDetalle?: string;
   ganadorManualColor?: "hong" | "chung" | "";
   ganadorManualMotivo?: string;
   ganadorPendienteCierre?: boolean;

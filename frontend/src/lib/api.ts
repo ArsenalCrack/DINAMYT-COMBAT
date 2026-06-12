@@ -7,6 +7,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const api = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { "Content-Type": "application/json" },
+  // 60 s: cubre el despertar del plan gratis de Render (~50 s tras 15 min
+  // inactivo) pero evita pantallas de carga colgadas para siempre.
+  timeout: 60000,
 });
 
 // Interceptor: inyectar JWT en cada request

@@ -1387,7 +1387,10 @@ function CombateJuez({
 }) {
   const miPuntaje = state.jueces?.[rol] || { hong: 0, chung: 0 };
   const nombresListos = competidoresConNombre(state);
-  const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
+  // Bloqueado también con ganador ya declarado o punto de oro en espera
+  const combateCerrado = Boolean(state.ganadorManualColor);
+  const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre)
+    || combateCerrado || Boolean(state.oroPendienteAprobacion);
   // Rol fuera de la configuración actual (ej: j3 en combate de 2 jueces)
   const rolNum = rol.startsWith("j") ? Number(rol.slice(1)) : 0;
   const rolInactivo = rolNum > (state.numJueces || 4);
@@ -1401,6 +1404,10 @@ function CombateJuez({
   function anotar(color: "hong" | "chung", pts: number, label: string) {
     if (!nombresListos) {
       onFlash("⚠️", "NOMBRES REQUERIDOS");
+      return;
+    }
+    if (combateCerrado) {
+      onFlash("🏆", "COMBATE FINALIZADO");
       return;
     }
     onFlash(color === "hong" ? "🔴" : "🔵", `+${pts} JEUMSU`);
@@ -1438,6 +1445,19 @@ function CombateJuez({
         </div>
         <CronoDisplay segundos={state.segundos} activo={state.activo} segundosMax={state.segundosMax} />
       </div>
+
+      {/* Aviso de combate cerrado o punto de oro en espera */}
+      {(combateCerrado || state.oroPendienteAprobacion) && (
+        <div style={{
+          marginBottom: 10, padding: "8px 12px", borderRadius: "var(--radius)",
+          border: "1px solid var(--gold)", background: "rgba(212,175,55,0.08)",
+          color: "var(--gold)", fontWeight: 700, textAlign: "center", fontSize: "0.85rem",
+        }}>
+          {state.oroPendienteAprobacion
+            ? "🏆 Punto de oro en espera de aprobación del Juez Central"
+            : "🏆 Combate finalizado — esperando al Juez Central"}
+        </div>
+      )}
 
       {/* Mis puntos — solo los propios */}
       <div className="grid-2" style={{ marginBottom: 10 }}>
@@ -1537,6 +1557,84 @@ function CombateJuez({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Inputs de nombres con estado local + debounce. El estado del combate vive en
+// el servidor, pero atar el value del input al eco del socket hace que cada
+// tecla espere el viaje de ida y vuelta: con latencia real se traga letras.
+// Aquí la letra aparece al instante y el envío se agrupa (pausa de 500 ms o blur).
+function NombresCombate({ nombreHong, nombreChung, enviarEvento, disabled }: {
+  nombreHong: string;
+  nombreChung: string;
+  enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
+  disabled?: boolean;
+}) {
+  const aDraft = (v: string, def: string) => (v === def ? "" : v);
+  const [hong, setHong] = useState(() => aDraft(nombreHong, "Hong"));
+  const [chung, setChung] = useState(() => aDraft(nombreChung, "Chung"));
+  const editandoRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftsRef = useRef({ hong, chung });
+  draftsRef.current = { hong, chung };
+  const serverRef = useRef({ nombreHong, nombreChung });
+  serverRef.current = { nombreHong, nombreChung };
+
+  // Adoptar cambios del servidor solo cuando no se está escribiendo
+  // (ej. otra pantalla activa una llave y los nombres llegan solos)
+  useEffect(() => {
+    if (!editandoRef.current) {
+      setHong(aDraft(nombreHong, "Hong"));
+      setChung(aDraft(nombreChung, "Chung"));
+    }
+  }, [nombreHong, nombreChung]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  const commit = () => {
+    const payload = {
+      nombreHong: draftsRef.current.hong || "Hong",
+      nombreChung: draftsRef.current.chung || "Chung",
+    };
+    if (payload.nombreHong === serverRef.current.nombreHong &&
+        payload.nombreChung === serverRef.current.nombreChung) return;
+    enviarEvento("nombres", payload);
+  };
+
+  const programarCommit = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(commit, 500);
+  };
+
+  const onBlur = () => {
+    editandoRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    commit();
+  };
+
+  return (
+    <div className="grid-2" style={{ marginBottom: 10 }}>
+      <input className="input" placeholder="Nombre Hong (Requerido)" value={hong}
+        disabled={disabled}
+        onFocus={() => { editandoRef.current = true; }}
+        onBlur={onBlur}
+        onChange={(e) => { setHong(e.target.value); programarCommit(); }}
+        style={{
+          borderColor: !hong ? "var(--hong-border)" : "var(--green-border)",
+          textAlign: "center", fontWeight: 700, color: "var(--hong-light)",
+          opacity: disabled ? 0.6 : 1,
+        }} />
+      <input className="input" placeholder="Nombre Chung (Requerido)" value={chung}
+        disabled={disabled}
+        onFocus={() => { editandoRef.current = true; }}
+        onBlur={onBlur}
+        onChange={(e) => { setChung(e.target.value); programarCommit(); }}
+        style={{
+          borderColor: !chung ? "var(--chung-border)" : "var(--green-border)",
+          textAlign: "center", fontWeight: 700, color: "var(--chung-light)",
+          opacity: disabled ? 0.6 : 1,
+        }} />
+    </div>
+  );
+}
+
 // COMBATE — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function CombateArbitro({
@@ -1556,8 +1654,13 @@ function CombateArbitro({
   const totalChung = marcadorDisplay(state, "chung");
   const esqHong = promedioEsquinas(state, "hong").toFixed(1);
   const esqChung = promedioEsquinas(state, "chung").toFixed(1);
+  const [motivoDq, setMotivoDq] = useState("No presentación");
   const nombresListos = competidoresConNombre(state);
-  const accionesBloqueadas = !nombresListos || Boolean(state.ganadorPendienteCierre);
+  // Con ganador declarado el combate está cerrado: se bloquea todo lo que
+  // altere marcador o cronómetro. Solo quedan NUEVO COMBATE (guardar) y RESET.
+  const combateCerrado = Boolean(state.ganadorManualColor);
+  const cierreBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
+  const accionesBloqueadas = cierreBloqueado || combateCerrado;
 
   const PUNTOS_ARB = [
     { pts: 2, nombre: "Knock Down" },
@@ -1661,6 +1764,29 @@ function CombateArbitro({
     });
   }
 
+  function handleDescalificar(color: "hong" | "chung") {
+    if (!nombresListos) {
+      onShowConfirm({
+        titulo: "NOMBRES REQUERIDOS",
+        mensaje: "Debes ingresar el nombre de ambos competidores antes de descalificar.",
+        tipo: "advertencia",
+        solo_ok: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
+    const nombre = color === "hong" ? state.nombreHong : state.nombreChung;
+    const rival = color === "hong" ? state.nombreChung : state.nombreHong;
+    onShowConfirm({
+      titulo: "DESCALIFICACIÓN",
+      mensaje: `¿Descalificar a ${nombre} (${color === "hong" ? "🔴 HONG" : "🔵 CHUNG"}) por "${motivoDq}"? ${rival} quedará como ganador y el combate se cerrará.`,
+      tipo: "peligro",
+      confirmLabel: "DESCALIFICAR",
+      cancelLabel: "Cancelar",
+      onConfirm: () => enviarEvento("descalificar", { color, razon: motivoDq }),
+    });
+  }
+
   function handleNuevoCombate() {
     onShowConfirm({
       titulo: "GUARDAR Y NUEVO COMBATE",
@@ -1696,10 +1822,22 @@ function CombateArbitro({
         }}>
           <div style={{ fontSize: "3rem", marginBottom: 12 }}>🏆</div>
           <div style={{ color: "var(--gold)", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "0.05em", textAlign: "center", padding: "0 20px" }}>
-            PUNTO DE ORO REGISTRADO
+            PUNTO DE ORO POR APROBAR
           </div>
-          <div style={{ color: "var(--text)", marginTop: 8, textAlign: "center", maxWidth: 400, fontSize: "0.9rem" }}>
-            Un juez ha marcado un punto de oro para {state.oroGanadorNombre || "el competidor"}. El combate finaliza si lo apruebas.
+          {state.oroPuntoDetalle && (
+            <div style={{
+              marginTop: 12, padding: "8px 16px", borderRadius: "var(--radius)",
+              border: "1px solid var(--gold)", color: "var(--gold)",
+              fontWeight: 700, fontSize: "1rem", textAlign: "center", maxWidth: 420,
+            }}>
+              {state.oroPuntoDetalle}
+            </div>
+          )}
+          <div style={{ color: "var(--text)", marginTop: 10, textAlign: "center", maxWidth: 420, fontSize: "0.9rem" }}>
+            Punto para <strong>{state.oroGanadorNombre || "el competidor"}</strong>.
+            Aún <strong>no está sumado</strong> al marcador: si lo apruebas se suma,
+            se declara el ganador y el combate finaliza; si lo rechazas se descarta
+            y el combate continúa.
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 24 }}>
             <button className="btn btn-primary" onClick={() => enviarEvento("aprobar_oro")} style={{ padding: "12px 24px", fontSize: "1.1rem" }}>
@@ -1722,21 +1860,26 @@ function CombateArbitro({
         onShowConfirm={onShowConfirm}
       />
 
+      {/* Combate cerrado: solo guardar o descartar */}
+      {combateCerrado && !state.ganadorPendienteCierre && (
+        <div style={{
+          marginBottom: 10, padding: "10px 14px", borderRadius: "var(--radius)",
+          border: "1px solid var(--gold)", background: "rgba(212,175,55,0.08)",
+          color: "var(--gold)", fontWeight: 700, textAlign: "center", fontSize: "0.92rem",
+        }}>
+          🏆 Combate finalizado — Ganó {state.ganadorManualColor === "hong" ? state.nombreHong : state.nombreChung}
+          {state.ganadorManualMotivo ? ` (${state.ganadorManualMotivo})` : ""}.
+          Guarda con NUEVO COMBATE o descarta con RESET.
+        </div>
+      )}
+
       {/* Nombres */}
-      <div className="grid-2" style={{ marginBottom: 10 }}>
-        <input className="input" placeholder="Nombre Hong (Requerido)" value={state.nombreHong === "Hong" ? "" : state.nombreHong}
-          onChange={(e) => enviarEvento("nombres", { nombreHong: e.target.value || "Hong", nombreChung: state.nombreChung })}
-          style={{
-            borderColor: state.nombreHong === "Hong" ? "var(--hong-border)" : "var(--green-border)",
-            textAlign: "center", fontWeight: 700, color: "var(--hong-light)",
-          }} />
-        <input className="input" placeholder="Nombre Chung (Requerido)" value={state.nombreChung === "Chung" ? "" : state.nombreChung}
-          onChange={(e) => enviarEvento("nombres", { nombreHong: state.nombreHong, nombreChung: e.target.value || "Chung" })}
-          style={{
-            borderColor: state.nombreChung === "Chung" ? "var(--chung-border)" : "var(--green-border)",
-            textAlign: "center", fontWeight: 700, color: "var(--chung-light)",
-          }} />
-      </div>
+      <NombresCombate
+        nombreHong={state.nombreHong}
+        nombreChung={state.nombreChung}
+        enviarEvento={enviarEvento}
+        disabled={combateCerrado || Boolean(state.ganadorPendienteCierre)}
+      />
       {(state.nombreHong === "Hong" || state.nombreChung === "Chung") && (
         <p style={{ color: "var(--orange)", fontSize: "0.78rem", textAlign: "center", marginBottom: 8 }}>
           ⚠️ Ingresa los nombres antes de iniciar el cronómetro
@@ -1910,6 +2053,38 @@ function CombateArbitro({
         </button>
       </div>
 
+      {/* Descalificación directa (no presentación, conducta, etc.) */}
+      <div className="card-title">Descalificación directa</div>
+      <select
+        className="input"
+        value={motivoDq}
+        onChange={(e) => setMotivoDq(e.target.value)}
+        disabled={accionesBloqueadas}
+        style={{ marginBottom: 8, textAlign: "center", fontWeight: 700, opacity: accionesBloqueadas ? 0.5 : 1 }}
+      >
+        <option value="No presentación">Motivo: No presentación (walkover)</option>
+        <option value="Conducta antideportiva">Motivo: Conducta antideportiva</option>
+        <option value="Decisión del Juez Central">Motivo: Decisión del Juez Central</option>
+      </select>
+      <div className="grid-2" style={{ marginBottom: 8 }}>
+        <button
+          className="combat-btn falta"
+          onClick={() => handleDescalificar("hong")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">🚫</span><span className="label">Descalificar HONG</span>
+        </button>
+        <button
+          className="combat-btn falta"
+          onClick={() => handleDescalificar("chung")}
+          disabled={accionesBloqueadas}
+          style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}
+        >
+          <span className="pts">🚫</span><span className="label">Descalificar CHUNG</span>
+        </button>
+      </div>
+
       {/* Deshacer + Guardar */}
       <div className="grid-2" style={{ marginBottom: 8 }}>
         <button className="btn btn-sm btn-danger"
@@ -1927,10 +2102,10 @@ function CombateArbitro({
       </div>
 
       <div className="grid-2" style={{ marginBottom: 10 }}>
-        <button className="btn btn-primary" onClick={handleNuevoCombate} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="btn btn-primary" onClick={handleNuevoCombate} disabled={cierreBloqueado} style={{ opacity: cierreBloqueado ? 0.5 : 1 }}>
           Guardar + Nuevo
         </button>
-        <button className="btn btn-danger" onClick={handleReset} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="btn btn-danger" onClick={handleReset} disabled={cierreBloqueado} style={{ opacity: cierreBloqueado ? 0.5 : 1 }}>
           Reset Total
         </button>
       </div>

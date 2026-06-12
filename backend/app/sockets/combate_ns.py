@@ -23,6 +23,7 @@ from flask_socketio import ConnectionRefusedError, Namespace, emit, join_room, l
 from flask_jwt_extended import decode_token
 
 from ..engine.combate_engine import (
+    ACCIONES_BLOQUEADAS_TRAS_GANADOR,
     estado_inicial,
     aplicar_evento,
     guardar_combate_snapshot,
@@ -149,6 +150,7 @@ ACCIONES_REQUIEREN_COMPETIDORES = {
     "aprobar_oro",
     "rechazar_oro",
     "declarar_ganador",
+    "descalificar",
 }
 
 ACCIONES_FIGURAS_SIN_NOMBRE_CATEGORIA = {
@@ -178,6 +180,7 @@ ACCIONES_SOLO_ARBITRO = {
     "aprobar_oro",
     "rechazar_oro",
     "declarar_ganador",
+    "descalificar",
     "cerrar_ganador",
     "agregar_competidor",
     "eliminar_competidor",
@@ -492,6 +495,21 @@ class CombateNamespace(Namespace):
                     emit("ack", {"evId": ev_id})
                 return
 
+            # Combate cerrado: con ganador declarado solo procede guardar
+            # (Nuevo Combate) o descartar (Reset).
+            if (
+                ts.get("categoria_activa", "combate") == "combate"
+                and ts["estado"].get("ganadorManualColor")
+                and accion in ACCIONES_BLOQUEADAS_TRAS_GANADOR
+            ):
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                emit("accion_rechazada", {
+                    "message": "El combate ya tiene ganador. Usa NUEVO COMBATE "
+                               "para guardarlo o RESET para descartarlo."
+                })
+                return
+
             if accion == "cerrar_ganador" and rol != "arbitro":
                 if ev_id:
                     emit("ack", {"evId": ev_id})
@@ -662,6 +680,17 @@ class CombateNamespace(Namespace):
             def alerta_superioridad_cb(payload):
                 socketio.emit("alerta12", payload, namespace="/combate", to=room)
 
+            def derrota_cb(perdedor, razon):
+                # Descalificación automática: modal de derrota en todos los
+                # dispositivos del tatami (el ganador sale por ganador_cb).
+                socketio.emit(
+                    "derrota",
+                    {"perdedor": perdedor, "razon": razon},
+                    namespace="/combate",
+                    to=room,
+                )
+                self._detener_crono(tatami_id)
+
             # ── Cambio de categoría ────────────────────────────────────────
             if accion == "cambiar_categoria":
                 nueva_cat = ev.get("categoria", "combate")
@@ -684,7 +713,7 @@ class CombateNamespace(Namespace):
             if categoria == "figuras":
                 aplicar_evento_figuras(ts["estado"], ev)
             else:
-                aplicar_evento(ts["estado"], ev, ganador_cb, alerta_superioridad_cb)
+                aplicar_evento(ts["estado"], ev, ganador_cb, alerta_superioridad_cb, derrota_cb)
 
             # ── Manejar cronómetro ─────────────────────────────────────────
             if accion == "crono_start":

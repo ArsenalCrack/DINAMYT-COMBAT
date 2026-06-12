@@ -328,24 +328,38 @@ def _figuras_estado(combate):
 
 
 def _puntos_por_ronda(combate):
-    """Suma de puntos registrados por ronda y color (incluye penalizaciones)."""
+    """
+    Puntos por ronda y color EN LA MISMA ESCALA que el marcador final:
+    los puntos de jueces de esquina se promedian entre los jueces activos
+    (igual que calcular_marcador) y los del árbitro van a valor completo.
+    Así la suma de las rondas coincide con el total del combate.
+    """
+    num_jueces = combate.num_jueces or 4
     rondas = {}
     for entrada in (combate.historial_completo or []):
         color = entrada.get("color")
         if color not in ("hong", "chung"):
             continue
-        ronda = entrada.get("ronda") or "-"
         try:
             pts = float(entrada.get("pts") or 0)
         except (TypeError, ValueError):
             pts = 0.0
+        juez = str(entrada.get("juez") or "")
+        if juez.startswith("j"):
+            try:
+                if int(juez[1:]) > num_jueces:
+                    continue  # juez fuera de la configuración final del combate
+            except ValueError:
+                continue
+            pts = pts / num_jueces
+        ronda = entrada.get("ronda") or "-"
         slot = rondas.setdefault(ronda, {"hong": 0.0, "chung": 0.0})
         slot[color] += pts
     return rondas
 
 
 def _fmt_pts(valor):
-    return f"{valor:g}"
+    return f"{round(valor, 2):g}"
 
 
 def _rondas_resumen(combate):

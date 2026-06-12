@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 
 
 ALERTA_SUPERIORIDAD_DIFERENCIA = 12
+
+# Descalificación automática (debe coincidir con COMBATE_CONFIG en
+# seeds/seed_categorias.py: faltas.max_kyonggo_dq y faltas.max_gamjeum_dq)
+MAX_KYONGGO_DQ = 6
+MAX_GAMJEUM_DQ = 3
 ACCIONES_MARCADOR = {
     "punto_juez",
     "deshacer_juez",
@@ -17,6 +22,24 @@ ACCIONES_MARCADOR = {
     "kyonggo",
     "gamjeum",
     "set_num_jueces",
+}
+
+# Con ganador ya declarado el combate está cerrado: solo se permite cerrarlo
+# (Nuevo Combate / Reset) o reconocer el aviso. Todo lo que altere marcador,
+# nombres o cronómetro queda bloqueado hasta entonces.
+ACCIONES_BLOQUEADAS_TRAS_GANADOR = {
+    "punto_juez",
+    "deshacer_juez",
+    "especial",
+    "deshacer_arbitro",
+    "kyonggo",
+    "gamjeum",
+    "crono_start",
+    "ronda",
+    "declarar_ganador",
+    "descalificar",
+    "set_num_jueces",
+    "nombres",
 }
 
 
@@ -50,6 +73,10 @@ def estado_inicial():
         "oroPendienteAprobacion": False,
         "oroGanadorNombre": "",
         "oroGanadorColor": "",
+        # El punto de oro NO se suma al marcador hasta que el JC lo apruebe:
+        # aquí espera la entrada de historial lista para aplicarse.
+        "oroPuntoPendiente": None,
+        "oroPuntoDetalle": "",
         "ganadorManualColor": "",
         "ganadorManualMotivo": "",
         "ganadorPendienteCierre": False,
@@ -90,9 +117,71 @@ def _juez_log_label(ev, juez_fallback):
     return f"{base} <{email}>" if email else base
 
 
+def _registrar_oro_pendiente(estado, entrada, color, detalle):
+    """
+    Punto de Oro: el punto queda EN ESPERA (sin tocar marcador ni historial)
+    hasta que el Juez Central lo apruebe. Si lo rechaza, se descarta.
+    """
+    estado["oroResuelto"] = True
+    estado["activo"] = False
+    winner = estado["nombreHong"] if color == "hong" else estado["nombreChung"]
+    estado["oroPendienteAprobacion"] = True
+    estado["oroGanadorNombre"] = winner
+    estado["oroGanadorColor"] = color
+    estado["oroPuntoPendiente"] = entrada
+    estado["oroPuntoDetalle"] = detalle
+    _agregar_log(
+        estado,
+        f"🏆 Punto de Oro — {detalle} (sin sumar, pendiente aprobación JC)",
+        "arb",
+    )
+
+
+def _descalificar(estado, color_infractor, razon, ev,
+                  broadcast_ganador_cb=None, broadcast_derrota_cb=None):
+    """
+    Descalificación automática por acumulación de faltas: el infractor
+    pierde y el rival queda declarado ganador (mismo flujo que
+    declarar_ganador, pendiente de cierre por el Juez Central).
+    """
+    perdedor = estado["nombreHong"] if color_infractor == "hong" else estado["nombreChung"]
+    rival_color = "chung" if color_infractor == "hong" else "hong"
+    winner = estado["nombreHong"] if rival_color == "hong" else estado["nombreChung"]
+    motivo = f"Descalificación del oponente — {razon}"
+
+    estado["activo"] = False
+    estado["oroPendienteAprobacion"] = False
+    estado["ganadorManualColor"] = rival_color
+    estado["ganadorManualMotivo"] = motivo
+    estado["ganadorPendienteCierre"] = True
+    estado["ganadorPendienteNombre"] = winner
+    estado["ganadorPendienteColor"] = rival_color
+    estado["ganadorPendienteMotivo"] = motivo
+    estado["historial"].append({
+        "juez": "arbitro",
+        "color": rival_color,
+        "pts": 0,
+        "nombre": motivo,
+        "esDecision": True,
+        "tiempo": estado["segundos"],
+        "ronda": estado["ronda"],
+        "momento": _momento_evento(),
+        **_juez_meta_evento(ev, "arbitro"),
+    })
+    _agregar_log(estado, f"🚫 DESCALIFICACIÓN — {perdedor.upper()} ({razon})", "arb")
+    _agregar_log(estado, f"🏆 SUNG — {winner.upper()} GANA ({motivo})", "arb")
+    if broadcast_derrota_cb:
+        broadcast_derrota_cb(perdedor, razon)
+    if broadcast_ganador_cb:
+        broadcast_ganador_cb(winner, rival_color, motivo)
+
+
 def verificar_superioridad_tecnica(estado):
     """Dispara una sola alerta cuando la diferencia llega a 12 puntos."""
     if estado.get("alerta12Lanzada"):
+        return None
+    # Con el combate ya decidido la alerta no aporta nada
+    if estado.get("ganadorManualColor"):
         return None
 
     marcador = calcular_marcador(estado)
@@ -118,7 +207,8 @@ def verificar_superioridad_tecnica(estado):
     }
 
 
-def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=None):
+def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=None,
+                   broadcast_derrota_cb=None):
     """
     Aplica un evento delta al estado del combate.
     Traducción directa de aplicarEvento() en server.js.
@@ -128,11 +218,16 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
         ev: dict con {accion: str, ...datos}
         broadcast_ganador_cb: callback(nombre, color) para emitir ganador en Punto de Oro
         broadcast_alerta_cb: callback(payload) para emitir Superioridad técnica
+        broadcast_derrota_cb: callback(perdedor, razon) para la descalificación automática
 
     Returns:
         estado modificado
     """
     accion = ev.get("accion")
+
+    # Combate cerrado: con ganador declarado solo proceden Reset / cierre.
+    if estado.get("ganadorManualColor") and accion in ACCIONES_BLOQUEADAS_TRAS_GANADOR:
+        return estado
 
     if accion == "punto_juez":
         juez = ev.get("juez")
@@ -153,8 +248,7 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
                 return estado
 
         if juez in estado["jueces"]:
-            estado["jueces"][juez][color] += pts
-            estado["historial"].append({
+            entrada = {
                 "juez": juez,
                 "color": color,
                 "pts": pts,
@@ -163,20 +257,18 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
                 "ronda": estado["ronda"],
                 "momento": _momento_evento(),
                 **_juez_meta_evento(ev, juez),
-            })
+            }
+
+            # Punto de Oro: el punto queda pendiente, el JC decide si vale
+            if estado["ronda"] == "oro":
+                detalle = f"{nombre} +{pts} · {_juez_log_label(ev, juez)}"
+                _registrar_oro_pendiente(estado, entrada, color, detalle)
+                return estado
+
+            estado["jueces"][juez][color] += pts
+            estado["historial"].append(entrada)
             emoji = "🔴" if color == "hong" else "🔵"
             _agregar_log(estado, f"{emoji} {nombre} +{pts} · {_juez_log_label(ev, juez)}", color)
-
-            # Punto de Oro: bloquea puntos y espera aprobación del JC
-            if estado["ronda"] == "oro" and not estado["oroResuelto"]:
-                estado["oroResuelto"] = True
-                estado["activo"] = False
-                winner = estado["nombreHong"] if color == "hong" else estado["nombreChung"]
-                estado["oroPendienteAprobacion"] = True
-                estado["oroGanadorNombre"] = winner
-                estado["oroGanadorColor"] = color
-                _agregar_log(estado, f"🏆 Punto de Oro — {winner} (pendiente aprobación JC)", "arb")
-                # NO emitir ganador aquí — esperar aprobar_oro
 
     elif accion == "deshacer_juez":
         juez = ev.get("juez")
@@ -197,12 +289,7 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
         if estado["ronda"] == "oro" and estado.get("oroResuelto"):
             return estado
 
-        if color == "hong":
-            estado["arbHong"] += pts
-        else:
-            estado["arbChung"] += pts
-
-        estado["historial"].append({
+        entrada = {
             "juez": "arbitro",
             "color": color,
             "pts": pts,
@@ -212,19 +299,22 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             "ronda": estado["ronda"],
             "momento": _momento_evento(),
             **_juez_meta_evento(ev, "arbitro"),
-        })
+        }
+
+        # Punto de Oro con especiales: también espera aprobación
+        if estado["ronda"] == "oro":
+            detalle = f"⭐ {nombre} +{pts} · {_juez_log_label(ev, 'arbitro')}"
+            _registrar_oro_pendiente(estado, entrada, color, detalle)
+            return estado
+
+        if color == "hong":
+            estado["arbHong"] += pts
+        else:
+            estado["arbChung"] += pts
+
+        estado["historial"].append(entrada)
         emoji = "🔴" if color == "hong" else "🔵"
         _agregar_log(estado, f"{emoji} ⭐ {nombre} +{pts} · {_juez_log_label(ev, 'arbitro')}", color)
-
-        # Punto de Oro con especiales
-        if estado["ronda"] == "oro" and not estado["oroResuelto"]:
-            estado["oroResuelto"] = True
-            estado["activo"] = False
-            winner = estado["nombreHong"] if color == "hong" else estado["nombreChung"]
-            estado["oroPendienteAprobacion"] = True
-            estado["oroGanadorNombre"] = winner
-            estado["oroGanadorColor"] = color
-            _agregar_log(estado, f"🏆 Punto de Oro — {winner} (pendiente aprobación JC)", "arb")
 
     elif accion == "deshacer_arbitro":
         color = ev.get("color")
@@ -271,6 +361,9 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
                 **_juez_meta_evento(ev, "arbitro"),
             })
             _agregar_log(estado, f"🔴 KyongGo #{estado['kyongHong']} −0.5 — Hong · {_juez_log_label(ev, 'arbitro')}", "hong")
+            if estado["kyongHong"] >= MAX_KYONGGO_DQ:
+                _descalificar(estado, "hong", f"{MAX_KYONGGO_DQ} advertencias (KyongGo)",
+                              ev, broadcast_ganador_cb, broadcast_derrota_cb)
         else:
             estado["kyongChung"] += 1
             estado["arbChung"] -= 0.5
@@ -286,6 +379,9 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
                 **_juez_meta_evento(ev, "arbitro"),
             })
             _agregar_log(estado, f"🔵 KyongGo #{estado['kyongChung']} −0.5 — Chung · {_juez_log_label(ev, 'arbitro')}", "chung")
+            if estado["kyongChung"] >= MAX_KYONGGO_DQ:
+                _descalificar(estado, "chung", f"{MAX_KYONGGO_DQ} advertencias (KyongGo)",
+                              ev, broadcast_ganador_cb, broadcast_derrota_cb)
 
     elif accion == "gamjeum":
         color = ev.get("color")
@@ -319,6 +415,10 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             })
         emoji = "🔴" if color == "hong" else "🔵"
         _agregar_log(estado, f"{emoji} GamJeum −1 · {_juez_log_label(ev, 'arbitro')}", color)
+        faltas = estado["faltasHong"] if color == "hong" else estado["faltasChung"]
+        if faltas >= MAX_GAMJEUM_DQ:
+            _descalificar(estado, color, f"{MAX_GAMJEUM_DQ} GamJeum",
+                          ev, broadcast_ganador_cb, broadcast_derrota_cb)
 
     elif accion == "set_num_jueces":
         estado["numJueces"] = max(2, min(4, ev.get("numJueces", 4)))
@@ -354,8 +454,26 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
         _agregar_log(estado, f"🔢 Ronda: {estado['ronda']}", "arb")
 
     elif accion == "aprobar_oro":
-        # El Juez Central confirma el ganador del Punto de Oro
+        # El Juez Central confirma: AHORA se suma el punto y se da el ganador
         if estado.get("oroPendienteAprobacion"):
+            pendiente = estado.get("oroPuntoPendiente")
+            if pendiente:
+                if pendiente.get("esEspecial"):
+                    if pendiente.get("color") == "hong":
+                        estado["arbHong"] += pendiente.get("pts", 0)
+                    else:
+                        estado["arbChung"] += pendiente.get("pts", 0)
+                elif pendiente.get("juez") in estado["jueces"]:
+                    estado["jueces"][pendiente["juez"]][pendiente["color"]] += pendiente.get("pts", 0)
+                estado["historial"].append(pendiente)
+                emoji = "🔴" if pendiente.get("color") == "hong" else "🔵"
+                _agregar_log(
+                    estado,
+                    f"{emoji} {pendiente.get('nombre', '')} +{pendiente.get('pts', 0)} (Punto de Oro aprobado)",
+                    pendiente.get("color", "arb"),
+                )
+            estado["oroPuntoPendiente"] = None
+            estado["oroPuntoDetalle"] = ""
             estado["oroPendienteAprobacion"] = False
             winner = estado.get("oroGanadorNombre", "")
             color = estado.get("oroGanadorColor", "")
@@ -397,6 +515,15 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             if broadcast_ganador_cb:
                 broadcast_ganador_cb(winner, color, motivo)
 
+    elif accion == "descalificar":
+        # Descalificación directa del Juez Central (ej: no presentación,
+        # conducta antideportiva). El rival queda como ganador.
+        color = ev.get("color")
+        if color in ("hong", "chung"):
+            razon = str(ev.get("razon") or "Decisión del Juez Central").strip()[:80]
+            _descalificar(estado, color, razon, ev,
+                          broadcast_ganador_cb, broadcast_derrota_cb)
+
     elif accion == "cerrar_ganador":
         if estado.get("ganadorPendienteCierre"):
             estado["ganadorPendienteCierre"] = False
@@ -406,13 +533,16 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             _agregar_log(estado, "Ganador reconocido por el Juez Central", "arb")
 
     elif accion == "rechazar_oro":
-        # Permite continuar si el Juez Central no valida el primer punto marcado.
+        # El punto pendiente se descarta sin haber tocado el marcador
+        # y el combate continúa.
         if estado.get("oroPendienteAprobacion"):
             estado["oroPendienteAprobacion"] = False
             estado["oroResuelto"] = False
             estado["oroGanadorNombre"] = ""
             estado["oroGanadorColor"] = ""
-            _agregar_log(estado, "Punto de Oro rechazado por el Juez Central", "arb")
+            estado["oroPuntoPendiente"] = None
+            estado["oroPuntoDetalle"] = ""
+            _agregar_log(estado, "Punto de Oro rechazado por el JC — descartado, el combate continúa", "arb")
 
     elif accion == "reset":
         seg_max = estado["segundosMax"]

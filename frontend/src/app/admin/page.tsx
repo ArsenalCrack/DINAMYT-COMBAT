@@ -39,6 +39,7 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<{ texto: string; tipo: "ok" | "error" } | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [creandoCamp, setCreandoCamp] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "" });
   const { pedirConfirmacion, dialogo } = useConfirmDialog();
@@ -129,13 +130,20 @@ export default function AdminPage() {
 
   async function handleCreateCamp(e: React.FormEvent) {
     e.preventDefault();
+    if (creandoCamp) return;
+    setCreandoCamp(true);
     try {
       await createCampeonatoAPI(newCamp);
       setShowNewCamp(false);
       setNewCamp({ nombre: "", descripcion: "", num_tatamis: 6 });
       loadData(showInactive);
       flash("Campeonato creado exitosamente", "ok");
-    } catch { flash("Error al crear el campeonato", "error"); }
+    } catch {
+      flash("Error al crear el campeonato. Si el servidor estaba dormido puede tardar ~1 min en despertar: revisa la lista antes de reintentar.", "error");
+      loadData(showInactive);
+    } finally {
+      setCreandoCamp(false);
+    }
   }
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -230,8 +238,10 @@ export default function AdminPage() {
                     style={{ width: 80 }} />
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button type="submit" className="btn btn-primary">Crear</button>
-                  <button type="button" className="btn" onClick={() => setShowNewCamp(false)}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={creandoCamp}>
+                    {creandoCamp ? "Creando…" : "Crear"}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setShowNewCamp(false)} disabled={creandoCamp}>Cancelar</button>
                 </div>
               </form>
             </div>

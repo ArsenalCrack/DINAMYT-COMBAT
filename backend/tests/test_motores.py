@@ -64,15 +64,137 @@ class TestCombate:
         assert e["kyongHong"] == 1
         assert e["arbHong"] == -0.5
 
-    def test_punto_de_oro_requiere_aprobacion(self):
+    def test_punto_de_oro_no_suma_hasta_aprobar(self):
+        e = estado_inicial()
+        aplicar_evento(e, {"accion": "ronda", "ronda": "oro"})
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "chung", "pts": 2, "nombre": "Giro"})
+        # El punto queda EN ESPERA: ni marcador ni historial cambian
+        assert e["oroResuelto"] is True
+        assert e["oroPendienteAprobacion"] is True
+        assert e["jueces"]["j1"]["chung"] == 0
+        assert len(e["historial"]) == 0
+        assert "Giro" in e["oroPuntoDetalle"]
+        # Al aprobar: se suma el punto, entra al historial y hay ganador
+        aplicar_evento(e, {"accion": "aprobar_oro"})
+        assert e["jueces"]["j1"]["chung"] == 2
+        assert len(e["historial"]) == 1
+        assert e["historial"][0]["ronda"] == "oro"
+        assert e["ganadorManualColor"] == "chung"
+        assert e["ganadorManualMotivo"] == "Punto de Oro"
+        assert e["oroPuntoPendiente"] is None
+
+    def test_punto_de_oro_rechazado_se_descarta(self):
         e = estado_inicial()
         aplicar_evento(e, {"accion": "ronda", "ronda": "oro"})
         aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "chung", "pts": 1, "nombre": "x"})
-        assert e["oroResuelto"] is True
-        assert e["oroPendienteAprobacion"] is True
-        # Rechazar reabre el combate
         aplicar_evento(e, {"accion": "rechazar_oro"})
+        # Nada quedó sumado y el combate continúa
         assert e["oroResuelto"] is False
+        assert e["jueces"]["j1"]["chung"] == 0
+        assert len(e["historial"]) == 0
+        assert e["oroPuntoPendiente"] is None
+        # Se puede volver a marcar el punto de oro
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j2", "color": "hong", "pts": 1, "nombre": "y"})
+        assert e["oroPendienteAprobacion"] is True
+        assert e["oroGanadorColor"] == "hong"
+
+    def test_punto_de_oro_especial_tambien_espera(self):
+        e = estado_inicial()
+        aplicar_evento(e, {"accion": "ronda", "ronda": "oro"})
+        aplicar_evento(e, {"accion": "especial", "color": "hong", "pts": 2, "nombre": "Knock Down"})
+        assert e["oroPendienteAprobacion"] is True
+        assert e["arbHong"] == 0
+        assert len(e["historial"]) == 0
+        aplicar_evento(e, {"accion": "aprobar_oro"})
+        assert e["arbHong"] == 2
+        assert e["historial"][0].get("esEspecial") is True
+        assert e["ganadorManualColor"] == "hong"
+
+    def test_combate_cerrado_bloquea_acciones(self):
+        e = estado_inicial()
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "hong", "pts": 2, "nombre": "x"})
+        aplicar_evento(e, {"accion": "declarar_ganador", "color": "hong", "motivo": "Decisión"})
+        aplicar_evento(e, {"accion": "cerrar_ganador"})
+        # Con ganador declarado, nada altera marcador, faltas ni cronómetro
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j2", "color": "chung", "pts": 3, "nombre": "x"})
+        aplicar_evento(e, {"accion": "especial", "color": "chung", "pts": 2, "nombre": "x"})
+        aplicar_evento(e, {"accion": "kyonggo", "color": "hong"})
+        aplicar_evento(e, {"accion": "gamjeum", "color": "hong"})
+        aplicar_evento(e, {"accion": "crono_start"})
+        aplicar_evento(e, {"accion": "nombres", "nombreHong": "Otro", "nombreChung": "Nombre"})
+        aplicar_evento(e, {"accion": "declarar_ganador", "color": "chung", "motivo": "Cambio"})
+        assert e["jueces"]["j2"]["chung"] == 0
+        assert e["arbChung"] == 0
+        assert e["kyongHong"] == 0
+        assert e["faltasHong"] == 0
+        assert e["activo"] is False
+        assert e["nombreHong"] == "Hong"
+        assert e["ganadorManualColor"] == "hong"
+        # Reset sí libera el combate
+        aplicar_evento(e, {"accion": "reset"})
+        assert e["ganadorManualColor"] == ""
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "hong", "pts": 1, "nombre": "x"})
+        assert e["jueces"]["j1"]["hong"] == 1
+
+    def test_tres_gamjeum_descalifican(self):
+        e = estado_inicial()
+        e["nombreHong"] = "Ana"
+        e["nombreChung"] = "Luis"
+        derrotas = []
+        ganadores = []
+        for _ in range(3):
+            aplicar_evento(
+                e, {"accion": "gamjeum", "color": "hong"},
+                broadcast_ganador_cb=lambda n, c, m=None: ganadores.append((n, c, m)),
+                broadcast_derrota_cb=lambda p, r: derrotas.append((p, r)),
+            )
+        assert e["faltasHong"] == 3
+        # Hong queda descalificado y Chung es el ganador
+        assert derrotas == [("Ana", "3 GamJeum")]
+        assert ganadores and ganadores[0][0] == "Luis" and ganadores[0][1] == "chung"
+        assert e["ganadorManualColor"] == "chung"
+        assert "Descalificación" in e["ganadorManualMotivo"]
+        assert e["ganadorPendienteCierre"] is True
+        assert e["activo"] is False
+        # Con el combate cerrado ya no entran más faltas ni puntos
+        aplicar_evento(e, {"accion": "cerrar_ganador"})
+        aplicar_evento(e, {"accion": "gamjeum", "color": "chung"})
+        assert e["faltasChung"] == 0
+
+    def test_descalificar_manual_walkover(self):
+        # No presentación: sin un solo punto, el JC descalifica y el rival gana
+        e = estado_inicial()
+        e["nombreHong"] = "Ana"
+        e["nombreChung"] = "Luis"
+        derrotas = []
+        aplicar_evento(
+            e, {"accion": "descalificar", "color": "chung", "razon": "No presentación"},
+            broadcast_derrota_cb=lambda p, r: derrotas.append((p, r)),
+        )
+        assert derrotas == [("Luis", "No presentación")]
+        assert e["ganadorManualColor"] == "hong"
+        assert "No presentación" in e["ganadorManualMotivo"]
+        assert e["ganadorPendienteCierre"] is True
+        # Queda constancia en el historial para el reporte
+        assert len(e["historial"]) == 1
+        assert e["historial"][0].get("esDecision") is True
+        # Color inválido no hace nada
+        e2 = estado_inicial()
+        aplicar_evento(e2, {"accion": "descalificar", "color": "verde"})
+        assert e2["ganadorManualColor"] == ""
+
+    def test_seis_kyonggo_descalifican(self):
+        e = estado_inicial()
+        derrotas = []
+        for _ in range(6):
+            aplicar_evento(
+                e, {"accion": "kyonggo", "color": "chung"},
+                broadcast_derrota_cb=lambda p, r: derrotas.append((p, r)),
+            )
+        assert e["kyongChung"] == 6
+        assert derrotas == [("Chung", "6 advertencias (KyongGo)")]
+        assert e["ganadorManualColor"] == "hong"
+        assert e["ganadorPendienteCierre"] is True
 
     def test_reset_conserva_duracion(self):
         e = estado_inicial()
