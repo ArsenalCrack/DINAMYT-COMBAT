@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginAPI } from "@/lib/api";
 import Logo from "@/components/Logo";
@@ -12,8 +12,23 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Iniciar sesión requiere internet: avisar de frente en vez de fallar feo
+  const [sinInternet, setSinInternet] = useState(false);
+  useEffect(() => {
+    setSinInternet(typeof navigator !== "undefined" && !navigator.onLine);
+    const on = () => setSinInternet(false);
+    const off = () => setSinInternet(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (sinInternet) return;
     setError("");
     setLoading(true);
     try {
@@ -119,7 +134,14 @@ export default function LoginPage() {
                 />
               </div>
 
-              {error && (
+              {sinInternet && (
+                <div className="login-error animate-fade" role="alert">
+                  📡 Sin conexión a internet. Para iniciar sesión necesitas
+                  internet; vuelve a intentarlo cuando regrese.
+                </div>
+              )}
+
+              {error && !sinInternet && (
                 <div className="login-error animate-fade" role="alert">
                   {error}
                 </div>
@@ -128,11 +150,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 className="btn btn-primary btn-lg"
-                style={{ width: "100%" }}
-                disabled={loading}
+                style={{ width: "100%", opacity: sinInternet ? 0.5 : 1 }}
+                disabled={loading || sinInternet}
                 id="login-submit"
               >
-                {loading ? "Verificando..." : "Iniciar Sesion"}
+                {sinInternet ? "Sin conexión" : loading ? "Verificando..." : "Iniciar Sesion"}
               </button>
             </form>
           </div>

@@ -836,7 +836,9 @@ function FigurasJuez({
   const [notaOff, setNotaOff] = useState("");
   const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3 };
   const idxCriterio = MAP_JUEZ[juezId as keyof typeof MAP_JUEZ];
-  const miCriterio = idxCriterio !== undefined ? state.criterios[idxCriterio] : undefined;
+  // Optional chaining: en offline este componente puede montarse con estado
+  // de combate (el juez cambió a "Figuras" con el selector local).
+  const miCriterio = idxCriterio !== undefined ? state.criterios?.[idxCriterio] : undefined;
 
   // Sin conexión el servidor no puede activar competidores: el juez anota
   // sus notas en una libreta local y las reingresa (o dicta a la mesa) después.
@@ -2389,7 +2391,10 @@ function TatamiContent() {
   const rol = searchParams.get("rol") || "pantalla";
 
   const token = typeof window !== "undefined" ? localStorage.getItem("dinamyt_token") : null;
-  const { state, connected, hasServerState, socketError, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
+  const { state, connected, offline, hasServerState, socketError, pendingEvents, enviarEvento, broadcast, alerts: socketAlerts, clearAlert } = useCombate(tatamiId, rol, token);
+  // En modo offline el juez elige localmente qué necesita puntuar
+  // (no se sabe cuánto dura la caída ni qué categoría corre el tatami).
+  const [catOffline, setCatOffline] = useState<"combate" | "figuras" | null>(null);
 
   const alertSystem = useAlertSystem();
 
@@ -2449,11 +2454,15 @@ function TatamiContent() {
   const anyState = state as unknown as AnyState;
   const categoria = anyState._categoria || "combate";
   // Sin conexión ni estado del servidor, usar la última categoría conocida
-  // del tatami (guardada abajo) para mostrar la interfaz offline correcta.
+  // del tatami (guardada abajo); en offline el juez puede cambiarla a mano.
   const categoriaGuardada = typeof window !== "undefined"
     ? localStorage.getItem(`dinamyt_categoria_${tatamiId}`)
     : null;
-  const esFiguras = hasServerState ? isFiguras(anyState) : categoriaGuardada === "figuras";
+  const catServidor = hasServerState
+    ? (isFiguras(anyState) ? "figuras" : "combate")
+    : (categoriaGuardada === "figuras" ? "figuras" : "combate");
+  const catActiva = offline && catOffline ? catOffline : catServidor;
+  const esFiguras = catActiva === "figuras";
   const nombreCategoria = anyState._nombre_categoria || (isFiguras(anyState) ? anyState.nombre_categoria : "") || "Figuras";
   // Número visible del tatami dentro de su campeonato (no el ID interno)
   const tatamiLabel = String(anyState._tatami_numero ?? tatamiId);
@@ -2553,7 +2562,13 @@ function TatamiContent() {
     alertSystem.clearGanador();
   }
 
-  if (socketError && !isPantalla) {
+  // Solo es un rechazo real si el SERVIDOR negó el rol (mensaje en español
+  // desde nuestro backend). Los fallos de red ("websocket error", "timeout",
+  // "xhr poll error"...) NO expulsan al juez: se atienden con el modo offline.
+  const esRechazoDeRol = Boolean(
+    socketError && !/websocket|xhr|timeout|transport|polling|network/i.test(socketError)
+  );
+  if (esRechazoDeRol && !isPantalla) {
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div className="card" style={{ maxWidth: 460, width: "100%", textAlign: "center" }}>
@@ -2572,14 +2587,15 @@ function TatamiContent() {
     );
   }
 
-  // Sin estado del servidor: si hay conexión es una espera breve (splash).
-  // Sin conexión, los jueces NO se quedan esperando: entran directo al modo
-  // de registro local (la pantalla pública sí necesita el servidor).
-  if (!hasServerState && (connected || isPantalla)) {
+  // Sin estado del servidor: mientras no se confirme el corte es una espera
+  // breve (splash). Con el corte confirmado, los jueces NO se quedan
+  // esperando: entran directo al modo de registro local (la pantalla pública
+  // sí necesita el servidor).
+  if (!hasServerState && (!offline || isPantalla)) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
         <Logo stacked className="animate-fade" fontSize="2.4rem" />
-        {!connected && (
+        {offline && (
           <p style={{ position: "absolute", bottom: "18vh", color: "var(--text-dim)", fontSize: "0.85rem" }}>
             Sin conexión con el servidor…
           </p>
@@ -2773,7 +2789,7 @@ function TatamiContent() {
 
       {/* Content */}
       <div style={{ position: "relative", flex: 1 }}>
-        {connected && anyState._tatami_activo === false && !isArbitro && (
+        {!offline && anyState._tatami_activo === false && !isArbitro && (
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
             background: "rgba(15,15,25,0.85)", zIndex: 50,
@@ -2786,15 +2802,42 @@ function TatamiContent() {
           </div>
         )}
 
+        {/* Selector offline: el juez decide qué registrar mientras no haya conexión */}
+        {offline && (
+          <div style={{
+            display: "flex", gap: 8, alignItems: "center", justifyContent: "center",
+            flexWrap: "wrap", padding: "10px 14px", marginBottom: 4,
+            background: "rgba(232,0,42,0.08)", borderBottom: "1px solid var(--red-alert)",
+          }}>
+            <span style={{ color: "var(--red-alert)", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
+              📴 SIN CONEXIÓN · ¿Qué necesitas registrar?
+            </span>
+            <button
+              className={`btn btn-sm ${!esFiguras ? "btn-primary" : ""}`}
+              onClick={() => setCatOffline("combate")}
+            >
+              Combate
+            </button>
+            <button
+              className={`btn btn-sm ${esFiguras ? "btn-primary" : ""}`}
+              onClick={() => setCatOffline("figuras")}
+            >
+              Figuras
+            </button>
+          </div>
+        )}
+
         {esFiguras ? (
-          isArbitro
+          // En offline el JC también usa la libreta local de figuras
+          // (el panel de gestión necesita servidor)
+          isArbitro && !offline
             ? <FigurasArbitro
                 state={anyState as FigurasState}
                 enviarEvento={enviarEvento}
                 tatamiId={tatamiLabel}
                 onShowConfirm={alertSystem.showConfirm}
               />
-            : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} connected={connected} />
+            : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} connected={!offline} />
         ) : (
           isArbitro
             ? <CombateArbitro
@@ -2802,7 +2845,7 @@ function TatamiContent() {
                 enviarEvento={enviarEvento}
                 tatamiId={tatamiLabel}
                 tatamiDbId={tatamiId}
-                connected={connected}
+                connected={!offline}
                 onFlash={alertSystem.showFlash}
                 onFaltaFlash={alertSystem.showFaltaFlash}
                 onShowConfirm={alertSystem.showConfirm}
@@ -2813,7 +2856,7 @@ function TatamiContent() {
                 rol={rol}
                 enviarEvento={enviarEvento}
                 pendingEvents={pendingEvents}
-                connected={connected}
+                connected={!offline}
                 onFlash={alertSystem.showFlash}
               />
         )}

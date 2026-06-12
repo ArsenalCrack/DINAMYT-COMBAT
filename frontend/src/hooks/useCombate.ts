@@ -182,6 +182,27 @@ export function useCombate(
     };
   }, []);
 
+  // "offline" = corte CONFIRMADO. Conectar siempre tarda un instante, así que
+  // un período de gracia evita el falso "sin conexión" al entrar a la página:
+  // 5s en la conexión inicial, 2.5s si una conexión establecida se cae.
+  // Si el sistema operativo reporta que no hay red, es inmediato.
+  const [offline, setOffline] = useState(false);
+  const huboConexionRef = useRef(false);
+  useEffect(() => {
+    if (connected) huboConexionRef.current = true;
+    if (connected && netOnline) {
+      setOffline(false);
+      return;
+    }
+    if (!netOnline) {
+      setOffline(true);
+      return;
+    }
+    const espera = huboConexionRef.current ? 2500 : 5000;
+    const timer = setTimeout(() => setOffline(true), espera);
+    return () => clearTimeout(timer);
+  }, [connected, netOnline]);
+
   // Conectar al tatami
   useEffect(() => {
     if (!tatamiId) return;
@@ -346,6 +367,8 @@ export function useCombate(
   return {
     state,
     connected: connected && netOnline,
+    /** Corte de conexión confirmado (tras el período de gracia) */
+    offline,
     hasServerState,
     socketError,
     pendingEvents,
