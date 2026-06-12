@@ -91,6 +91,10 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
 
   async function handleCrear(e: React.FormEvent) {
     e.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      flash("Sin internet: no se puede crear la llave ahora. Reintenta cuando vuelva la conexión.");
+      return;
+    }
     if (!nombre.trim()) {
       flash("Escribe el nombre de la llave.");
       return;

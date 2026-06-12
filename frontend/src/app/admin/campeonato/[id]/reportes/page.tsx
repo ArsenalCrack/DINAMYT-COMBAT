@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api, { getCampeonatoAPI, listTatamisAPI } from "@/lib/api";
+import AvisoSinInternet from "@/components/AvisoSinInternet";
 
 interface Combate {
   id: number;
@@ -279,6 +280,7 @@ export default function ReportesCampeonatoPage() {
 
   return (
     <div className="reportes-page">
+      <AvisoSinInternet />
       {/* Header */}
       <div className="reportes-header">
         <div>

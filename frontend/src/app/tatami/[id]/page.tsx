@@ -846,13 +846,14 @@ function FigurasJuez({
     return (
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "12px 14px" }}>
         <PanelRegistroOffline
+          modo="resumen"
           conectado={false}
           entradas={offline.entradas}
           onDeshacer={offline.deshacer}
           onLimpiar={offline.limpiar}
           descripcion="Sin conexión: anota aquí el competidor y tu nota; se guardan en este dispositivo aunque recargues. Cuando vuelva la conexión, ingrésalas por el flujo normal cuando el Juez Central active a cada competidor, o díctalas a la mesa."
         />
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
           <div className="card-title">Anotar nota local{miCriterio ? ` — ${miCriterio.nombre}` : ""}</div>
           <input
             className="input"
@@ -862,10 +863,15 @@ function FigurasJuez({
           />
           <input
             className="input"
-            inputMode="decimal"
+            inputMode="numeric"
             placeholder="Nota (ej: 8.50)"
             value={notaOff}
-            onChange={(e) => setNotaOff(e.target.value)}
+            onChange={(e) => {
+              // Igual que el input online: solo números, máximo 3 dígitos y
+              // el punto decimal se inserta solo (875 → 8.75, 90 → 9.0)
+              const digitos = e.target.value.replace(/\D/g, "").slice(0, 3);
+              setNotaOff(digitos.length <= 1 ? digitos : `${digitos[0]}.${digitos.slice(1)}`);
+            }}
             style={{ fontFamily: "var(--font-mono)", textAlign: "center" }}
           />
           <button
@@ -880,6 +886,14 @@ function FigurasJuez({
             Guardar nota
           </button>
         </div>
+        <PanelRegistroOffline
+          modo="detalle"
+          conectado={false}
+          entradas={offline.entradas}
+          onDeshacer={offline.deshacer}
+          onLimpiar={offline.limpiar}
+          descripcion=""
+        />
       </div>
     );
   }
@@ -1510,7 +1524,7 @@ function CombateJuez({
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: "0 auto", padding: "12px 14px", height: "calc(100dvh - 48px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "12px 14px", minHeight: "calc(100dvh - 48px)", display: "flex", flexDirection: "column" }}>
       {/* Mini crono + nombre rol */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1527,15 +1541,16 @@ function CombateJuez({
         <CronoDisplay segundos={state.segundos} activo={state.activo} segundosMax={state.segundosMax} />
       </div>
 
-      {/* Registro local: activo sin conexión, visible hasta mostrarse a la mesa */}
+      {/* Arriba solo el aviso y el marcador local; el detalle va al final */}
       <PanelRegistroOffline
+        modo="resumen"
         conectado={connected}
         entradas={offline.entradas}
         onDeshacer={offline.deshacer}
         onLimpiar={offline.limpiar}
         descripcion={connected
-          ? "Recuperaste la conexión. Muestra este registro a la mesa de control para sumar los puntos y luego bórralo."
-          : "Tus puntos se están guardando en este teléfono (sobreviven aunque recargues). Cuando termine el combate, muestra este registro a la mesa de control."}
+          ? "Recuperaste la conexión. Muestra el registro del final de esta pantalla a la mesa de control y, cuando esté conciliado, bórralo allí."
+          : "Tus puntos se están guardando en este teléfono (sobreviven aunque recargues). El detalle completo está al final de esta pantalla."}
       />
 
       {/* Aviso de combate cerrado o punto de oro en espera */}
@@ -1646,6 +1661,18 @@ function CombateJuez({
           <span style={{ color: "var(--orange)", fontSize: "0.78rem" }}>{pendingEvents} pendiente(s)</span>
         </div>
       )}
+
+      {/* Detalle del registro local: al final para no estorbar la puntuación */}
+      <div style={{ marginTop: 10 }}>
+        <PanelRegistroOffline
+          modo="detalle"
+          conectado={connected}
+          entradas={offline.entradas}
+          onDeshacer={offline.deshacer}
+          onLimpiar={offline.limpiar}
+          descripcion=""
+        />
+      </div>
     </div>
   );
 }
@@ -1667,6 +1694,8 @@ interface EntradaOffline {
 function useRegistroOffline(clave: string) {
   const [entradas, setEntradas] = useState<EntradaOffline[]>([]);
 
+  // Carga al montar (en efecto y no en el inicializador para no romper la
+  // hidratación de SSR, donde localStorage no existe).
   useEffect(() => {
     try {
       const raw = localStorage.getItem(clave);
@@ -1674,33 +1703,48 @@ function useRegistroOffline(clave: string) {
     } catch { /* almacenamiento no disponible: el registro vive solo en memoria */ }
   }, [clave]);
 
-  function guardar(siguientes: EntradaOffline[]) {
-    setEntradas(siguientes);
-    try { localStorage.setItem(clave, JSON.stringify(siguientes)); } catch { /* */ }
+  // Actualización funcional + escritura inmediata: sin closures viejos, cada
+  // cambio queda en localStorage al instante (sobrevive recargas y salidas).
+  function persistir(transformar: (prev: EntradaOffline[]) => EntradaOffline[]) {
+    setEntradas((prev) => {
+      const siguientes = transformar(prev);
+      try { localStorage.setItem(clave, JSON.stringify(siguientes)); } catch { /* */ }
+      return siguientes;
+    });
   }
 
   return {
     entradas,
-    agregar: (e: Omit<EntradaOffline, "ts">) => guardar([...entradas, { ...e, ts: Date.now() }]),
-    deshacer: () => guardar(entradas.slice(0, -1)),
-    limpiar: () => guardar([]),
+    agregar: (e: Omit<EntradaOffline, "ts">) =>
+      persistir((prev) => [...prev, { ...e, ts: Date.now() }]),
+    deshacer: () => persistir((prev) => prev.slice(0, -1)),
+    limpiar: () => persistir(() => []),
   };
 }
 
 function PanelRegistroOffline({
-  conectado, entradas, onDeshacer, onLimpiar, descripcion,
+  conectado, entradas, onDeshacer, onLimpiar, descripcion, modo = "completo",
 }: {
   conectado: boolean;
   entradas: EntradaOffline[];
   onDeshacer: () => void;
   onLimpiar: () => void;
   descripcion: string;
+  /**
+   * "resumen": solo aviso + marcador local (va arriba, no estorba).
+   * "detalle": lista de anotaciones + deshacer/borrar (va abajo).
+   * "completo": ambos.
+   */
+  modo?: "completo" | "resumen" | "detalle";
 }) {
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
   // Visible mientras no haya conexión, o mientras quede un registro pendiente
-  // de mostrar a la mesa después de reconectar.
+  // de conciliar con la mesa después de reconectar.
   if (conectado && entradas.length === 0) return null;
+  if (modo === "detalle" && entradas.length === 0) return null;
 
+  const verResumen = modo !== "detalle";
+  const verDetalle = modo !== "resumen";
   const totalHong = entradas.filter((e) => e.color === "hong").reduce((s, e) => s + (e.pts || 0), 0);
   const totalChung = entradas.filter((e) => e.color === "chung").reduce((s, e) => s + (e.pts || 0), 0);
   const hayPuntos = entradas.some((e) => e.color);
@@ -1713,65 +1757,74 @@ function PanelRegistroOffline({
       border: `2px solid ${conectado ? "var(--gold)" : "var(--red-alert)"}`,
       background: conectado ? "rgba(212,175,55,0.08)" : "rgba(232,0,42,0.08)",
     }}>
-      <div style={{
-        fontWeight: 800, fontSize: "0.9rem", letterSpacing: "0.06em", textTransform: "uppercase",
-        color: conectado ? "var(--gold)" : "var(--red-alert)", marginBottom: 6,
-      }}>
-        {conectado ? "📋 Registro local pendiente" : "📴 Sin conexión — registro local activo"}
-      </div>
-      <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: 10 }}>
-        {descripcion}
-      </p>
-
-      {hayPuntos && (
-        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginBottom: 10 }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--hong-light)", fontWeight: 800 }}>HONG</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--hong-vivid)" }}>
-              {totalHong}
-            </div>
+      {verResumen ? (
+        <>
+          <div style={{
+            fontWeight: 800, fontSize: "0.9rem", letterSpacing: "0.06em", textTransform: "uppercase",
+            color: conectado ? "var(--gold)" : "var(--red-alert)", marginBottom: 6,
+          }}>
+            {conectado ? "📋 Registro local pendiente" : "📴 Sin conexión — registro local activo"}
           </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--chung-light)", fontWeight: 800 }}>CHUNG</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--chung-vivid)" }}>
-              {totalChung}
+          <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: hayPuntos ? 10 : 0 }}>
+            {descripcion}
+          </p>
+          {hayPuntos && (
+            <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.65rem", color: "var(--hong-light)", fontWeight: 800 }}>HONG</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--hong-vivid)" }}>
+                  {totalHong}
+                </div>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.65rem", color: "var(--chung-light)", fontWeight: 800 }}>CHUNG</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--chung-vivid)" }}>
+                  {totalChung}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {entradas.length > 0 && (
-        <div style={{ maxHeight: 130, overflowY: "auto", marginBottom: 10, display: "flex", flexDirection: "column", gap: 2 }}>
-          {[...entradas].reverse().map((e) => (
-            <div key={e.ts} style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{hora(e.ts)}</span>
-              {e.color && (
-                <span style={{ color: e.color === "hong" ? "var(--hong-light)" : "var(--chung-light)", fontWeight: 700 }}>
-                  {e.color === "hong" ? "HONG" : "CHUNG"}
-                </span>
-              )}
-              <span>{e.etiqueta}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {entradas.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-sm" onClick={onDeshacer}>↩ Deshacer último</button>
-          {confirmandoBorrado ? (
-            <>
-              <button className="btn btn-sm btn-danger" onClick={() => { onLimpiar(); setConfirmandoBorrado(false); }}>
-                ✓ Sí, borrar todo
-              </button>
-              <button className="btn btn-sm" onClick={() => setConfirmandoBorrado(false)}>Cancelar</button>
-            </>
-          ) : (
-            <button className="btn btn-sm btn-danger" onClick={() => setConfirmandoBorrado(true)}>
-              Borrar registro
-            </button>
           )}
+        </>
+      ) : (
+        <div style={{
+          fontWeight: 800, fontSize: "0.82rem", letterSpacing: "0.06em", textTransform: "uppercase",
+          color: conectado ? "var(--gold)" : "var(--red-alert)", marginBottom: 8,
+        }}>
+          📋 Registro local ({entradas.length})
         </div>
+      )}
+
+      {verDetalle && entradas.length > 0 && (
+        <>
+          <div style={{ maxHeight: 160, overflowY: "auto", margin: "10px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+            {[...entradas].reverse().map((e) => (
+              <div key={e.ts} style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{hora(e.ts)}</span>
+                {e.color && (
+                  <span style={{ color: e.color === "hong" ? "var(--hong-light)" : "var(--chung-light)", fontWeight: 700 }}>
+                    {e.color === "hong" ? "HONG" : "CHUNG"}
+                  </span>
+                )}
+                <span>{e.etiqueta}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-sm" onClick={onDeshacer}>↩ Deshacer último</button>
+            {confirmandoBorrado ? (
+              <>
+                <button className="btn btn-sm btn-danger" onClick={() => { onLimpiar(); setConfirmandoBorrado(false); }}>
+                  ✓ Sí, borrar todo
+                </button>
+                <button className="btn btn-sm" onClick={() => setConfirmandoBorrado(false)}>Cancelar</button>
+              </>
+            ) : (
+              <button className="btn btn-sm btn-danger" onClick={() => setConfirmandoBorrado(true)}>
+                Borrar registro
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -2091,25 +2144,29 @@ function CombateArbitro({
         </div>
       )}
 
-      {/* Combates de eliminación (llaves asignadas a este tatami) */}
-      <LlavePanel
-        tatamiDbId={tatamiDbId}
-        combateLlave={state._combate_llave}
-        mostrarArbol={Boolean(state._mostrar_arbol)}
-        hayArbol={Boolean(state._hay_arbol)}
-        enviarEvento={enviarEvento}
-        onShowConfirm={onShowConfirm}
-      />
+      {/* Combates de eliminación (llaves asignadas a este tatami).
+          Sin conexión no se muestran: no se pueden activar ni avanzar. */}
+      {connected && (
+        <LlavePanel
+          tatamiDbId={tatamiDbId}
+          combateLlave={state._combate_llave}
+          mostrarArbol={Boolean(state._mostrar_arbol)}
+          hayArbol={Boolean(state._hay_arbol)}
+          enviarEvento={enviarEvento}
+          onShowConfirm={onShowConfirm}
+        />
+      )}
 
-      {/* Registro local del JC: puntos y faltas sin conexión */}
+      {/* Registro local del JC: arriba solo el aviso y el marcador local */}
       <PanelRegistroOffline
+        modo="resumen"
         conectado={connected}
         entradas={offline.entradas}
         onDeshacer={offline.deshacer}
         onLimpiar={offline.limpiar}
         descripcion={connected
-          ? "Recuperaste la conexión. Concilia este registro con la mesa: aplica los puntos/faltas con los botones normales o declara el ganador, y luego bórralo."
-          : "Sin conexión: tus puntos especiales y faltas se guardan en este dispositivo. Cronometra manualmente. Al final, suma con los registros de los jueces de esquina y declara el ganador cuando vuelva la conexión."}
+          ? "Recuperaste la conexión. Concilia el registro del final de esta pantalla con la mesa (aplica puntos/faltas con los botones normales o declara el ganador) y luego bórralo allí."
+          : "Sin conexión: tus puntos especiales y faltas se guardan en este dispositivo. Cronometra manualmente; el detalle completo está al final de esta pantalla."}
       />
 
       {/* Combate cerrado: solo guardar o descartar */}
@@ -2375,6 +2432,18 @@ function CombateArbitro({
           </div>
         </div>
       )}
+
+      {/* Detalle del registro local del JC: al final para no estorbar */}
+      <div style={{ marginTop: 10 }}>
+        <PanelRegistroOffline
+          modo="detalle"
+          conectado={connected}
+          entradas={offline.entradas}
+          onDeshacer={offline.deshacer}
+          onLimpiar={offline.limpiar}
+          descripcion=""
+        />
+      </div>
     </div>
   );
 }
@@ -2681,7 +2750,9 @@ function TatamiContent() {
         <div className="tatami-topbar-center" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className={`status-dot ${connected ? "online" : "offline"}`} />
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>T{tatamiLabel}</span>
-          {isArbitro && <CatSelector current={categoria} onSelect={handleChangeCategoria} figurasLabel={nombreCategoria} />}
+          {/* El selector online de categoría se oculta sin conexión:
+              en offline manda el selector local de la barra roja */}
+          {isArbitro && !offline && <CatSelector current={categoria} onSelect={handleChangeCategoria} figurasLabel={nombreCategoria} />}
           {!isArbitro && (
             <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
               {categoria} · {rol.toUpperCase()}
@@ -2805,25 +2876,27 @@ function TatamiContent() {
         {/* Selector offline: el juez decide qué registrar mientras no haya conexión */}
         {offline && (
           <div style={{
-            display: "flex", gap: 8, alignItems: "center", justifyContent: "center",
-            flexWrap: "wrap", padding: "10px 14px", marginBottom: 4,
+            display: "flex", flexDirection: "column", gap: 8, alignItems: "center",
+            padding: "10px 14px", marginBottom: 4,
             background: "rgba(232,0,42,0.08)", borderBottom: "1px solid var(--red-alert)",
           }}>
-            <span style={{ color: "var(--red-alert)", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
+            <span style={{ color: "var(--red-alert)", fontWeight: 800, fontSize: "0.78rem", letterSpacing: "0.06em", textAlign: "center" }}>
               📴 SIN CONEXIÓN · ¿Qué necesitas registrar?
             </span>
-            <button
-              className={`btn btn-sm ${!esFiguras ? "btn-primary" : ""}`}
-              onClick={() => setCatOffline("combate")}
-            >
-              Combate
-            </button>
-            <button
-              className={`btn btn-sm ${esFiguras ? "btn-primary" : ""}`}
-              onClick={() => setCatOffline("figuras")}
-            >
-              Figuras
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className={`btn btn-sm ${!esFiguras ? "btn-primary" : ""}`}
+                onClick={() => setCatOffline("combate")}
+              >
+                Combate
+              </button>
+              <button
+                className={`btn btn-sm ${esFiguras ? "btn-primary" : ""}`}
+                onClick={() => setCatOffline("figuras")}
+              >
+                Figuras
+              </button>
+            </div>
           </div>
         )}
 

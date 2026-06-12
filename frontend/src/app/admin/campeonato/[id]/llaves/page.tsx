@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { getCampeonatoAPI } from "@/lib/api";
 import LlavesSection from "@/components/LlavesSection";
+import AvisoSinInternet from "@/components/AvisoSinInternet";
 
 export default function LlavesCampeonatoPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function LlavesCampeonatoPage() {
 
   return (
     <div className="llaves-page">
+      <AvisoSinInternet />
       <div style={{ marginBottom: 20 }}>
         <button className="btn btn-sm btn-ghost" onClick={() => router.push(`/admin/campeonato/${campId}`)}
           style={{ marginBottom: 8 }}>

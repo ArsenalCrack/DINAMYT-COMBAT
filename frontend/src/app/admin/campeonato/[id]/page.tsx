@@ -13,6 +13,7 @@ import {
   type UserData,
 } from "@/lib/api";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import AvisoSinInternet from "@/components/AvisoSinInternet";
 
 interface Tatami {
   id: number;
@@ -180,6 +181,7 @@ export default function CampeonatoDetailPage() {
 
   return (
     <div className="campeonato-admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
+      <AvisoSinInternet />
       {/* Header */}
       <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
         <div style={{ minWidth: 0 }}>

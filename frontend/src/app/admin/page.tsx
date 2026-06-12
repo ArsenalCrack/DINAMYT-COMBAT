@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import LogoutButton from "@/components/LogoutButton";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import AvisoSinInternet, { useSinInternet } from "@/components/AvisoSinInternet";
 import Logo from "@/components/Logo";
 
 interface Campeonato {
@@ -43,6 +44,16 @@ export default function AdminPage() {
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "", rol: "juez" });
   const { pedirConfirmacion, dialogo } = useConfirmDialog();
+  const sinInternet = useSinInternet();
+
+  // Sin internet el admin queda en solo-consulta: ninguna mutación sale
+  function bloqueadoPorInternet(): boolean {
+    if (sinInternet) {
+      flash("Sin internet: los cambios no se pueden guardar ahora. Reintenta cuando vuelva la conexión.", "error");
+      return true;
+    }
+    return false;
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem("dinamyt_user");
@@ -76,6 +87,7 @@ export default function AdminPage() {
   }
 
   async function handleToggleCampActivo(c: Campeonato) {
+    if (bloqueadoPorInternet()) return;
     try {
       await updateCampeonatoAPI(c.id, { activo: !c.activo });
       await loadData(showInactive);
@@ -87,7 +99,7 @@ export default function AdminPage() {
 
   async function handleSaveUserEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || bloqueadoPorInternet()) return;
     const payload: { nombre?: string; email?: string; password?: string; rol?: string } = {};
     if (editUserData.nombre.trim()) payload.nombre = editUserData.nombre.trim();
     if (editUserData.email.trim()) payload.email = editUserData.email.trim();
@@ -105,6 +117,7 @@ export default function AdminPage() {
   }
 
   function handleToggleUserActivo(target: UserData) {
+    if (bloqueadoPorInternet()) return;
     if (target.id === user?.id) {
       flash("No puedes desactivar tu propio usuario", "error");
       return;
@@ -131,7 +144,7 @@ export default function AdminPage() {
 
   async function handleCreateCamp(e: React.FormEvent) {
     e.preventDefault();
-    if (creandoCamp) return;
+    if (creandoCamp || bloqueadoPorInternet()) return;
     setCreandoCamp(true);
     try {
       await createCampeonatoAPI(newCamp);
@@ -149,6 +162,7 @@ export default function AdminPage() {
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
+    if (bloqueadoPorInternet()) return;
     try {
       await registerUserAPI(newUser);
       setShowNewUser(false);
@@ -165,6 +179,7 @@ export default function AdminPage() {
 
   return (
     <div className="admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
+      <AvisoSinInternet />
       {/* Header */}
       <div className="admin-header" style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",

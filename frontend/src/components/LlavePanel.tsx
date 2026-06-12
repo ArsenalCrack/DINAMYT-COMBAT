@@ -127,52 +127,70 @@ export default function LlavePanel({
           </button>
         </div>
       ) : (
-        /* ── Llaves con combates pendientes: sugerir el siguiente ── */
+        /* ── Llaves con combates pendientes: solo UNA a la vez para no
+              saturar al JC; las demás esperan en cola ── */
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {llaves.map((llave) => (
+          {llaves.filter((l) => l.campeon).map((llave) => (
             <div key={llave.id} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              gap: 10, flexWrap: "wrap",
               padding: "8px 12px", background: "var(--bg-elevated)",
               border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
             }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: "0.85rem" }}>
-                  {llave.nombre}
-                  <span style={{ color: "var(--text-dim)", fontWeight: 600, marginLeft: 8, fontSize: "0.75rem" }}>
-                    {llave.pendientes} combate(s) pendiente(s)
-                  </span>
-                </div>
-                {llave.campeon ? (
-                  <div style={{ fontSize: "0.8rem", color: "var(--gold)", fontWeight: 800, marginTop: 2 }}>
-                    🏆 Campeón: {llave.campeon.nombre}
-                  </div>
-                ) : llave.siguiente ? (
-                  <div style={{ fontSize: "0.8rem", marginTop: 2 }}>
-                    <span style={{ color: "var(--text-dim)" }}>Sigue ({llave.siguiente.ronda_nombre}): </span>
-                    <span style={{ color: "var(--hong-light)", fontWeight: 700 }}>{llave.siguiente.comp1.nombre}</span>
-                    <span style={{ color: "var(--text-dim)" }}> vs </span>
-                    <span style={{ color: "var(--chung-light)", fontWeight: 700 }}>{llave.siguiente.comp2.nombre}</span>
-                  </div>
-                ) : null}
+              <div style={{ fontWeight: 800, fontSize: "0.85rem" }}>{llave.nombre}</div>
+              <div style={{ fontSize: "0.8rem", color: "var(--gold)", fontWeight: 800, marginTop: 2 }}>
+                🏆 Campeón: {llave.campeon!.nombre}
               </div>
-              {llave.siguiente && (
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() => onShowConfirm({
-                    titulo: "ACTIVAR COMBATE DE ELIMINACIÓN",
-                    mensaje: `${llave.nombre} · ${llave.siguiente?.ronda_nombre}: ${llave.siguiente?.comp1.nombre} (Rojo) vs ${llave.siguiente?.comp2.nombre} (Azul). Los nombres se cargarán en el marcador con el tiempo pausado.`,
-                    tipo: "info",
-                    confirmLabel: "ACTIVAR",
-                    cancelLabel: "Cancelar",
-                    onConfirm: () => enviarEvento("activar_combate_llave", { llave_id: llave.id }),
-                  })}
-                >
-                  Activar
-                </button>
-              )}
             </div>
           ))}
+
+          {(() => {
+            const pendientes = llaves.filter((l) => !l.campeon && l.siguiente);
+            const llave = pendientes[0];
+            if (!llave) return null;
+            const enCola = pendientes.length - 1;
+            return (
+              <>
+                <div key={llave.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  gap: 10, flexWrap: "wrap",
+                  padding: "8px 12px", background: "var(--bg-elevated)",
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: "0.85rem" }}>
+                      {llave.nombre}
+                      <span style={{ color: "var(--text-dim)", fontWeight: 600, marginLeft: 8, fontSize: "0.75rem" }}>
+                        {llave.pendientes} combate(s) pendiente(s)
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", marginTop: 2 }}>
+                      <span style={{ color: "var(--text-dim)" }}>Sigue ({llave.siguiente!.ronda_nombre}): </span>
+                      <span style={{ color: "var(--hong-light)", fontWeight: 700 }}>{llave.siguiente!.comp1.nombre}</span>
+                      <span style={{ color: "var(--text-dim)" }}> vs </span>
+                      <span style={{ color: "var(--chung-light)", fontWeight: 700 }}>{llave.siguiente!.comp2.nombre}</span>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={() => onShowConfirm({
+                      titulo: "ACTIVAR COMBATE DE ELIMINACIÓN",
+                      mensaje: `${llave.nombre} · ${llave.siguiente?.ronda_nombre}: ${llave.siguiente?.comp1.nombre} (Rojo) vs ${llave.siguiente?.comp2.nombre} (Azul). Los nombres se cargarán en el marcador con el tiempo pausado.`,
+                      tipo: "info",
+                      confirmLabel: "ACTIVAR",
+                      cancelLabel: "Cancelar",
+                      onConfirm: () => enviarEvento("activar_combate_llave", { llave_id: llave.id }),
+                    })}
+                  >
+                    Activar
+                  </button>
+                </div>
+                {enCola > 0 && (
+                  <p style={{ color: "var(--text-dim)", fontSize: "0.74rem", margin: "2px 2px 0" }}>
+                    ⏳ {enCola} llave(s) más en cola en este tatami — aparecerán al terminar la actual.
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
