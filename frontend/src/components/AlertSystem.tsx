@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -28,6 +28,8 @@ export interface Alerta12Data {
   lider: string;
   diferencia?: string;
   motivo?: string;
+  /** Nombre del competidor que lidera (para el botón de ganador del JC) */
+  liderNombre?: string;
 }
 
 export interface DerrotaData {
@@ -128,22 +130,38 @@ export function useAlertSystem() {
 interface AlertSystemProps {
   alerts: AlertState;
   onClearGanador: () => void;
-  onClearAlerta12: () => void;
   onClearDerrota: () => void;
   onClearConfirm: () => void;
   isPantalla?: boolean;
   canCloseGanador?: boolean;
+  /** Solo el Juez Central decide sobre la alerta de superioridad */
+  canCloseAlerta12?: boolean;
+  onAlerta12Reanudar?: () => void;
+  onAlerta12Ganador?: () => void;
 }
 
 export default function AlertSystem({
   alerts,
   onClearGanador,
-  onClearAlerta12,
   onClearDerrota,
   onClearConfirm,
   isPantalla = false,
   canCloseGanador = true,
+  canCloseAlerta12 = true,
+  onAlerta12Reanudar,
+  onAlerta12Ganador,
 }: AlertSystemProps) {
+  // Con un modal bloqueante abierto, la página de fondo no debe hacer scroll
+  const hayModalBloqueante = Boolean(
+    alerts.ganador || alerts.alerta12 || alerts.derrota || alerts.confirm
+  );
+  useEffect(() => {
+    if (!hayModalBloqueante) return;
+    const previo = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previo; };
+  }, [hayModalBloqueante]);
+
   return (
     <>
       {/* ── FLASH NOTIF rápida (centro) ── */}
@@ -164,7 +182,12 @@ export default function AlertSystem({
 
       {/* ── ALERTA 12 puntos ── */}
       {alerts.alerta12 && (
-        <Alerta12Modal data={alerts.alerta12} onClose={onClearAlerta12} />
+        <Alerta12Modal
+          data={alerts.alerta12}
+          canClose={canCloseAlerta12}
+          onReanudar={onAlerta12Reanudar}
+          onGanador={onAlerta12Ganador}
+        />
       )}
 
       {/* ── DERROTA modal ── */}
@@ -328,6 +351,8 @@ function GanadorOverlay({
         justifyContent: "center",
         background: "rgba(0,0,0,0.9)",
         backdropFilter: "blur(12px)",
+        padding: 16,
+        overflowY: "auto",
       }}
     >
       <div
@@ -417,11 +442,18 @@ function GanadorOverlay({
 // ─── Alerta 12 puntos ────────────────────────────────────────────────────────
 function Alerta12Modal({
   data,
-  onClose,
+  canClose,
+  onReanudar,
+  onGanador,
 }: {
   data: Alerta12Data;
-  onClose: () => void;
+  canClose: boolean;
+  onReanudar?: () => void;
+  onGanador?: () => void;
 }) {
+  // Confirmación inline antes de terminar el combate por superioridad
+  const [confirmandoGanador, setConfirmandoGanador] = useState(false);
+  const liderNombre = (data.liderNombre || data.lider || "").toUpperCase();
   return (
     <div
       style={{
@@ -433,6 +465,7 @@ function Alerta12Modal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: 16,
       }}
     >
       <div
@@ -440,19 +473,21 @@ function Alerta12Modal({
           background: "var(--bg-card)",
           border: "2px solid var(--gold)",
           borderRadius: "var(--radius-xl)",
-          padding: "32px 44px",
+          padding: "clamp(16px, 4vw, 32px) clamp(16px, 5vw, 44px)",
           textAlign: "center",
           maxWidth: 400,
-          width: "92%",
+          width: "100%",
+          maxHeight: "90dvh",
+          overflowY: "auto",
           animation: "shake 0.4s ease-out",
           boxShadow: "var(--shadow-gold)",
         }}
       >
-        <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>⚠️</div>
+        <div style={{ fontSize: "clamp(2rem, 6vw, 2.8rem)", lineHeight: 1 }}>⚠️</div>
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "2rem",
+            fontSize: "clamp(1.4rem, 5.5vw, 2rem)",
             letterSpacing: "0.08em",
             color: "var(--gold)",
             marginTop: 6,
@@ -462,9 +497,9 @@ function Alerta12Modal({
         </div>
         <div
           style={{
-            fontSize: "0.9rem",
+            fontSize: "clamp(0.8rem, 3vw, 0.9rem)",
             color: "var(--text-muted)",
-            margin: "8px 0 20px",
+            margin: "8px 0 16px",
           }}
         >
           {data.lider} lidera por {data.diferencia || "12.0"} puntos — El Juez Central evalúa
@@ -474,46 +509,126 @@ function Alerta12Modal({
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            gap: 20,
-            marginBottom: 24,
+            gap: "clamp(10px, 4vw, 20px)",
+            marginBottom: 18,
           }}
         >
           <div
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: "3.5rem",
+              fontSize: "clamp(2.2rem, 9vw, 3.5rem)",
               color: "var(--hong-vivid)",
             }}
           >
             {data.hong}
           </div>
-          <div style={{ color: "var(--text-dim)", fontSize: "1.5rem" }}>vs</div>
+          <div style={{ color: "var(--text-dim)", fontSize: "clamp(1rem, 4vw, 1.5rem)" }}>vs</div>
           <div
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: "3.5rem",
+              fontSize: "clamp(2.2rem, 9vw, 3.5rem)",
               color: "var(--chung-vivid)",
             }}
           >
             {data.chung}
           </div>
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: "linear-gradient(135deg,var(--gold),var(--gold-dark))",
-            border: "none",
-            borderRadius: "var(--radius)",
-            padding: "12px 32px",
-            fontFamily: "var(--font-display)",
-            fontSize: "1.1rem",
-            letterSpacing: "0.06em",
-            color: "var(--text-on-gold)",
-            cursor: "pointer",
-          }}
-        >
-          ENTENDIDO
-        </button>
+        {canClose ? (
+          confirmandoGanador ? (
+            <>
+              <div
+                style={{
+                  fontSize: "clamp(0.82rem, 3vw, 0.92rem)",
+                  color: "var(--text-muted)",
+                  marginBottom: 14,
+                }}
+              >
+                El combate terminará y <strong style={{ color: "var(--gold)" }}>{liderNombre}</strong> quedará
+                como ganador por superioridad técnica.
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setConfirmandoGanador(false)}
+                  style={{
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "var(--radius)",
+                    padding: "12px 24px",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.95rem",
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Volver
+                </button>
+                <button
+                  onClick={onGanador}
+                  style={{
+                    background: "linear-gradient(135deg,var(--gold),var(--gold-dark))",
+                    border: "none",
+                    borderRadius: "var(--radius)",
+                    padding: "12px 24px",
+                    fontFamily: "var(--font-display)",
+                    fontSize: "1.05rem",
+                    letterSpacing: "0.06em",
+                    color: "var(--text-on-gold)",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✓ CONFIRMAR GANADOR
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={onReanudar}
+                style={{
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border-light)",
+                  borderRadius: "var(--radius)",
+                  padding: "12px 24px",
+                  fontFamily: "var(--font-display)",
+                  fontSize: "1.05rem",
+                  letterSpacing: "0.06em",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                ▶ REANUDAR COMBATE
+              </button>
+              <button
+                onClick={() => setConfirmandoGanador(true)}
+                style={{
+                  background: "linear-gradient(135deg,var(--gold),var(--gold-dark))",
+                  border: "none",
+                  borderRadius: "var(--radius)",
+                  padding: "12px 24px",
+                  fontFamily: "var(--font-display)",
+                  fontSize: "1.05rem",
+                  letterSpacing: "0.06em",
+                  color: "var(--text-on-gold)",
+                  cursor: "pointer",
+                }}
+              >
+                🏆 GANADOR: {liderNombre}
+              </button>
+            </div>
+          )
+        ) : (
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(0.85rem, 3vw, 1rem)",
+              letterSpacing: "0.12em",
+              color: "rgba(255,255,255,0.45)",
+            }}
+          >
+            ESPERANDO AL JUEZ CENTRAL
+          </div>
+        )}
       </div>
     </div>
   );
@@ -538,6 +653,7 @@ function DerrotaModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: 16,
       }}
     >
       <div
@@ -545,19 +661,21 @@ function DerrotaModal({
           background: "var(--bg-card)",
           border: "3px solid var(--hong)",
           borderRadius: "var(--radius-xl)",
-          padding: "36px 48px",
+          padding: "clamp(18px, 4vw, 36px) clamp(18px, 5vw, 48px)",
           textAlign: "center",
           maxWidth: 440,
-          width: "92%",
+          width: "100%",
+          maxHeight: "90dvh",
+          overflowY: "auto",
           animation: "shake 0.5s ease-out",
           boxShadow: "var(--shadow-hong)",
         }}
       >
-        <div style={{ fontSize: "4rem", lineHeight: 1 }}>🚫</div>
+        <div style={{ fontSize: "clamp(2.6rem, 8vw, 4rem)", lineHeight: 1 }}>🚫</div>
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "2.6rem",
+            fontSize: "clamp(1.7rem, 6.5vw, 2.6rem)",
             letterSpacing: "0.06em",
             color: "var(--hong-light)",
             marginTop: 8,
@@ -568,9 +686,10 @@ function DerrotaModal({
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "3.2rem",
+            fontSize: "clamp(2rem, 8vw, 3.2rem)",
             lineHeight: 1.1,
             margin: "8px 0",
+            overflowWrap: "anywhere",
           }}
         >
           {data.perdedor.toUpperCase()}
@@ -645,10 +764,12 @@ function ConfirmModal({
           background: "var(--bg-card)",
           border: `2px solid ${tipoBorder[tipo]}`,
           borderRadius: "var(--radius-xl)",
-          padding: "32px 40px",
+          padding: "clamp(18px, 4vw, 32px) clamp(16px, 5vw, 40px)",
           textAlign: "center",
           maxWidth: 460,
           width: "100%",
+          maxHeight: "90dvh",
+          overflowY: "auto",
           animation: "shake 0.35s ease-out",
           boxShadow: "var(--shadow-lg)",
         }}

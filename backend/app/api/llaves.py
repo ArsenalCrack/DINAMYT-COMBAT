@@ -237,8 +237,13 @@ def crear():
         for c in competidores
         if str(c.get("nombre", "")).strip()
     ]
-    if len(competidores) < 2:
-        return jsonify({"error": "Se necesitan al menos 2 competidores"}), 400
+    # Una llave con 2 competidores no tiene sentido: ese caso es un combate
+    # normal disputado directamente desde el tatami, sin llave.
+    if len(competidores) < 3:
+        return jsonify({
+            "error": "Una llave de eliminación necesita mínimo 3 competidores. "
+                     "Con solo 2, disputa un combate normal desde el tatami."
+        }), 400
     if len(competidores) > MAX_COMPETIDORES:
         return jsonify({"error": f"Máximo {MAX_COMPETIDORES} competidores"}), 400
 

@@ -99,8 +99,8 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
       flash("Selecciona el tatami donde se disputará esta llave.");
       return;
     }
-    if (competidores.length < 2) {
-      flash("Agrega al menos 2 competidores.");
+    if (competidores.length < 3) {
+      flash("Una llave necesita mínimo 3 competidores. Con solo 2, haz un combate normal desde el tatami (sin llave).");
       return;
     }
     setGuardando(true);
@@ -290,10 +290,11 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
           <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: 0 }}>
             El sistema sortea las posiciones aleatoriamente y asigna los byes
             (pases directos) automáticamente cuando el número de competidores
-            no es potencia de 2.
+            no es potencia de 2. Mínimo 3 competidores: si solo son 2, disputa
+            un combate normal desde el tatami (sin llave).
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="submit" className="btn btn-primary" disabled={guardando || competidores.length < 2}>
+            <button type="submit" className="btn btn-primary" disabled={guardando || competidores.length < 3}>
               {guardando ? "Sorteando..." : `Crear y Sortear (${competidores.length})`}
             </button>
             <button type="button" className="btn" onClick={() => setCreando(false)}>Cancelar</button>

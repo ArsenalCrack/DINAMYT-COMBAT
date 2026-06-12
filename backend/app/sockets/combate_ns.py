@@ -23,6 +23,7 @@ from flask_socketio import ConnectionRefusedError, Namespace, emit, join_room, l
 from flask_jwt_extended import decode_token
 
 from ..engine.combate_engine import (
+    ACCIONES_BLOQUEADAS_DURANTE_ALERTA,
     ACCIONES_BLOQUEADAS_TRAS_GANADOR,
     estado_inicial,
     aplicar_evento,
@@ -131,7 +132,7 @@ ACCIONES_SIN_ACTIVACION = {
     "cambiar_nombre_categoria",
 }
 
-ACCIONES_DURANTE_GANADOR_PENDIENTE = {"cerrar_ganador"}
+ACCIONES_DURANTE_GANADOR_PENDIENTE = {"cerrar_ganador", "cerrar_alerta12"}
 
 ACCIONES_REQUIEREN_COMPETIDORES = {
     "punto_juez",
@@ -182,6 +183,7 @@ ACCIONES_SOLO_ARBITRO = {
     "declarar_ganador",
     "descalificar",
     "cerrar_ganador",
+    "cerrar_alerta12",
     "agregar_competidor",
     "eliminar_competidor",
     "activar_competidor",
@@ -510,6 +512,20 @@ class CombateNamespace(Namespace):
                 })
                 return
 
+            # Combate en pausa mientras la alerta de superioridad esté abierta
+            if (
+                ts.get("categoria_activa", "combate") == "combate"
+                and ts["estado"].get("alerta12Data")
+                and accion in ACCIONES_BLOQUEADAS_DURANTE_ALERTA
+            ):
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                emit("accion_rechazada", {
+                    "message": "Combate en pausa por la alerta de superioridad. "
+                               "El Juez Central debe cerrarla para continuar."
+                })
+                return
+
             if accion == "cerrar_ganador" and rol != "arbitro":
                 if ev_id:
                     emit("ack", {"evId": ev_id})
@@ -679,6 +695,8 @@ class CombateNamespace(Namespace):
 
             def alerta_superioridad_cb(payload):
                 socketio.emit("alerta12", payload, namespace="/combate", to=room)
+                # El combate se pausa hasta que el JC cierre la alerta
+                self._detener_crono(tatami_id)
 
             def derrota_cb(perdedor, razon):
                 # Descalificación automática: modal de derrota en todos los
@@ -723,6 +741,9 @@ class CombateNamespace(Namespace):
                 self._iniciar_crono(tatami_id)
             elif accion in ("crono_pause", "crono_reset", "reset", "declarar_ganador"):
                 self._detener_crono(tatami_id)
+            elif accion == "cerrar_alerta12" and ts["estado"].get("activo"):
+                # El JC cerró la alerta con "reanudar": el crono vuelve a correr
+                self._iniciar_crono(tatami_id)
 
             # Si Punto de Oro resuelto, detener crono
             if categoria == "combate" and ts["estado"].get("oroResuelto"):

@@ -23,6 +23,8 @@ export interface CombateState {
   activo: boolean;
   log: LogEntry[];
   alerta12Lanzada: boolean;
+  /** Alerta de superioridad visible hasta que el JC la cierre (cerrar_alerta12) */
+  alerta12Data?: { hong: string; chung: string; lider: string; diferencia?: string; motivo?: string } | null;
   ronda: string;
   oroResuelto: boolean;
   oroPendienteAprobacion: boolean;

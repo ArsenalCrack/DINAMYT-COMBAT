@@ -196,6 +196,49 @@ class TestCombate:
         assert e["ganadorManualColor"] == "hong"
         assert e["ganadorPendienteCierre"] is True
 
+    def test_alerta_superioridad_pausa_el_combate(self):
+        e = estado_inicial()
+        aplicar_evento(e, {"accion": "crono_start"})
+        # 12 puntos de diferencia con el árbitro (valor completo)
+        for _ in range(6):
+            aplicar_evento(e, {"accion": "especial", "color": "hong", "pts": 2, "nombre": "x"})
+        assert e["alerta12Lanzada"] is True
+        assert e["alerta12Data"] is not None
+        assert e["alerta12Data"]["lider"] == "Hong"
+        # El combate queda EN PAUSA: crono detenido y acciones bloqueadas
+        assert e["activo"] is False
+        aplicar_evento(e, {"accion": "crono_start"})
+        assert e["activo"] is False
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "chung", "pts": 1, "nombre": "x"})
+        assert e["jueces"]["j1"]["chung"] == 0
+        aplicar_evento(e, {"accion": "kyonggo", "color": "hong"})
+        assert e["kyongHong"] == 0
+        # Solo cerrar_alerta12 la retira y reabre el combate
+        aplicar_evento(e, {"accion": "cerrar_alerta12"})
+        assert e["alerta12Data"] is None
+        aplicar_evento(e, {"accion": "punto_juez", "juez": "j1", "color": "chung", "pts": 1, "nombre": "x"})
+        assert e["jueces"]["j1"]["chung"] == 1
+        aplicar_evento(e, {"accion": "crono_start"})
+        assert e["activo"] is True
+
+    def test_cerrar_alerta_con_reanudar_reactiva_el_combate(self):
+        e = estado_inicial()
+        aplicar_evento(e, {"accion": "crono_start"})
+        for _ in range(6):
+            aplicar_evento(e, {"accion": "especial", "color": "hong", "pts": 2, "nombre": "x"})
+        assert e["activo"] is False
+        aplicar_evento(e, {"accion": "cerrar_alerta12", "reanudar": True})
+        assert e["alerta12Data"] is None
+        assert e["activo"] is True
+
+    def test_alerta_superioridad_se_cierra_al_declarar_ganador(self):
+        e = estado_inicial()
+        for _ in range(6):
+            aplicar_evento(e, {"accion": "especial", "color": "chung", "pts": 2, "nombre": "x"})
+        assert e["alerta12Data"] is not None
+        aplicar_evento(e, {"accion": "declarar_ganador", "color": "chung", "motivo": "Superioridad técnica"})
+        assert e["alerta12Data"] is None
+
     def test_reset_conserva_duracion(self):
         e = estado_inicial()
         aplicar_evento(e, {"accion": "crono_reset", "segundosMax": 90})

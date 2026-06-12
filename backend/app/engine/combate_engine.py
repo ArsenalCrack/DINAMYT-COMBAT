@@ -24,6 +24,22 @@ ACCIONES_MARCADOR = {
     "set_num_jueces",
 }
 
+# Con la alerta de superioridad abierta el combate queda EN PAUSA: nada que
+# altere marcador, faltas o cronómetro hasta que el JC la cierre
+# (cerrar_alerta12). El JC sí puede declarar ganador o descalificar.
+ACCIONES_BLOQUEADAS_DURANTE_ALERTA = {
+    "punto_juez",
+    "deshacer_juez",
+    "especial",
+    "deshacer_arbitro",
+    "kyonggo",
+    "gamjeum",
+    "crono_start",
+    "ronda",
+    "set_num_jueces",
+    "nombres",
+}
+
 # Con ganador ya declarado el combate está cerrado: solo se permite cerrarlo
 # (Nuevo Combate / Reset) o reconocer el aviso. Todo lo que altere marcador,
 # nombres o cronómetro queda bloqueado hasta entonces.
@@ -68,6 +84,9 @@ def estado_inicial():
         "activo": False,
         "log": [],
         "alerta12Lanzada": False,
+        # Alerta de superioridad visible en todos los dispositivos hasta que
+        # el Juez Central la cierre (accion cerrar_alerta12).
+        "alerta12Data": None,
         "ronda": "r1",
         "oroResuelto": False,
         "oroPendienteAprobacion": False,
@@ -151,6 +170,7 @@ def _descalificar(estado, color_infractor, razon, ev,
 
     estado["activo"] = False
     estado["oroPendienteAprobacion"] = False
+    estado["alerta12Data"] = None
     estado["ganadorManualColor"] = rival_color
     estado["ganadorManualMotivo"] = motivo
     estado["ganadorPendienteCierre"] = True
@@ -198,13 +218,18 @@ def verificar_superioridad_tecnica(estado):
         f"[ALERTA] Superioridad técnica — {lider} lidera por {diff:.1f} puntos",
         "arb",
     )
-    return {
+    alerta = {
         "hong": f"{total_hong:.1f}",
         "chung": f"{total_chung:.1f}",
         "lider": lider,
         "diferencia": f"{diff:.1f}",
         "motivo": "Superioridad técnica",
     }
+    # La alerta queda en el estado: visible para todos hasta que el JC la
+    # cierre, y el combate se pausa (cronómetro detenido, acciones bloqueadas).
+    estado["alerta12Data"] = alerta
+    estado["activo"] = False
+    return alerta
 
 
 def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=None,
@@ -227,6 +252,10 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
 
     # Combate cerrado: con ganador declarado solo proceden Reset / cierre.
     if estado.get("ganadorManualColor") and accion in ACCIONES_BLOQUEADAS_TRAS_GANADOR:
+        return estado
+
+    # Combate en pausa por alerta de superioridad: espera al Juez Central.
+    if estado.get("alerta12Data") and accion in ACCIONES_BLOQUEADAS_DURANTE_ALERTA:
         return estado
 
     if accion == "punto_juez":
@@ -475,6 +504,7 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             estado["oroPuntoPendiente"] = None
             estado["oroPuntoDetalle"] = ""
             estado["oroPendienteAprobacion"] = False
+            estado["alerta12Data"] = None
             winner = estado.get("oroGanadorNombre", "")
             color = estado.get("oroGanadorColor", "")
             estado["ganadorManualColor"] = color
@@ -492,6 +522,7 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
         if color in ("hong", "chung"):
             winner = estado["nombreHong"] if color == "hong" else estado["nombreChung"]
             motivo = ev.get("motivo") or "Decisión del Juez Central"
+            estado["alerta12Data"] = None
             estado["ganadorManualColor"] = color
             estado["ganadorManualMotivo"] = motivo
             estado["ganadorPendienteCierre"] = True
@@ -514,6 +545,18 @@ def aplicar_evento(estado, ev, broadcast_ganador_cb=None, broadcast_alerta_cb=No
             _agregar_log(estado, f"🏆 SUNG — {winner.upper()} GANA ({motivo})", "arb")
             if broadcast_ganador_cb:
                 broadcast_ganador_cb(winner, color, motivo)
+
+    elif accion == "cerrar_alerta12":
+        # Solo el Juez Central retira la alerta de superioridad (gate en
+        # socket). Con reanudar=True el combate continúa de inmediato
+        # (el cronómetro vuelve a correr).
+        if estado.get("alerta12Data"):
+            estado["alerta12Data"] = None
+            if ev.get("reanudar"):
+                estado["activo"] = True
+                _agregar_log(estado, "▶ Superioridad evaluada — el JC reanuda el combate", "arb")
+            else:
+                _agregar_log(estado, "Alerta de superioridad cerrada por el JC", "arb")
 
     elif accion == "descalificar":
         # Descalificación directa del Juez Central (ej: no presentación,

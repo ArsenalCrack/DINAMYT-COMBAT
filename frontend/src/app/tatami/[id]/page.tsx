@@ -1387,10 +1387,12 @@ function CombateJuez({
 }) {
   const miPuntaje = state.jueces?.[rol] || { hong: 0, chung: 0 };
   const nombresListos = competidoresConNombre(state);
-  // Bloqueado también con ganador ya declarado o punto de oro en espera
+  // Bloqueado con ganador declarado, punto de oro en espera o alerta de
+  // superioridad abierta (el combate queda en pausa hasta que el JC la cierre)
   const combateCerrado = Boolean(state.ganadorManualColor);
   const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre)
-    || combateCerrado || Boolean(state.oroPendienteAprobacion);
+    || combateCerrado || Boolean(state.oroPendienteAprobacion)
+    || Boolean(state.alerta12Data);
   // Rol fuera de la configuración actual (ej: j3 en combate de 2 jueces)
   const rolNum = rol.startsWith("j") ? Number(rol.slice(1)) : 0;
   const rolInactivo = rolNum > (state.numJueces || 4);
@@ -1658,9 +1660,10 @@ function CombateArbitro({
   const nombresListos = competidoresConNombre(state);
   // Con ganador declarado el combate está cerrado: se bloquea todo lo que
   // altere marcador o cronómetro. Solo quedan NUEVO COMBATE (guardar) y RESET.
+  // La alerta de superioridad abierta también pausa el combate.
   const combateCerrado = Boolean(state.ganadorManualColor);
   const cierreBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
-  const accionesBloqueadas = cierreBloqueado || combateCerrado;
+  const accionesBloqueadas = cierreBloqueado || combateCerrado || Boolean(state.alerta12Data);
 
   const PUNTOS_ARB = [
     { pts: 2, nombre: "Knock Down" },
@@ -2163,12 +2166,18 @@ function TatamiContent() {
     }
   }, [socketAlerts.ganador]);
 
+  // Superioridad técnica: la alerta vive en el ESTADO del servidor
+  // (alerta12Data) — visible para todos hasta que el Juez Central decida
+  // (reanudar o declarar ganador). No se usa el evento transitorio del socket.
   useEffect(() => {
-    if (socketAlerts.alerta12) {
-      alertSystem.showAlerta12(socketAlerts.alerta12 as Alerta12Data);
-      clearAlert("alerta12");
+    if (state.alerta12Data) {
+      const liderNombre = state.alerta12Data.lider === "Hong" ? state.nombreHong : state.nombreChung;
+      alertSystem.showAlerta12({ ...state.alerta12Data, liderNombre } as Alerta12Data);
+    } else {
+      alertSystem.clearAlerta12();
     }
-  }, [socketAlerts.alerta12]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.alerta12Data]);
 
   useEffect(() => {
     if (socketAlerts.derrota) {
@@ -2330,11 +2339,11 @@ function TatamiContent() {
         <AlertSystem
           alerts={alertSystem.alerts}
           onClearGanador={handleClearGanador}
-          onClearAlerta12={alertSystem.clearAlerta12}
           onClearDerrota={alertSystem.clearDerrota}
           onClearConfirm={alertSystem.clearConfirm}
           isPantalla
           canCloseGanador={false}
+          canCloseAlerta12={false}
         />
         {esFiguras
           ? <FigurasPantalla state={anyState as FigurasState} tatamiId={tatamiLabel} />
@@ -2355,10 +2364,18 @@ function TatamiContent() {
       <AlertSystem
         alerts={alertSystem.alerts}
         onClearGanador={handleClearGanador}
-        onClearAlerta12={alertSystem.clearAlerta12}
         onClearDerrota={alertSystem.clearDerrota}
         onClearConfirm={alertSystem.clearConfirm}
         canCloseGanador={isArbitro}
+        canCloseAlerta12={isArbitro}
+        onAlerta12Reanudar={() => {
+          if (isArbitro) enviarEvento("cerrar_alerta12", { reanudar: true });
+        }}
+        onAlerta12Ganador={() => {
+          if (!isArbitro || !state.alerta12Data) return;
+          const color = state.alerta12Data.lider === "Hong" ? "hong" : "chung";
+          enviarEvento("declarar_ganador", { color, motivo: "Superioridad técnica" });
+        }}
       />
 
       {/* Top bar */}
