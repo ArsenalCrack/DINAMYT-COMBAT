@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Barlow_Condensed, Bebas_Neue, Inter, Share_Tech_Mono } from "next/font/google";
+import RegistrarSW from "@/components/RegistrarSW";
 import "./globals.css";
 
 // Fuentes auto-hospedadas: next/font las descarga en el build y las sirve
@@ -52,6 +53,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#050507" />
       </head>
       <body>
+        <RegistrarSW />
         {children}
       </body>
     </html>

@@ -823,15 +823,77 @@ function FigurasScoreCard({
 }
 
 function FigurasJuez({
-  state, enviarEvento, juezId,
+  state, enviarEvento, juezId, connected,
 }: {
   state: FigurasState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   juezId: string;
+  connected: boolean;
 }) {
+  const params = useParams();
+  const offline = useRegistroOffline(`dinamyt_offline_figuras_${params.id}_${juezId}`);
+  const [nombreOff, setNombreOff] = useState("");
+  const [notaOff, setNotaOff] = useState("");
   const MAP_JUEZ = { j1: 0, j2: 1, j3: 2, j4: 3 };
   const idxCriterio = MAP_JUEZ[juezId as keyof typeof MAP_JUEZ];
   const miCriterio = idxCriterio !== undefined ? state.criterios[idxCriterio] : undefined;
+
+  // Sin conexión el servidor no puede activar competidores: el juez anota
+  // sus notas en una libreta local y las reingresa (o dicta a la mesa) después.
+  if (!connected) {
+    return (
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "12px 14px" }}>
+        <PanelRegistroOffline
+          conectado={false}
+          entradas={offline.entradas}
+          onDeshacer={offline.deshacer}
+          onLimpiar={offline.limpiar}
+          descripcion="Sin conexión: anota aquí el competidor y tu nota; se guardan en este dispositivo aunque recargues. Cuando vuelva la conexión, ingrésalas por el flujo normal cuando el Juez Central active a cada competidor, o díctalas a la mesa."
+        />
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="card-title">Anotar nota local{miCriterio ? ` — ${miCriterio.nombre}` : ""}</div>
+          <input
+            className="input"
+            placeholder="Nombre del competidor"
+            value={nombreOff}
+            onChange={(e) => setNombreOff(e.target.value)}
+          />
+          <input
+            className="input"
+            inputMode="decimal"
+            placeholder="Nota (ej: 8.50)"
+            value={notaOff}
+            onChange={(e) => setNotaOff(e.target.value)}
+            style={{ fontFamily: "var(--font-mono)", textAlign: "center" }}
+          />
+          <button
+            className="btn btn-primary"
+            disabled={!nombreOff.trim() || !notaOff.trim()}
+            onClick={() => {
+              offline.agregar({ etiqueta: `${nombreOff.trim()}: ${notaOff.trim()}` });
+              setNombreOff("");
+              setNotaOff("");
+            }}
+          >
+            Guardar nota
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Tras reconectar, recordar las notas locales pendientes de reingresar
+  const recordatorioOffline = offline.entradas.length > 0 ? (
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "12px 14px 0" }}>
+      <PanelRegistroOffline
+        conectado
+        entradas={offline.entradas}
+        onDeshacer={offline.deshacer}
+        onLimpiar={offline.limpiar}
+        descripcion="Recuperaste la conexión. Reingresa estas notas cuando el Juez Central active a cada competidor (o díctalas a la mesa) y luego borra el registro."
+      />
+    </div>
+  ) : null;
 
   if (!categoriaNombreValido(state.nombre_categoria)) {
     return (
@@ -853,10 +915,13 @@ function FigurasJuez({
 
   if (!state.puntuacion_abierta || !state.competidor_activo_id) {
     return (
-      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
-        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>Esperando autorización...</p>
-        <p style={{ fontSize: "0.85rem" }}>El Juez Central debe activar el turno del competidor.</p>
-      </div>
+      <>
+        {recordatorioOffline}
+        <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+          <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>Esperando autorización...</p>
+          <p style={{ fontSize: "0.85rem" }}>El Juez Central debe activar el turno del competidor.</p>
+        </div>
+      </>
     );
   }
 
@@ -877,14 +942,17 @@ function FigurasJuez({
   const isConfirmed = state.puntuaciones_confirmadas?.[compId]?.[juezId];
 
   return (
-    <FigurasScoreCard
-      key={`${compId}-${juezId}-${isConfirmed ? "ok" : "edit"}-${valCommitted ?? "empty"}`}
-      state={state}
-      enviarEvento={enviarEvento}
-      juezId={juezId}
-      miCriterio={miCriterio}
-      comp={comp}
-    />
+    <>
+      {recordatorioOffline}
+      <FigurasScoreCard
+        key={`${compId}-${juezId}-${isConfirmed ? "ok" : "edit"}-${valCommitted ?? "empty"}`}
+        state={state}
+        enviarEvento={enviarEvento}
+        juezId={juezId}
+        miCriterio={miCriterio}
+        comp={comp}
+      />
+    </>
   );
 }
 
@@ -1386,13 +1454,16 @@ function CombateJuez({
   onFlash: (ico: string, txt: string) => void;
 }) {
   const miPuntaje = state.jueces?.[rol] || { hong: 0, chung: 0 };
+  const params = useParams();
+  const offline = useRegistroOffline(`dinamyt_offline_${params.id}_${rol}`);
   const nombresListos = competidoresConNombre(state);
   // Bloqueado con ganador declarado, punto de oro en espera o alerta de
-  // superioridad abierta (el combate queda en pausa hasta que el JC la cierre)
+  // superioridad abierta (el combate queda en pausa hasta que el JC la cierre).
+  // Sin conexión NO se bloquea: los puntos van al registro local.
   const combateCerrado = Boolean(state.ganadorManualColor);
-  const juezBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre)
+  const juezBloqueado = connected && (!nombresListos || Boolean(state.ganadorPendienteCierre)
     || combateCerrado || Boolean(state.oroPendienteAprobacion)
-    || Boolean(state.alerta12Data);
+    || Boolean(state.alerta12Data));
   // Rol fuera de la configuración actual (ej: j3 en combate de 2 jueces)
   const rolNum = rol.startsWith("j") ? Number(rol.slice(1)) : 0;
   const rolInactivo = rolNum > (state.numJueces || 4);
@@ -1404,6 +1475,12 @@ function CombateJuez({
   ];
 
   function anotar(color: "hong" | "chung", pts: number, label: string) {
+    // Sin conexión: el punto se guarda en el teléfono, no se pierde
+    if (!connected) {
+      offline.agregar({ etiqueta: `+${pts} ${label}`, color, pts });
+      onFlash("📴", `+${pts} GUARDADO LOCAL`);
+      return;
+    }
     if (!nombresListos) {
       onFlash("⚠️", "NOMBRES REQUERIDOS");
       return;
@@ -1448,8 +1525,19 @@ function CombateJuez({
         <CronoDisplay segundos={state.segundos} activo={state.activo} segundosMax={state.segundosMax} />
       </div>
 
+      {/* Registro local: activo sin conexión, visible hasta mostrarse a la mesa */}
+      <PanelRegistroOffline
+        conectado={connected}
+        entradas={offline.entradas}
+        onDeshacer={offline.deshacer}
+        onLimpiar={offline.limpiar}
+        descripcion={connected
+          ? "Recuperaste la conexión. Muestra este registro a la mesa de control para sumar los puntos y luego bórralo."
+          : "Tus puntos se están guardando en este teléfono (sobreviven aunque recargues). Cuando termine el combate, muestra este registro a la mesa de control."}
+      />
+
       {/* Aviso de combate cerrado o punto de oro en espera */}
-      {(combateCerrado || state.oroPendienteAprobacion) && (
+      {connected && (combateCerrado || state.oroPendienteAprobacion) && (
         <div style={{
           marginBottom: 10, padding: "8px 12px", borderRadius: "var(--radius)",
           border: "1px solid var(--gold)", background: "rgba(212,175,55,0.08)",
@@ -1494,9 +1582,9 @@ function CombateJuez({
             <button
               key={`h${p.pts}`}
               className="combat-btn hong"
-              style={{ flex: 1, opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
+              style={{ flex: 1, opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
               onClick={() => anotar("hong", p.pts, p.label)}
-              disabled={state.oroResuelto || juezBloqueado}
+              disabled={(connected && state.oroResuelto) || juezBloqueado}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -1504,9 +1592,10 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
-            disabled={state.oroResuelto || juezBloqueado}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
+            disabled={(connected && state.oroResuelto) || juezBloqueado}
             onClick={() => {
+              if (!connected) { offline.deshacer(); onFlash("📴", "DESHECHO LOCAL"); return; }
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "hong");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "hong" });
               else onFlash("⚠️", "NADA QUE DESHACER");
@@ -1525,9 +1614,9 @@ function CombateJuez({
             <button
               key={`c${p.pts}`}
               className="combat-btn chung"
-              style={{ flex: 1, opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
+              style={{ flex: 1, opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
               onClick={() => anotar("chung", p.pts, p.label)}
-              disabled={state.oroResuelto || juezBloqueado}
+              disabled={(connected && state.oroResuelto) || juezBloqueado}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.label}</span>
@@ -1535,9 +1624,10 @@ function CombateJuez({
           ))}
           <button
             className="btn btn-danger"
-            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: state.oroResuelto || juezBloqueado ? 0.5 : 1 }}
-            disabled={state.oroResuelto || juezBloqueado}
+            style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
+            disabled={(connected && state.oroResuelto) || juezBloqueado}
             onClick={() => {
+              if (!connected) { offline.deshacer(); onFlash("📴", "DESHECHO LOCAL"); return; }
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "chung");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "chung" });
               else onFlash("⚠️", "NADA QUE DESHACER");
@@ -1559,6 +1649,132 @@ function CombateJuez({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// REGISTRO LOCAL SIN CONEXIÓN
+// Si se va el internet, cada juez sigue puntuando en su dispositivo: las
+// anotaciones se guardan en localStorage (sobreviven recargas) y al final se
+// muestran a la mesa de control, que suma manualmente y el JC da el ganador.
+// ══════════════════════════════════════════════════════════════════════════════
+interface EntradaOffline {
+  ts: number;
+  etiqueta: string;
+  color?: "hong" | "chung";
+  pts?: number;
+}
+
+function useRegistroOffline(clave: string) {
+  const [entradas, setEntradas] = useState<EntradaOffline[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(clave);
+      if (raw) setEntradas(JSON.parse(raw));
+    } catch { /* almacenamiento no disponible: el registro vive solo en memoria */ }
+  }, [clave]);
+
+  function guardar(siguientes: EntradaOffline[]) {
+    setEntradas(siguientes);
+    try { localStorage.setItem(clave, JSON.stringify(siguientes)); } catch { /* */ }
+  }
+
+  return {
+    entradas,
+    agregar: (e: Omit<EntradaOffline, "ts">) => guardar([...entradas, { ...e, ts: Date.now() }]),
+    deshacer: () => guardar(entradas.slice(0, -1)),
+    limpiar: () => guardar([]),
+  };
+}
+
+function PanelRegistroOffline({
+  conectado, entradas, onDeshacer, onLimpiar, descripcion,
+}: {
+  conectado: boolean;
+  entradas: EntradaOffline[];
+  onDeshacer: () => void;
+  onLimpiar: () => void;
+  descripcion: string;
+}) {
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+  // Visible mientras no haya conexión, o mientras quede un registro pendiente
+  // de mostrar a la mesa después de reconectar.
+  if (conectado && entradas.length === 0) return null;
+
+  const totalHong = entradas.filter((e) => e.color === "hong").reduce((s, e) => s + (e.pts || 0), 0);
+  const totalChung = entradas.filter((e) => e.color === "chung").reduce((s, e) => s + (e.pts || 0), 0);
+  const hayPuntos = entradas.some((e) => e.color);
+  const hora = (ts: number) =>
+    new Date(ts).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  return (
+    <div style={{
+      marginBottom: 10, padding: "12px 14px", borderRadius: "var(--radius)",
+      border: `2px solid ${conectado ? "var(--gold)" : "var(--red-alert)"}`,
+      background: conectado ? "rgba(212,175,55,0.08)" : "rgba(232,0,42,0.08)",
+    }}>
+      <div style={{
+        fontWeight: 800, fontSize: "0.9rem", letterSpacing: "0.06em", textTransform: "uppercase",
+        color: conectado ? "var(--gold)" : "var(--red-alert)", marginBottom: 6,
+      }}>
+        {conectado ? "📋 Registro local pendiente" : "📴 Sin conexión — registro local activo"}
+      </div>
+      <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: 10 }}>
+        {descripcion}
+      </p>
+
+      {hayPuntos && (
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginBottom: 10 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "0.65rem", color: "var(--hong-light)", fontWeight: 800 }}>HONG</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--hong-vivid)" }}>
+              {totalHong}
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "0.65rem", color: "var(--chung-light)", fontWeight: 800 }}>CHUNG</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "2rem", color: "var(--chung-vivid)" }}>
+              {totalChung}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {entradas.length > 0 && (
+        <div style={{ maxHeight: 130, overflowY: "auto", marginBottom: 10, display: "flex", flexDirection: "column", gap: 2 }}>
+          {[...entradas].reverse().map((e) => (
+            <div key={e.ts} style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", gap: 8 }}>
+              <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{hora(e.ts)}</span>
+              {e.color && (
+                <span style={{ color: e.color === "hong" ? "var(--hong-light)" : "var(--chung-light)", fontWeight: 700 }}>
+                  {e.color === "hong" ? "HONG" : "CHUNG"}
+                </span>
+              )}
+              <span>{e.etiqueta}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {entradas.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-sm" onClick={onDeshacer}>↩ Deshacer último</button>
+          {confirmandoBorrado ? (
+            <>
+              <button className="btn btn-sm btn-danger" onClick={() => { onLimpiar(); setConfirmandoBorrado(false); }}>
+                ✓ Sí, borrar todo
+              </button>
+              <button className="btn btn-sm" onClick={() => setConfirmandoBorrado(false)}>Cancelar</button>
+            </>
+          ) : (
+            <button className="btn btn-sm btn-danger" onClick={() => setConfirmandoBorrado(true)}>
+              Borrar registro
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Inputs de nombres con estado local + debounce. El estado del combate vive en
 // el servidor, pero atar el value del input al eco del socket hace que cada
 // tecla espere el viaje de ida y vuelta: con latencia real se traga letras.
@@ -1640,13 +1856,14 @@ function NombresCombate({ nombreHong, nombreChung, enviarEvento, disabled }: {
 // COMBATE — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function CombateArbitro({
-  state, enviarEvento, tatamiDbId,
+  state, enviarEvento, tatamiDbId, connected,
   onFlash, onFaltaFlash, onShowConfirm, broadcast
 }: {
   state: CombateState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   tatamiId: string;
   tatamiDbId: string;
+  connected: boolean;
   onFlash: (ico: string, txt: string) => void;
   onFaltaFlash: (data: FaltaFlashData) => void;
   onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
@@ -1657,6 +1874,7 @@ function CombateArbitro({
   const esqHong = promedioEsquinas(state, "hong").toFixed(1);
   const esqChung = promedioEsquinas(state, "chung").toFixed(1);
   const [motivoDq, setMotivoDq] = useState("No presentación");
+  const offline = useRegistroOffline(`dinamyt_offline_${tatamiDbId}_arbitro`);
   const nombresListos = competidoresConNombre(state);
   // Con ganador declarado el combate está cerrado: se bloquea todo lo que
   // altere marcador o cronómetro. Solo quedan NUEVO COMBATE (guardar) y RESET.
@@ -1664,6 +1882,9 @@ function CombateArbitro({
   const combateCerrado = Boolean(state.ganadorManualColor);
   const cierreBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
   const accionesBloqueadas = cierreBloqueado || combateCerrado || Boolean(state.alerta12Data);
+  // Sin conexión, los puntos y faltas del JC van al registro local
+  const puntosArbBloqueados = connected && (state.oroResuelto || accionesBloqueadas);
+  const faltasBloqueadas = connected && accionesBloqueadas;
 
   const PUNTOS_ARB = [
     { pts: 2, nombre: "Knock Down" },
@@ -1691,6 +1912,11 @@ function CombateArbitro({
   }
 
   function handleEspecial(color: "hong" | "chung", pts: number, nombre: string) {
+    if (!connected) {
+      offline.agregar({ etiqueta: `⭐ ${nombre} +${pts}`, color, pts });
+      onFlash("📴", `+${pts} GUARDADO LOCAL`);
+      return;
+    }
     if (!nombresListos) {
       onFlash("⚠️", "NOMBRES REQUERIDOS");
       return;
@@ -1711,6 +1937,11 @@ function CombateArbitro({
   }
 
   function handleKyonggo(color: "hong" | "chung") {
+    if (!connected) {
+      offline.agregar({ etiqueta: "KyongGo −0.5", color, pts: -0.5 });
+      onFlash("📴", "KYONGGO LOCAL");
+      return;
+    }
     if (!nombresListos) {
       onFlash("⚠️", "NOMBRES REQUERIDOS");
       return;
@@ -1728,6 +1959,11 @@ function CombateArbitro({
   }
 
   function handleGamjeum(color: "hong" | "chung") {
+    if (!connected) {
+      offline.agregar({ etiqueta: "GamJeum −1", color, pts: -1 });
+      onFlash("📴", "GAMJEUM LOCAL");
+      return;
+    }
     if (!nombresListos) {
       onFlash("⚠️", "NOMBRES REQUERIDOS");
       return;
@@ -1863,6 +2099,17 @@ function CombateArbitro({
         onShowConfirm={onShowConfirm}
       />
 
+      {/* Registro local del JC: puntos y faltas sin conexión */}
+      <PanelRegistroOffline
+        conectado={connected}
+        entradas={offline.entradas}
+        onDeshacer={offline.deshacer}
+        onLimpiar={offline.limpiar}
+        descripcion={connected
+          ? "Recuperaste la conexión. Concilia este registro con la mesa: aplica los puntos/faltas con los botones normales o declara el ganador, y luego bórralo."
+          : "Sin conexión: tus puntos especiales y faltas se guardan en este dispositivo. Cronometra manualmente. Al final, suma con los registros de los jueces de esquina y declara el ganador cuando vuelva la conexión."}
+      />
+
       {/* Combate cerrado: solo guardar o descartar */}
       {combateCerrado && !state.ganadorPendienteCierre && (
         <div style={{
@@ -1983,8 +2230,8 @@ function CombateArbitro({
             <button
               className="combat-btn hong"
               onClick={() => handleEspecial("hong", p.pts, p.nombre)}
-              disabled={state.oroResuelto || accionesBloqueadas}
-              style={{ opacity: state.oroResuelto || accionesBloqueadas ? 0.5 : 1 }}
+              disabled={puntosArbBloqueados}
+              style={{ opacity: puntosArbBloqueados ? 0.5 : 1 }}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
@@ -1992,8 +2239,8 @@ function CombateArbitro({
             <button
               className="combat-btn chung"
               onClick={() => handleEspecial("chung", p.pts, p.nombre)}
-              disabled={state.oroResuelto || accionesBloqueadas}
-              style={{ opacity: state.oroResuelto || accionesBloqueadas ? 0.5 : 1 }}
+              disabled={puntosArbBloqueados}
+              style={{ opacity: puntosArbBloqueados ? 0.5 : 1 }}
             >
               <span className="pts">+{p.pts}</span>
               <span className="label">{p.nombre}</span>
@@ -2005,16 +2252,16 @@ function CombateArbitro({
       {/* Faltas */}
       <div className="card-title">Faltas</div>
       <div className="grid-2" style={{ marginBottom: 8 }}>
-        <button className="combat-btn hong" onClick={() => handleKyonggo("hong")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="combat-btn hong" onClick={() => handleKyonggo("hong")} disabled={faltasBloqueadas} style={{ opacity: faltasBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−0.5</span><span className="label">KyongGo HONG</span>
         </button>
-        <button className="combat-btn chung" onClick={() => handleKyonggo("chung")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="combat-btn chung" onClick={() => handleKyonggo("chung")} disabled={faltasBloqueadas} style={{ opacity: faltasBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−0.5</span><span className="label">KyongGo CHUNG</span>
         </button>
-        <button className="combat-btn falta" onClick={() => handleGamjeum("hong")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="combat-btn falta" onClick={() => handleGamjeum("hong")} disabled={faltasBloqueadas} style={{ opacity: faltasBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−1</span><span className="label">GamJeum HONG</span>
         </button>
-        <button className="combat-btn falta" onClick={() => handleGamjeum("chung")} disabled={accionesBloqueadas} style={{ opacity: accionesBloqueadas ? 0.5 : 1 }}>
+        <button className="combat-btn falta" onClick={() => handleGamjeum("chung")} disabled={faltasBloqueadas} style={{ opacity: faltasBloqueadas ? 0.5 : 1 }}>
           <span className="pts">−1</span><span className="label">GamJeum CHUNG</span>
         </button>
       </div>
@@ -2201,10 +2448,25 @@ function TatamiContent() {
 
   const anyState = state as unknown as AnyState;
   const categoria = anyState._categoria || "combate";
-  const esFiguras = isFiguras(anyState);
+  // Sin conexión ni estado del servidor, usar la última categoría conocida
+  // del tatami (guardada abajo) para mostrar la interfaz offline correcta.
+  const categoriaGuardada = typeof window !== "undefined"
+    ? localStorage.getItem(`dinamyt_categoria_${tatamiId}`)
+    : null;
+  const esFiguras = hasServerState ? isFiguras(anyState) : categoriaGuardada === "figuras";
   const nombreCategoria = anyState._nombre_categoria || (isFiguras(anyState) ? anyState.nombre_categoria : "") || "Figuras";
   // Número visible del tatami dentro de su campeonato (no el ID interno)
   const tatamiLabel = String(anyState._tatami_numero ?? tatamiId);
+
+  // Recordar la categoría activa para el arranque sin conexión
+  useEffect(() => {
+    if (hasServerState) {
+      try {
+        localStorage.setItem(`dinamyt_categoria_${tatamiId}`, isFiguras(anyState) ? "figuras" : "combate");
+      } catch { /* */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasServerState, categoria, tatamiId]);
 
   const isArbitro = rol === "arbitro";
   const isPantalla = rol === "pantalla";
@@ -2310,10 +2572,18 @@ function TatamiContent() {
     );
   }
 
-  if (!hasServerState) {
+  // Sin estado del servidor: si hay conexión es una espera breve (splash).
+  // Sin conexión, los jueces NO se quedan esperando: entran directo al modo
+  // de registro local (la pantalla pública sí necesita el servidor).
+  if (!hasServerState && (connected || isPantalla)) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh" }}>
         <Logo stacked className="animate-fade" fontSize="2.4rem" />
+        {!connected && (
+          <p style={{ position: "absolute", bottom: "18vh", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+            Sin conexión con el servidor…
+          </p>
+        )}
       </div>
     );
   }
@@ -2503,7 +2773,7 @@ function TatamiContent() {
 
       {/* Content */}
       <div style={{ position: "relative", flex: 1 }}>
-        {anyState._tatami_activo === false && !isArbitro && (
+        {connected && anyState._tatami_activo === false && !isArbitro && (
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
             background: "rgba(15,15,25,0.85)", zIndex: 50,
@@ -2524,7 +2794,7 @@ function TatamiContent() {
                 tatamiId={tatamiLabel}
                 onShowConfirm={alertSystem.showConfirm}
               />
-            : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} />
+            : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} connected={connected} />
         ) : (
           isArbitro
             ? <CombateArbitro
@@ -2532,6 +2802,7 @@ function TatamiContent() {
                 enviarEvento={enviarEvento}
                 tatamiId={tatamiLabel}
                 tatamiDbId={tatamiId}
+                connected={connected}
                 onFlash={alertSystem.showFlash}
                 onFaltaFlash={alertSystem.showFaltaFlash}
                 onShowConfirm={alertSystem.showConfirm}

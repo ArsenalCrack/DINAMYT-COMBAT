@@ -65,6 +65,10 @@ def create_app(config_name=None):
         app,
         cors_allowed_origins=origins,
         async_mode=app.config.get("SOCKETIO_ASYNC_MODE", "eventlet"),
+        # Heartbeat corto: en redes inestables (polideportivos) detecta el
+        # corte en ~20s para que los jueces pasen al modo sin conexión rápido.
+        ping_interval=10,
+        ping_timeout=10,
         logger=False,
         engineio_logger=False,
     )

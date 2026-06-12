@@ -167,6 +167,21 @@ export function useCombate(
   const socketRef = useRef<Socket | null>(null);
   const pendingMap = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
+  // El heartbeat del socket puede tardar ~30s en detectar un corte de red;
+  // navigator.onLine lo reporta al instante y activa el modo sin conexión.
+  const [netOnline, setNetOnline] = useState(true);
+  useEffect(() => {
+    setNetOnline(typeof navigator === "undefined" ? true : navigator.onLine);
+    const marcarOnline = () => setNetOnline(true);
+    const marcarOffline = () => setNetOnline(false);
+    window.addEventListener("online", marcarOnline);
+    window.addEventListener("offline", marcarOffline);
+    return () => {
+      window.removeEventListener("online", marcarOnline);
+      window.removeEventListener("offline", marcarOffline);
+    };
+  }, []);
+
   // Conectar al tatami
   useEffect(() => {
     if (!tatamiId) return;
@@ -330,7 +345,7 @@ export function useCombate(
 
   return {
     state,
-    connected,
+    connected: connected && netOnline,
     hasServerState,
     socketError,
     pendingEvents,
