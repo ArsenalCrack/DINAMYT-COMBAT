@@ -1,6 +1,8 @@
 import os
 from datetime import timedelta
 
+from sqlalchemy.pool import NullPool
+
 
 class Config:
     """Configuración base de la aplicación."""
@@ -47,6 +49,12 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SOCKETIO_ASYNC_MODE = "eventlet"
+    # Bajo gunicorn -k eventlet, el QueuePool de SQLAlchemy es inutilizable:
+    # eventlet no parchea threading.RLock (no distingue greenlets) y el
+    # Condition del pool muere con "cannot notify on un-acquired lock" en
+    # cada checkout. NullPool no usa locks ni colas: abre y cierra conexión
+    # por petición, y el pooling real lo hace el Session Pooler de Supabase.
+    SQLALCHEMY_ENGINE_OPTIONS = {"poolclass": NullPool}
 
 
 config_by_name = {
