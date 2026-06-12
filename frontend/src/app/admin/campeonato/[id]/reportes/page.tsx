@@ -629,7 +629,7 @@ export default function ReportesCampeonatoPage() {
                           {c.jueces.map((j) => (
                             <span key={`${c.id}-${j.rol_tatami}`} style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
                               <strong style={{ color: "var(--text)" }}>{j.asignacion}:</strong> {j.nombre} · {j.email}
-                              {j.origen === "pin" ? " · PIN" : ""}
+                              {j.origen !== "asignacion" ? " · Directo" : ""}
                             </span>
                           ))}
                         </div>

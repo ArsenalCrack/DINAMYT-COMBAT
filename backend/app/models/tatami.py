@@ -1,7 +1,8 @@
 """
 Modelos: Tatami y SesionTatami
 
-Tatami — Cada tatami pertenece a un campeonato y tiene un PIN auto-generado.
+Tatami — Cada tatami pertenece a un campeonato. El acceso de los jueces es
+exclusivamente por asignación del administrador (AsignacionJuez).
 SesionTatami — Vincula un tatami con una categoría activa (ej: tatami 1 ejecuta "Combate").
 """
 
@@ -12,7 +13,7 @@ from ..extensions import db
 
 
 def _generar_pin():
-    """Genera un PIN numérico de 4 dígitos."""
+    """Relleno para la columna heredada `pin` (ver nota en el modelo)."""
     return "".join(random.choices(string.digits, k=4))
 
 
@@ -24,6 +25,9 @@ class Tatami(db.Model):
         db.Integer, db.ForeignKey("campeonatos.id"), nullable=False, index=True
     )
     numero = db.Column(db.Integer, nullable=False)
+    # HEREDADA: el acceso por PIN fue eliminado del sistema. La columna se
+    # conserva (NOT NULL en bases existentes) solo para no requerir migración;
+    # no se expone ni se usa en ninguna parte.
     pin = db.Column(db.String(10), nullable=False, default=_generar_pin)
     activo = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(
@@ -46,12 +50,8 @@ class Tatami(db.Model):
         db.UniqueConstraint("campeonato_id", "numero", name="uq_tatami_campeonato_numero"),
     )
 
-    def regenerar_pin(self):
-        """Genera un nuevo PIN para el tatami."""
-        self.pin = _generar_pin()
-
-    def to_dict(self, include_pin=False):
-        data = {
+    def to_dict(self):
+        return {
             "id": self.id,
             "campeonato_id": self.campeonato_id,
             "numero": self.numero,
@@ -59,9 +59,6 @@ class Tatami(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "num_asignaciones": self.asignaciones.count(),
         }
-        if include_pin:
-            data["pin"] = self.pin
-        return data
 
     def __repr__(self):
         return f"<Tatami {self.numero} (Campeonato {self.campeonato_id})>"

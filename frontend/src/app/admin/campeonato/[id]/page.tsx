@@ -10,7 +10,6 @@ import {
   desasignarJuezAPI,
   updateCampeonatoAPI,
   deleteCampeonatoAPI,
-  regenerarPinAPI,
   type UserData,
 } from "@/lib/api";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
@@ -19,7 +18,6 @@ interface Tatami {
   id: number;
   numero: number;
   activo: boolean;
-  pin?: string;
   num_asignaciones: number;
   asignaciones?: Asignacion[];
 }
@@ -165,22 +163,6 @@ export default function CampeonatoDetailPage() {
     });
   }
 
-  function handleRegenerarPin(tatamiId: number) {
-    pedirConfirmacion({
-      titulo: "Regenerar PIN",
-      mensaje: "¿Generar un PIN nuevo para este tatami? El PIN anterior dejará de funcionar y los jueces deberán usar el nuevo.",
-      tipo: "advertencia",
-      confirmLabel: "Regenerar",
-      onConfirm: async () => {
-        try {
-          const res = await regenerarPinAPI(tatamiId);
-          await Promise.all([loadData(), loadTatamiDetail(tatamiId)]);
-          flash(`Nuevo PIN: ${res.pin}`, "ok");
-        } catch { flash("Error al regenerar el PIN", "error"); }
-      },
-    });
-  }
-
   const searchTerm = judgeSearch.trim().toLowerCase();
   const availableJudges = users.filter((u) => {
     if (!u.activo || u.rol !== "juez") return false;
@@ -309,14 +291,6 @@ export default function CampeonatoDetailPage() {
                     {t.num_asignaciones} jueces
                   </span>
                 </div>
-                {t.pin && (
-                  <span style={{
-                    display: "inline-block", marginTop: 6, padding: "2px 8px",
-                    background: "var(--gold-bg)", border: "1px solid var(--gold-border)",
-                    borderRadius: "var(--radius-sm)", fontSize: "0.75rem", fontFamily: "var(--font-mono)",
-                    color: "var(--gold)",
-                  }}>PIN: {t.pin}</span>
-                )}
               </button>
             ))}
           </div>
@@ -447,10 +421,6 @@ export default function CampeonatoDetailPage() {
                 <button className="btn btn-primary" style={{ width: "100%" }}
                   onClick={() => router.push(`/tatami/${selectedTatami.id}?rol=arbitro`)}>
                   Abrir como Juez Central
-                </button>
-                <button className="btn btn-sm" style={{ width: "100%" }}
-                  onClick={() => handleRegenerarPin(selectedTatami.id)}>
-                  Regenerar PIN del tatami
                 </button>
               </div>
             </div>

@@ -74,7 +74,7 @@ export async function deleteUserAPI(id: number) {
 
 export async function updateUserAPI(
   id: number,
-  data: { nombre?: string; email?: string; password?: string; activo?: boolean }
+  data: { nombre?: string; email?: string; password?: string; activo?: boolean; rol?: string }
 ) {
   const res = await api.put(`/auth/users/${id}`, data);
   return res.data;
@@ -138,11 +138,6 @@ export async function misTatamisAPI() {
   return res.data;
 }
 
-export async function verificarPinAPI(pin: string) {
-  const res = await api.post("/tatamis/verificar-pin", { pin });
-  return res.data;
-}
-
 export async function asignarJuezAPI(
   tatamiId: number,
   data: { usuario_id: number; rol_tatami: string; nombre_display?: string }
@@ -154,11 +149,6 @@ export async function asignarJuezAPI(
 export async function desasignarJuezAPI(tatamiId: number, usuarioId: number) {
   const res = await api.delete(`/tatamis/${tatamiId}/desasignar/${usuarioId}`);
   return res.data;
-}
-
-export async function regenerarPinAPI(tatamiId: number) {
-  const res = await api.post(`/tatamis/${tatamiId}/regenerar-pin`);
-  return res.data as { pin: string; message: string };
 }
 
 // ── Llaves de eliminación (brackets) API ──

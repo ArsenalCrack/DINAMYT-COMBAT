@@ -244,7 +244,8 @@ def _jueces_resumen(combate):
     partes = []
     for juez in _jueces_list(combate):
         email = juez["email"] if juez["email"] != "-" else ""
-        origen = "PIN" if juez["origen"] == "pin" else "Asignado"
+        # "pin" aparece solo en combates guardados antes de eliminar el acceso por PIN
+        origen = "Asignado" if juez["origen"] == "asignacion" else "Directo"
         partes.append(
             f"{juez['asignacion']}: {juez['nombre']}"
             + (f" <{email}>" if email else "")

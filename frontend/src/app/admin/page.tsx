@@ -41,7 +41,7 @@ export default function AdminPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [creandoCamp, setCreandoCamp] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
-  const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "" });
+  const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "", rol: "juez" });
   const { pedirConfirmacion, dialogo } = useConfirmDialog();
 
   useEffect(() => {
@@ -88,10 +88,11 @@ export default function AdminPage() {
   async function handleSaveUserEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingUser) return;
-    const payload: { nombre?: string; email?: string; password?: string } = {};
+    const payload: { nombre?: string; email?: string; password?: string; rol?: string } = {};
     if (editUserData.nombre.trim()) payload.nombre = editUserData.nombre.trim();
     if (editUserData.email.trim()) payload.email = editUserData.email.trim();
     if (editUserData.password) payload.password = editUserData.password;
+    if (editUserData.rol && editUserData.rol !== editingUser.rol) payload.rol = editUserData.rol;
     try {
       await updateUserAPI(editingUser.id, payload);
       setEditingUser(null);
@@ -390,7 +391,7 @@ export default function AdminPage() {
                           setEditingUser(null);
                         } else {
                           setEditingUser(u);
-                          setEditUserData({ nombre: u.nombre, email: u.email, password: "" });
+                          setEditUserData({ nombre: u.nombre, email: u.email, password: "", rol: u.rol });
                         }
                       }}
                       style={{ padding: "4px 10px", fontSize: "0.75rem" }}
@@ -423,9 +424,21 @@ export default function AdminPage() {
                       placeholder="Nueva contraseña (dejar vacío para no cambiarla)"
                       value={editUserData.password}
                       onChange={(e) => setEditUserData({ ...editUserData, password: e.target.value })} />
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <label style={{ color: "var(--text-muted)", fontSize: "0.85rem", whiteSpace: "nowrap" }}>Rol:</label>
+                      <select className="input" value={editUserData.rol}
+                        disabled={u.id === user.id}
+                        onChange={(e) => setEditUserData({ ...editUserData, rol: e.target.value })}>
+                        <option value="juez">Juez</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
                     <p style={{ color: "var(--text-dim)", fontSize: "0.76rem", margin: 0 }}>
                       Si el juez olvidó su contraseña, escríbele una nueva aquí y
                       comunícasela: este restablecimiento solo lo puede hacer un administrador.
+                      {u.id === user.id
+                        ? " No puedes cambiar tu propio rol."
+                        : " Al volver administrador a un juez se liberan sus asignaciones de tatami."}
                     </p>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button type="submit" className="btn btn-primary btn-sm">Guardar cambios</button>

@@ -1,6 +1,7 @@
 """
 API: Tatamis
-Gestión de tatamis, PINs, y asignaciones de jueces.
+Gestión de tatamis y asignaciones de jueces. El acceso de los jueces a un
+tatami es exclusivamente por asignación del administrador.
 """
 
 from flask import Blueprint, request, jsonify
@@ -9,26 +10,11 @@ from ..extensions import db
 from ..models.usuario import Usuario
 from ..models.tatami import Tatami
 from ..models.asignacion import AsignacionJuez
-from ..security import intento_bloqueado, limpiar_intentos, segundos_restantes
 
 tatamis_bp = Blueprint("tatamis", __name__)
 
 # Máximo 4 jueces de esquina por tatami (más el Juez Central)
-ROLES_PIN = ("arbitro", "j1", "j2", "j3", "j4")
-
-ROL_LABELS = {
-    "arbitro": "Juez Central",
-    "j1": "Juez Esquina 1",
-    "j2": "Juez Esquina 2",
-    "j3": "Juez Esquina 3",
-    "j4": "Juez Esquina 4",
-}
-
-# Límite de intentos de PIN: 10 por usuario y 30 por IP cada 5 minutos
-PIN_MAX_POR_USUARIO = 10
-PIN_MAX_POR_IP = 30
-PIN_VENTANA_SEG = 300
-
+ROLES_TATAMI = ("arbitro", "j1", "j2", "j3", "j4")
 
 def _require_admin():
     uid = get_jwt_identity()
@@ -42,58 +28,22 @@ def _require_admin():
 @jwt_required()
 def listar_por_campeonato(camp_id):
     """GET /api/tatamis/campeonato/:camp_id — Lista tatamis de un campeonato."""
-    uid = get_jwt_identity()
-    user = Usuario.query.get(int(uid))
-
     tatamis = Tatami.query.filter_by(campeonato_id=camp_id).order_by(Tatami.numero).all()
-
-    # Admin ve los PINs, juez no
-    include_pin = user and user.rol == "admin"
-    return jsonify([t.to_dict(include_pin=include_pin) for t in tatamis]), 200
+    return jsonify([t.to_dict() for t in tatamis]), 200
 
 
 @tatamis_bp.route("/<int:tatami_id>", methods=["GET"])
 @jwt_required()
 def obtener(tatami_id):
     """GET /api/tatamis/:id — Obtener tatami con asignaciones."""
-    uid = get_jwt_identity()
-    user = Usuario.query.get(int(uid))
-
     tatami = Tatami.query.get_or_404(tatami_id)
-    data = tatami.to_dict(include_pin=(user and user.rol == "admin"))
+    data = tatami.to_dict()
 
     # Incluir asignaciones
     asignaciones = AsignacionJuez.query.filter_by(tatami_id=tatami_id).all()
     data["asignaciones"] = [a.to_dict() for a in asignaciones]
 
     return jsonify(data), 200
-
-
-@tatamis_bp.route("/<int:tatami_id>/pin", methods=["GET"])
-@jwt_required()
-def ver_pin(tatami_id):
-    """GET /api/tatamis/:id/pin — Ver PIN del tatami (solo admin)."""
-    admin = _require_admin()
-    if not admin:
-        return jsonify({"error": "Solo administradores"}), 403
-
-    tatami = Tatami.query.get_or_404(tatami_id)
-    return jsonify({"tatami_id": tatami.id, "numero": tatami.numero, "pin": tatami.pin}), 200
-
-
-@tatamis_bp.route("/<int:tatami_id>/regenerar-pin", methods=["POST"])
-@jwt_required()
-def regenerar_pin(tatami_id):
-    """POST /api/tatamis/:id/regenerar-pin — Generar nuevo PIN (solo admin)."""
-    admin = _require_admin()
-    if not admin:
-        return jsonify({"error": "Solo administradores"}), 403
-
-    tatami = Tatami.query.get_or_404(tatami_id)
-    tatami.regenerar_pin()
-    db.session.commit()
-
-    return jsonify({"pin": tatami.pin, "message": "PIN regenerado"}), 200
 
 
 @tatamis_bp.route("/<int:tatami_id>/asignar", methods=["POST"])
@@ -118,7 +68,7 @@ def asignar_juez(tatami_id):
     if user.rol != "juez" or not user.activo:
         return jsonify({"error": "Solo se pueden asignar jueces activos"}), 400
 
-    ROLES_VALIDOS = ROLES_PIN
+    ROLES_VALIDOS = ROLES_TATAMI
     rol = data["rol_tatami"]
     if rol not in ROLES_VALIDOS:
         return jsonify({"error": "Rol inválido"}), 400
@@ -210,75 +160,3 @@ def mis_tatamis():
             result.append(t_data)
 
     return jsonify(result), 200
-
-
-@tatamis_bp.route("/verificar-pin", methods=["POST"])
-@jwt_required()
-def verificar_pin():
-    """
-    POST /api/tatamis/verificar-pin
-    Body: { "pin": "1234" }
-    Permite a un juez acceder a un tatami con PIN.
-    """
-    uid = get_jwt_identity()
-    data = request.get_json()
-    pin = data.get("pin", "").strip()
-
-    if not pin:
-        return jsonify({"error": "PIN requerido"}), 400
-
-    # Límite de intentos: un PIN de 4 dígitos no debe poder adivinarse
-    ip = request.remote_addr or "?"
-    clave_usuario = f"pin:{uid}"
-    clave_ip = f"pin-ip:{ip}"
-    if (
-        intento_bloqueado(clave_usuario, PIN_MAX_POR_USUARIO, PIN_VENTANA_SEG)
-        or intento_bloqueado(clave_ip, PIN_MAX_POR_IP, PIN_VENTANA_SEG)
-    ):
-        espera = max(segundos_restantes(clave_usuario), segundos_restantes(clave_ip))
-        return jsonify({
-            "error": f"Demasiados intentos de PIN. Intenta de nuevo en {max(espera, 30)} segundos."
-        }), 429
-
-    tatami = Tatami.query.filter_by(pin=pin, activo=True).first()
-    if not tatami:
-        return jsonify({"error": "PIN inválido o tatami inactivo"}), 404
-
-    # PIN correcto: limpiar contador de intentos fallidos
-    limpiar_intentos(clave_usuario)
-
-    asignacion = AsignacionJuez.query.filter_by(
-        tatami_id=tatami.id, usuario_id=int(uid)
-    ).first()
-
-    asignaciones = AsignacionJuez.query.filter_by(tatami_id=tatami.id).all()
-    roles_asignados = {a.rol_tatami for a in asignaciones if a.rol_tatami}
-    roles_ocupados = set()
-    try:
-        from ..sockets.combate_ns import roles_ocupados_para_tatami
-        roles_ocupados = roles_ocupados_para_tatami(tatami.id)
-    except Exception:
-        roles_ocupados = set()
-
-    if asignacion:
-        roles_disponibles = [asignacion.rol_tatami]
-        rol_sugerido = asignacion.rol_tatami
-        requiere_seleccion = False
-    else:
-        roles_bloqueados = roles_asignados | roles_ocupados
-        roles_disponibles = [r for r in ROLES_PIN if r not in roles_bloqueados]
-        rol_sugerido = next((r for r in roles_disponibles if r != "arbitro"), None)
-        rol_sugerido = rol_sugerido or (roles_disponibles[0] if roles_disponibles else None)
-        requiere_seleccion = True
-
-    return jsonify({
-        "tatami": tatami.to_dict(),
-        "campeonato_nombre": tatami.campeonato.nombre if tatami.campeonato else None,
-        "rol_sugerido": rol_sugerido,
-        "roles_disponibles": [
-            {"rol": rol, "label": ROL_LABELS.get(rol, rol)}
-            for rol in roles_disponibles
-        ],
-        "requiere_seleccion_rol": requiere_seleccion,
-        "acceso_por_pin": True,
-    }), 200

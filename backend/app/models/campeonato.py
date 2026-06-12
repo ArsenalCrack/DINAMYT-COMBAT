@@ -42,7 +42,7 @@ class Campeonato(db.Model):
             "num_tatamis": self.tatamis.count() if self.tatamis else 0,
         }
         if include_tatamis:
-            data["tatamis"] = [t.to_dict(include_pin=True) for t in self.tatamis.all()]
+            data["tatamis"] = [t.to_dict() for t in self.tatamis.all()]
         return data
 
     def __repr__(self):

@@ -330,7 +330,7 @@ def _meta_desde_asignacion(asig):
     }
 
 
-def _meta_desde_conexion(rol, user_id=None, nombre=None, email=None, origen="pin"):
+def _meta_desde_conexion(rol, user_id=None, nombre=None, email=None, origen="directo"):
     return {
         "usuario_id": int(user_id) if user_id else None,
         "nombre": nombre or _rol_label(rol),
@@ -418,12 +418,12 @@ class CombateNamespace(Namespace):
                 ts["jueces_meta"][rol] = _meta_desde_asignacion(asignacion)
             elif rol != "pantalla":
                 ts["jueces_meta"][rol] = _meta_desde_conexion(
-                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="pin"
+                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="directo"
                 )
         except Exception:
             if rol != "pantalla":
                 ts["jueces_meta"][rol] = _meta_desde_conexion(
-                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="pin"
+                    rol, user_id=user_id, nombre=user_nombre, email=user_email, origen="directo"
                 )
         emit("estado", {"datos": _build_estado_broadcast(ts)})
 
@@ -830,13 +830,13 @@ class CombateNamespace(Namespace):
             return
 
         meta = ts.get("jueces_meta", {}).get(actor_rol) or _meta_desde_conexion(
-            actor_rol, origen="pin"
+            actor_rol, origen="directo"
         )
         ev["juez_nombre"] = meta.get("nombre")
         ev["juez_email"] = meta.get("email")
         ev["juez_asignacion"] = meta.get("asignacion") or _rol_label(actor_rol)
         ev["juez_rol"] = meta.get("rol_tatami") or actor_rol
-        ev["juez_acceso"] = meta.get("origen") or "pin"
+        ev["juez_acceso"] = meta.get("origen") or "directo"
 
     def _activar_combate_llave(self, tatami_id, ts, ev):
         """
@@ -1123,14 +1123,14 @@ class CombateNamespace(Namespace):
         for rol, meta in ts.get("jueces_meta", {}).items():
             if rol == "pantalla":
                 continue
-            if rol not in jueces or meta.get("origen") == "pin":
+            if rol not in jueces or meta.get("origen") in ("directo", "pin"):
                 jueces[rol] = {
                     "usuario_id": meta.get("usuario_id"),
                     "nombre": meta.get("nombre") or _rol_label(rol),
                     "email": meta.get("email") or "",
                     "rol_tatami": meta.get("rol_tatami") or rol,
                     "asignacion": meta.get("asignacion") or _rol_label(rol),
-                    "origen": meta.get("origen") or "pin",
+                    "origen": meta.get("origen") or "directo",
                     "asignado_at": meta.get("asignado_at"),
                     "asignado_por": meta.get("asignado_por"),
                 }

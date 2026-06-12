@@ -175,9 +175,9 @@ def list_users():
 def update_user(user_id):
     """
     PUT /api/auth/users/:id (solo Admin)
-    Body opcional: { "nombre", "email", "password", "activo" }
-    Permite al administrador corregir correo, restablecer contraseña
-    o activar/desactivar un usuario.
+    Body opcional: { "nombre", "email", "password", "activo", "rol" }
+    Permite al administrador corregir correo, restablecer contraseña,
+    cambiar el rol (admin/juez) o activar/desactivar un usuario.
     """
     current_user_id = get_jwt_identity()
     current_user = Usuario.query.get(int(current_user_id))
@@ -206,6 +206,18 @@ def update_user(user_id):
         if len(data["password"]) < 6:
             return jsonify({"error": "La contraseña debe tener al menos 6 caracteres"}), 400
         user.set_password(data["password"])
+
+    if data.get("rol"):
+        nuevo_rol = data["rol"]
+        if nuevo_rol not in ("admin", "juez"):
+            return jsonify({"error": "Rol inválido (debe ser 'admin' o 'juez')"}), 400
+        if user.id == current_user.id and nuevo_rol != "admin":
+            return jsonify({"error": "No puedes quitarte tu propio rol de administrador"}), 400
+        if nuevo_rol != user.rol:
+            if nuevo_rol == "admin":
+                # Un admin no actúa como juez de tatami: liberar sus asignaciones
+                AsignacionJuez.query.filter_by(usuario_id=user.id).delete()
+            user.rol = nuevo_rol
 
     if "activo" in data:
         if user.id == current_user.id and not data["activo"]:
