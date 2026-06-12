@@ -11,5 +11,13 @@ reportlab==4.4.1
 # psycopg2-binary: solo se instala en producción (Python <= 3.13, ej. Render).
 # En Windows local con Python 3.14 se omite automáticamente (SQLite local).
 psycopg2-binary==2.9.10; python_version < "3.14"
-eventlet==0.39.1
+# eventlet: las versiones nuevas (0.36+) tienen roto el monkey-patching de
+# locks bajo gunicorn: todo acceso al pool de SQLAlchemy muere con
+# "RuntimeError: cannot notify on un-acquired lock" (en Python 3.11 y 3.12).
+# Producción (Render, Python 3.11.9) usa la 0.33.3, estable por años con
+# Flask-SocketIO. La 0.33.3 no instala en Python >= 3.12 (usa distutils),
+# así que el entorno local Windows (3.14) conserva la 0.39.1 — ahí no hay
+# gunicorn ni monkey-patching y el bug no aplica.
+eventlet==0.33.3; python_version < "3.12"
+eventlet==0.39.1; python_version >= "3.12"
 gunicorn==23.0.0

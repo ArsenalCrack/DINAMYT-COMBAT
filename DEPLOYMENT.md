@@ -70,7 +70,7 @@ producción (fuerte: 12+ caracteres, letras, números y símbolo).
 
    | Variable         | Valor                                                         |
    | ---------------- | ------------------------------------------------------------- |
-   | `PYTHON_VERSION` | `3.12.7`                                                      |
+   | `PYTHON_VERSION` | `3.11.9` ⚠️ NO usar 3.12+: el monkey-patching de eventlet se rompe y toda consulta a la BD devuelve 500 (`cannot notify on un-acquired lock`) |
    | `FLASK_ENV`      | `production`                                                  |
    | `DATABASE_URL`   | la connection string de Neon (Paso 1)                         |
    | `JWT_SECRET_KEY` | el secreto generado en el Paso 0                              |
