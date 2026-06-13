@@ -13,7 +13,22 @@
  *  - Nunca se interceptan peticiones a otros orígenes (API de Render, sockets).
  */
 
-const CACHE = "dinamyt-v1";
+const CACHE = "dinamyt-v2";
+
+// Rutas que deben funcionar SIN conexión aunque no se hayan visitado antes
+// (el Tablero local y el retorno del juez). Se precachean al instalar el SW.
+const PRECACHE = [
+  "/",
+  "/login",
+  "/juez",
+  "/pantalla",
+  "/tablero",
+  "/tablero/pantalla",
+  "/logo.png",
+  "/manifest.webmanifest",
+  "/icon-192.png",
+  "/icon-512.png",
+];
 
 // Página de respaldo cuando no hay red NI copia en caché de la ruta pedida
 const PAGINA_SIN_CONEXION = `<!DOCTYPE html>
@@ -51,8 +66,24 @@ const PAGINA_SIN_CONEXION = `<!DOCTYPE html>
 </body>
 </html>`;
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE);
+      // Best-effort: precachear el documento HTML de cada ruta crítica para
+      // que estén disponibles offline. No se aborta la instalación si alguna
+      // ruta falla (los subrecursos JS se cachean al navegar/prefetch online).
+      await Promise.all(
+        PRECACHE.map(async (ruta) => {
+          try {
+            const res = await fetch(ruta, { cache: "no-cache" });
+            if (res && res.ok) await cache.put(ruta, res.clone());
+          } catch { /* sin red en install: se cacheará al primer uso online */ }
+        })
+      );
+      await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener("activate", (event) => {

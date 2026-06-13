@@ -57,15 +57,32 @@ export default function GrupoFigurasPanel({
 
       {grupoActivo ? (
         <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          gap: 10, flexWrap: "wrap",
           padding: "8px 12px", background: "var(--chung-bg)",
           border: "1px solid var(--chung-border)", borderRadius: "var(--radius-sm)",
         }}>
-          <div style={{ fontWeight: 800, color: "var(--chung-light)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            En curso: {grupoActivo.nombre}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, color: "var(--chung-light)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              En curso: {grupoActivo.nombre}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 2 }}>
+              Al guardar la categoría (&quot;Nueva categoría&quot;) este grupo queda terminado.
+            </div>
           </div>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 2 }}>
-            Al guardar la categoría (&quot;Nueva categoría&quot;) este grupo queda terminado.
-          </div>
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={() => onShowConfirm({
+              titulo: "SOLTAR GRUPO DE FIGURAS",
+              mensaje: `¿Liberar "${grupoActivo.nombre}"? Volverá a la cola como pendiente y podrás activarlo de nuevo. Las puntuaciones sin guardar se descartan.`,
+              tipo: "advertencia",
+              confirmLabel: "SOLTAR",
+              cancelLabel: "Cancelar",
+              onConfirm: () => enviarEvento("soltar_grupo_figuras"),
+            })}
+          >
+            Soltar
+          </button>
         </div>
       ) : siguiente ? (
         <div style={{

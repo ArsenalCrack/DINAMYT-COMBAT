@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [rolFiltro, setRolFiltro] = useState<"todos" | "admin" | "juez">("todos");
   const [campSearch, setCampSearch] = useState("");
+  const [campFiltro, setCampFiltro] = useState<"todos" | "activos" | "inactivos">("todos");
   const [creandoCamp, setCreandoCamp] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "", rol: "juez" });
@@ -69,7 +70,6 @@ export default function AdminPage() {
       void loadData(showInactive);
     });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, showInactive]);
 
   async function loadData(includeInactive = false) {
@@ -179,6 +179,11 @@ export default function AdminPage() {
 
   if (!user) return null;
 
+  // Filtro combinado de campeonatos: búsqueda por nombre + estado activo/inactivo
+  const coincideCamp = (c: Campeonato) =>
+    c.nombre.toLowerCase().includes(campSearch.trim().toLowerCase())
+    && (campFiltro === "todos" || (campFiltro === "activos" ? c.activo : !c.activo));
+
   return (
     <div className="admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
       <AvisoSinInternet />
@@ -241,13 +246,26 @@ export default function AdminPage() {
             </button>
           </div>
 
-          <input
-            className="input"
-            placeholder="Buscar campeonato por nombre..."
-            value={campSearch}
-            onChange={(e) => setCampSearch(e.target.value)}
-            style={{ marginBottom: 14, maxWidth: 380 }}
-          />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+            <input
+              className="input"
+              placeholder="Buscar campeonato por nombre..."
+              value={campSearch}
+              onChange={(e) => setCampSearch(e.target.value)}
+              style={{ flex: "1 1 200px", maxWidth: 380 }}
+            />
+            <select
+              className="input"
+              value={campFiltro}
+              onChange={(e) => setCampFiltro(e.target.value as "todos" | "activos" | "inactivos")}
+              aria-label="Filtrar campeonatos por estado"
+              style={{ width: "auto", minWidth: 150, padding: "8px 30px 8px 12px", minHeight: 38 }}
+            >
+              <option value="todos">Todos</option>
+              <option value="activos">Activos</option>
+              <option value="inactivos">Inactivos</option>
+            </select>
+          </div>
 
           {showNewCamp && (
             <div className="card animate-slide" style={{ marginBottom: 16 }}>
@@ -273,16 +291,16 @@ export default function AdminPage() {
             </div>
           )}
 
-          {campeonatos.filter((c) => c.nombre.toLowerCase().includes(campSearch.trim().toLowerCase())).length === 0 ? (
+          {campeonatos.filter(coincideCamp).length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>
               {campeonatos.length === 0
                 ? "No hay campeonatos creados. Crea uno para empezar."
-                : "Ningún campeonato coincide con la búsqueda."}
+                : "Ningún campeonato coincide con los filtros."}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {campeonatos
-                .filter((c) => c.nombre.toLowerCase().includes(campSearch.trim().toLowerCase()))
+                .filter(coincideCamp)
                 .map((c) => (
                 <div key={c.id} className="card" style={{ cursor: "pointer" }}
                   onClick={() => router.push(`/admin/campeonato/${c.id}`)}>

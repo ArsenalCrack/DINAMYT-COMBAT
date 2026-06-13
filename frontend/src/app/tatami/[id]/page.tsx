@@ -2526,6 +2526,14 @@ function TatamiContent() {
   // (no se sabe cuánto dura la caída ni qué categoría corre el tatami).
   const [catOffline, setCatOffline] = useState<"combate" | "figuras" | null>(null);
 
+  // Mientras hay conexión, precargar el Tablero local (HTML + JS) para que
+  // cargue offline si se va el internet. El SW cachea estos recursos.
+  useEffect(() => {
+    if (!connected) return;
+    router.prefetch("/tablero");
+    router.prefetch("/tablero/pantalla");
+  }, [connected, router]);
+
   const alertSystem = useAlertSystem();
 
   // Wire socket alerts → alertSystem

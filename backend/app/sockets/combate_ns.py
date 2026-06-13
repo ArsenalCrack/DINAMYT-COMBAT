@@ -149,6 +149,7 @@ ACCIONES_SIN_ACTIVACION = {
     "activar_combate_llave",
     "soltar_combate_llave",
     "activar_grupo_figuras",
+    "soltar_grupo_figuras",
     "mostrar_arbol",
 }
 
@@ -214,6 +215,7 @@ ACCIONES_SOLO_ARBITRO = {
     "activar_combate_llave",
     "soltar_combate_llave",
     "activar_grupo_figuras",
+    "soltar_grupo_figuras",
     "mostrar_arbol",
 }
 
@@ -642,6 +644,20 @@ class CombateNamespace(Namespace):
                     )
                 ts["mostrar_arbol"] = False
                 ts.pop("llave_arbol", None)
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                self._broadcast_estado(room, ts)
+                return
+
+            # ── Soltar grupo de figuras: lo desvincula y vuelve a 'pendiente' ─
+            if accion == "soltar_grupo_figuras":
+                if ts.get("grupo_figuras"):
+                    self._cerrar_grupo_figuras(ts, terminada=False)
+                    _agregar_log(
+                        ts["estado"],
+                        "[FIGURAS] Grupo liberado — vuelve a la cola como pendiente",
+                        "arb",
+                    )
                 if ev_id:
                     emit("ack", {"evId": ev_id})
                 self._broadcast_estado(room, ts)

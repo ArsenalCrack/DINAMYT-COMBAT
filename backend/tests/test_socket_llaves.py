@@ -461,6 +461,30 @@ class TestGrupoFiguras:
         assert any("otro tatami" in m.lower() for m in rechazos), rechazos
         cliente.disconnect(namespace="/combate")
 
+    def test_soltar_grupo_figuras(self, entorno):
+        app, tatami_id, _ = entorno
+        fig_id = _crear_llave_figuras(app, tatami_id)
+        cliente = socketio.test_client(
+            app, namespace="/combate",
+            query_string=f"tatami_id={tatami_id}&rol=arbitro",
+        )
+        _emitir(cliente, "activar_tatami")
+        _emitir(cliente, "activar_grupo_figuras", llave_id=fig_id)
+        estado = _ultimo_estado(cliente)
+        assert estado["_grupo_figuras"]["llave_id"] == fig_id
+        with app.app_context():
+            from app.models.llave import Llave
+            assert Llave.query.get(fig_id).estado == "activa"
+
+        # Soltar: se desvincula y la llave vuelve a 'pendiente'
+        _emitir(cliente, "soltar_grupo_figuras")
+        estado = _ultimo_estado(cliente)
+        assert estado.get("_grupo_figuras") is None
+        with app.app_context():
+            from app.models.llave import Llave
+            assert Llave.query.get(fig_id).estado == "pendiente"
+        cliente.disconnect(namespace="/combate")
+
 
 def test_partido_bronce_via_api(entorno):
     """El 3er puesto se marca por HTTP con ronda='bronce' y cierra la llave."""
