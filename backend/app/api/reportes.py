@@ -16,6 +16,8 @@ from ..models.usuario import Usuario
 from ..models.combate import Combate
 from ..models.tatami import Tatami, SesionTatami
 from ..models.campeonato import Campeonato
+from ..models.llave import Llave
+from .llaves import podio_llave
 
 reportes_bp = Blueprint("reportes", __name__)
 
@@ -282,6 +284,45 @@ def _ranking_figuras(combate):
     return ranking if isinstance(ranking, list) else []
 
 
+def _descripcion_registro(combate):
+    """Descripción pública del registro (figuras): 'Intermedios 15-17 años'."""
+    return (_detalle_registro(combate).get("descripcion") or "").strip()
+
+
+def _llave_registro(combate):
+    """Info de llave del registro (combates de eliminación) o None."""
+    llave = _detalle_registro(combate).get("llave")
+    return llave if isinstance(llave, dict) else None
+
+
+def _es_final_llave(combate):
+    """True si este registro es el combate final de una llave de eliminación."""
+    llave = _llave_registro(combate)
+    return bool(llave and (llave.get("ronda_nombre") or "").strip().lower() == "final")
+
+
+def _podios_llaves_map(rows):
+    """
+    {llave_id: {nombre, podio}} para las llaves de eliminación referenciadas por
+    las filas dadas que ya tienen campeón. Una sola consulta por lote.
+    """
+    ids = set()
+    nombres = {}
+    for combate, _t, _c in rows:
+        llave = _llave_registro(combate)
+        if llave and llave.get("llave_id"):
+            ids.add(int(llave["llave_id"]))
+            nombres[int(llave["llave_id"])] = llave.get("nombre") or combate.nombre_hong
+    if not ids:
+        return {}
+    mapa = {}
+    for ll in Llave.query.filter(Llave.id.in_(ids)).all():
+        podio = podio_llave(ll.estructura)
+        if podio:
+            mapa[ll.id] = {"nombre": ll.nombre or nombres.get(ll.id, "-"), "podio": podio}
+    return mapa
+
+
 def _puesto_figuras_txt(item):
     """Puesto anotado: '1 (Especial)' / '3 (Empate)' para Excel y PDF."""
     puesto = str(item.get("puesto", "-"))
@@ -290,6 +331,10 @@ def _puesto_figuras_txt(item):
     elif item.get("empate"):
         puesto += " (Empate)"
     return puesto
+
+
+def _medalla_txt(puesto):
+    return {1: "1° (Oro)", 2: "2° (Plata)", 3: "3° (Bronce)"}.get(puesto, f"{puesto}°")
 
 
 def _figuras_completas(combate):
@@ -451,13 +496,20 @@ def listar_combates():
     total = len(rows_filtradas)
     rows = rows_filtradas[(page - 1) * per_page: page * per_page]
 
+    podios_llaves = _podios_llaves_map(rows)
+
     result = []
     for c, tatami, camp in rows:
         tipo = _tipo_registro(c)
+        llave_info = _llave_registro(c)
+        podio_combate = []
+        if _es_final_llave(c) and llave_info and llave_info.get("llave_id"):
+            podio_combate = podios_llaves.get(int(llave_info["llave_id"]), {}).get("podio", [])
         result.append({
             "id": c.id,
             "tipo": tipo,
             "nombre_categoria": _nombre_categoria_registro(c),
+            "descripcion": _descripcion_registro(c),
             "nombre_hong": c.nombre_hong,
             "nombre_chung": c.nombre_chung,
             "marcador_hong": float(c.marcador_hong or 0),
@@ -482,6 +534,7 @@ def listar_combates():
             "jueces": _jueces_list(c),
             "jueces_resumen": _jueces_resumen(c),
             "ranking": _ranking_figuras(c) if tipo == "figuras" else [],
+            "podio_llave": podio_combate,
         })
 
     return jsonify({
@@ -653,7 +706,7 @@ def _generar_excel(rows, subtitulo=""):
     # ── Hoja 3: Ranking de Figuras ──────────────────────────────────────────
     ws3 = wb.create_sheet("Ranking Figuras")
     fig_headers = [
-        "Registro ID", "Categoría", "Campeonato", "Tatami", "Estado", "Puesto",
+        "Registro ID", "Categoría", "Descripción", "Campeonato", "Tatami", "Estado", "Puesto",
         "Competidor", "Club", "Total", "Puntajes por juez (criterio y correo)",
     ]
     for col_idx, h in enumerate(fig_headers, 1):
@@ -673,6 +726,7 @@ def _generar_excel(rows, subtitulo=""):
             fig_data = [
                 combate.id,
                 _nombre_categoria_registro(combate),
+                _descripcion_registro(combate) or "-",
                 camp.nombre if camp else "-",
                 f"Tatami {tatami.numero}" if tatami else "-",
                 estado,
@@ -688,8 +742,36 @@ def _generar_excel(rows, subtitulo=""):
                 cell.alignment = center
             fig_row += 1
 
-    for i, w in enumerate([12, 22, 22, 10, 12, 8, 24, 18, 10, 64], 1):
+    for i, w in enumerate([12, 22, 24, 22, 10, 12, 8, 24, 18, 10, 64], 1):
         ws3.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # ── Hoja 4: Podios de Llaves (eliminación) ──────────────────────────────
+    podios_map = _podios_llaves_map(rows)
+    if podios_map:
+        ws4 = wb.create_sheet("Podios Llaves")
+        po_headers = ["Llave", "Puesto", "Competidor", "Club"]
+        for col_idx, h in enumerate(po_headers, 1):
+            cell = ws4.cell(row=1, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center
+            cell.border = border
+        po_row = 2
+        for _llid, info in sorted(podios_map.items(), key=lambda x: x[1]["nombre"]):
+            for item in info["podio"]:
+                po_data = [
+                    info["nombre"],
+                    _medalla_txt(item["puesto"]),
+                    item.get("nombre", "-"),
+                    item.get("club") or "-",
+                ]
+                for col_idx, val in enumerate(po_data, 1):
+                    cell = ws4.cell(row=po_row, column=col_idx, value=val)
+                    cell.border = border
+                    cell.alignment = center
+                po_row += 1
+        for i, w in enumerate([28, 12, 26, 22], 1):
+            ws4.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
     # Output
     output = io.BytesIO()
@@ -938,13 +1020,15 @@ def _generar_pdf(rows, subtitulo=""):
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DDDDDD")))
         story.append(Spacer(1, 0.4 * cm))
 
-        fig_table_data = [["Reg ID", "Categoría", "Estado", "Puesto", "Competidor", "Club", "Total"]]
+        fig_table_data = [["Reg ID", "Categoría", "Descripción", "Estado", "Puesto", "Competidor", "Club", "Total"]]
         for combate, _t5, _c5 in figuras:
             estado = _figuras_estado(combate)
+            descripcion = _descripcion_registro(combate) or "-"
             for item in _ranking_figuras(combate):
                 fig_table_data.append([
                     str(combate.id),
                     _nombre_categoria_registro(combate),
+                    descripcion,
                     estado,
                     _puesto_figuras_txt(item),
                     str(item.get("nombre", "-")),
@@ -954,7 +1038,7 @@ def _generar_pdf(rows, subtitulo=""):
 
         fig_table = Table(
             fig_table_data,
-            colWidths=[1.6*cm, 4.6*cm, 2.2*cm, 1.4*cm, 5.6*cm, 4.0*cm, 1.8*cm],
+            colWidths=[1.4*cm, 3.8*cm, 3.4*cm, 2.0*cm, 1.3*cm, 4.8*cm, 3.4*cm, 1.5*cm],
             repeatRows=1,
         )
         fig_table.setStyle(TableStyle([
@@ -995,6 +1079,37 @@ def _generar_pdf(rows, subtitulo=""):
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GRAY_BG]),
         ]))
         story.append(figdet_table)
+
+    # ── Podios de Llaves (eliminación) en PDF ───────────────────────────────
+    podios_map = _podios_llaves_map(rows)
+    if podios_map:
+        story.append(Spacer(1, 1 * cm))
+        story.append(Paragraph("Podios de Llaves (eliminación)", title_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DDDDDD")))
+        story.append(Spacer(1, 0.4 * cm))
+        po_data = [["Llave", "Puesto", "Competidor", "Club"]]
+        for _llid, info in sorted(podios_map.items(), key=lambda x: x[1]["nombre"]):
+            for item in info["podio"]:
+                po_data.append([
+                    info["nombre"],
+                    _medalla_txt(item["puesto"]),
+                    str(item.get("nombre", "-")),
+                    str(item.get("club") or "-"),
+                ])
+        po_table = Table(po_data, colWidths=[7.5*cm, 2.6*cm, 8.5*cm, 7.4*cm], repeatRows=1)
+        po_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GRAY_BG]),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+        ]))
+        story.append(po_table)
 
     doc.build(story)
     output.seek(0)

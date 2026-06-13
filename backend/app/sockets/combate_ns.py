@@ -68,6 +68,7 @@ def _serializar_ts(ts):
         "campeonato_nombre": ts.get("campeonato_nombre"),
         "campeonato_id": ts.get("campeonato_id"),
         "combate_llave": ts.get("combate_llave"),
+        "grupo_figuras": ts.get("grupo_figuras"),
         "mostrar_arbol": bool(ts.get("mostrar_arbol")),
         "llave_arbol": ts.get("llave_arbol"),
     }
@@ -116,6 +117,7 @@ def _cargar_estados():
                 "campeonato_nombre": guardado.get("campeonato_nombre"),
                 "campeonato_id": guardado.get("campeonato_id"),
                 "combate_llave": guardado.get("combate_llave"),
+                "grupo_figuras": guardado.get("grupo_figuras"),
                 "mostrar_arbol": bool(guardado.get("mostrar_arbol")),
                 "llave_arbol": guardado.get("llave_arbol"),
             }
@@ -159,6 +161,9 @@ ACCIONES_FIGURAS_SIN_NOMBRE_CATEGORIA = {
     "desactivar_tatami",
     "cambiar_categoria",
     "cambiar_nombre_categoria",
+    "cambiar_descripcion",
+    # Activar un grupo de la cola fija un nombre de categoría válido por sí mismo.
+    "activar_grupo_figuras",
 }
 
 ACCIONES_SOLO_ARBITRO = {
@@ -190,8 +195,10 @@ ACCIONES_SOLO_ARBITRO = {
     "cerrar_puntuacion",
     "reevaluar_empate",
     "finalizar",
+    "cambiar_descripcion",
     "activar_combate_llave",
     "soltar_combate_llave",
+    "activar_grupo_figuras",
     "mostrar_arbol",
 }
 
@@ -269,6 +276,7 @@ def _build_estado_broadcast(ts):
     estado_copy["_campeonato_nombre"] = ts.get("campeonato_nombre")
     estado_copy["_campeonato_id"] = ts.get("campeonato_id")
     estado_copy["_combate_llave"] = ts.get("combate_llave")
+    estado_copy["_grupo_figuras"] = ts.get("grupo_figuras")
     # Árbol de la llave para la pantalla pública. La estructura completa
     # solo viaja cuando está visible (los ticks del cronómetro no la cargan),
     # pero _hay_arbol siempre indica si existe para el botón del Juez Central.
@@ -301,6 +309,9 @@ def _competidores_con_nombre(estado):
 def _normalizar_nombre_categoria(nombre):
     raw = str(nombre or "")
     limpio = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]", "", raw)
+    # Colapsar espacios y unificar en MAYÚSCULAS para que "Defensa" y
+    # "defensa" no aparezcan como categorías distintas en el registro.
+    limpio = re.sub(r"\s+", " ", limpio).strip().upper()
     return limpio[:CATEGORIA_NOMBRE_MAX]
 
 
@@ -595,6 +606,17 @@ class CombateNamespace(Namespace):
                 self._broadcast_estado(room, ts)
                 return
 
+            # ── Activar grupo de figuras (cola) ────────────────────────────
+            if accion == "activar_grupo_figuras":
+                error = self._activar_grupo_figuras(tatami_id, ts, ev)
+                if ev_id:
+                    emit("ack", {"evId": ev_id})
+                if error:
+                    emit("accion_rechazada", {"message": error})
+                    return
+                self._broadcast_estado(room, ts)
+                return
+
             if accion == "soltar_combate_llave":
                 if ts.get("combate_llave"):
                     ts.pop("combate_llave", None)
@@ -652,6 +674,8 @@ class CombateNamespace(Namespace):
 
                 self._guardar_combate_actual(tatami_id, ts, llave_info=llave_info)
                 if categoria == "figuras":
+                    # Si venía de un grupo de la cola, queda 'terminada' al guardar.
+                    self._cerrar_grupo_figuras(ts, terminada=True)
                     nombre_cat = ts.get("nombre_categoria", "Figuras")
                     nuevo = estado_inicial_figuras()
                     nuevo["nombre_categoria"] = nombre_cat
@@ -711,6 +735,8 @@ class CombateNamespace(Namespace):
 
             # ── Cambio de categoría ────────────────────────────────────────
             if accion == "cambiar_categoria":
+                # Abandona el grupo de figuras en curso (vuelve a 'pendiente').
+                self._cerrar_grupo_figuras(ts, terminada=False)
                 nueva_cat = ev.get("categoria", "combate")
                 ts["categoria_activa"] = nueva_cat
                 if nueva_cat == "figuras":
@@ -730,6 +756,9 @@ class CombateNamespace(Namespace):
             self._inyectar_meta_juez(ts, ev, rol)
             if categoria == "figuras":
                 aplicar_evento_figuras(ts["estado"], ev)
+                # Reset de figuras abandona el grupo de la cola (vuelve a pendiente).
+                if accion in ("reset_figuras", "reset"):
+                    self._cerrar_grupo_figuras(ts, terminada=False)
             else:
                 aplicar_evento(ts["estado"], ev, ganador_cb, alerta_superioridad_cb, derrota_cb)
 
@@ -846,7 +875,7 @@ class CombateNamespace(Namespace):
         Retorna un mensaje de error, o None si todo salió bien.
         """
         from ..models.llave import Llave
-        from ..api.llaves import siguiente_partido, nombre_ronda
+        from ..api.llaves import siguiente_partido, etiqueta_ronda
 
         if ts.get("categoria_activa", "combate") != "combate":
             return "Cambia a la categoría Combate antes de activar un combate de eliminación."
@@ -884,13 +913,13 @@ class CombateNamespace(Namespace):
         nuevo["nombreChung"] = partido["comp2"]["nombre"]
         ts["estado"] = nuevo
 
-        etiqueta_ronda = nombre_ronda(ronda_idx, total_rondas)
+        ronda_label = etiqueta_ronda(ronda_idx, total_rondas)
         ts["combate_llave"] = {
             "llave_id": llave.id,
             "nombre": llave.nombre,
             "ronda": ronda_idx,
             "partido": partido_idx,
-            "ronda_nombre": etiqueta_ronda,
+            "ronda_nombre": ronda_label,
             "comp1": partido["comp1"],
             "comp2": partido["comp2"],
         }
@@ -902,9 +931,13 @@ class CombateNamespace(Namespace):
         }
         ts["mostrar_arbol"] = True
         self._detener_crono(tatami_id)
+        # La llave pasa a "activa" mientras se disputa en este tatami.
+        if llave.estado_norm == "pendiente":
+            llave.estado = "activa"
+            db.session.commit()
         _agregar_log(
             ts["estado"],
-            f"[LLAVE] {llave.nombre} · {etiqueta_ronda}: "
+            f"[LLAVE] {llave.nombre} · {ronda_label}: "
             f"{partido['comp1']['nombre']} (Rojo) vs {partido['comp2']['nombre']} (Azul)",
             "arb",
         )
@@ -924,6 +957,10 @@ class CombateNamespace(Namespace):
                     estructura, llave_info["ronda"], llave_info["partido"], lado
                 )
                 llave.estructura = estructura
+                pendientes = len(partidos_jugables(estructura))
+                # Terminada solo cuando no queda nada por jugar (incluido el bronce).
+                if estructura.get("campeon") and pendientes == 0:
+                    llave.estado = "terminada"
                 db.session.commit()
 
                 # El público vuelve a ver el árbol actualizado tras el combate
@@ -934,16 +971,28 @@ class CombateNamespace(Namespace):
                 }
                 ts["mostrar_arbol"] = True
 
-                ganador = llave_info["comp1"] if lado == 1 else llave_info["comp2"]
+                gano_bronce = llave_info.get("ronda") == "bronce"
                 campeon = estructura.get("campeon")
-                pendientes = len(partidos_jugables(estructura))
-                if campeon:
+                if campeon and pendientes == 0:
                     _agregar_log(
                         ts["estado"],
                         f"[LLAVE] 🏆 {campeon['nombre']} CAMPEÓN — {llave_info['nombre']}",
                         "arb",
                     )
+                elif gano_bronce:
+                    tercero = (estructura.get("bronce") or {})
+                    nombre3 = ""
+                    if tercero.get("ganador") in (1, 2):
+                        c3 = tercero["comp1"] if tercero["ganador"] == 1 else tercero["comp2"]
+                        nombre3 = (c3 or {}).get("nombre", "")
+                    _agregar_log(
+                        ts["estado"],
+                        f"[LLAVE] 🥉 {nombre3} 3er puesto — "
+                        f"{pendientes} combate(s) pendiente(s) en {llave_info['nombre']}",
+                        "arb",
+                    )
                 else:
+                    ganador = llave_info["comp1"] if lado == 1 else llave_info["comp2"]
                     _agregar_log(
                         ts["estado"],
                         f"[LLAVE] {ganador['nombre']} avanza — "
@@ -955,6 +1004,85 @@ class CombateNamespace(Namespace):
             print(f"  [ERR] Error registrando resultado en la llave: {e}")
         finally:
             ts.pop("combate_llave", None)
+
+    def _activar_grupo_figuras(self, tatami_id, ts, ev):
+        """
+        Activa un grupo de figuras de la cola en este tatami: cambia la
+        categoría a Figuras y carga TODOS los competidores de golpe (adiós a
+        agregarlos a mano en vivo). Retorna un mensaje de error o None.
+        """
+        from ..models.llave import Llave
+
+        try:
+            llave = Llave.query.get(int(ev.get("llave_id", 0)))
+        except (TypeError, ValueError):
+            llave = None
+        if not llave:
+            return "Grupo de figuras no encontrado."
+        if llave.tipo_norm != "figuras":
+            return "Esa llave no es de figuras."
+        if llave.tatami_id != int(tatami_id):
+            return "Este grupo está asignado a otro tatami."
+        if llave.estado_norm == "terminada":
+            return "Este grupo ya fue calificado."
+
+        # No pisar una categoría de figuras en curso con puntuaciones sin guardar.
+        actual = ts.get("estado", {})
+        if (
+            ts.get("categoria_activa") == "figuras"
+            and actual.get("competidores")
+            and not actual.get("finalizado")
+            and any(actual.get("puntuaciones", {}).values())
+        ):
+            return ("Termina o guarda la categoría de figuras actual antes de "
+                    "activar otro grupo.")
+
+        nombre_cat = _normalizar_nombre_categoria(llave.nombre)
+        nuevo = estado_inicial_figuras()
+        nuevo["nombre_categoria"] = nombre_cat
+        nuevo["descripcion"] = llave.descripcion or ""
+        comps = (llave.estructura or {}).get("competidores", [])
+        for c in comps:
+            aplicar_evento_figuras(nuevo, {
+                "accion": "agregar_competidor",
+                "nombre": c.get("nombre"),
+                "club": c.get("club", ""),
+            })
+
+        ts["categoria_activa"] = "figuras"
+        ts["nombre_categoria"] = nombre_cat
+        ts["estado"] = nuevo
+        ts["grupo_figuras"] = {"llave_id": llave.id, "nombre": llave.nombre}
+        self._detener_crono(tatami_id)
+        if llave.estado_norm == "pendiente":
+            llave.estado = "activa"
+            db.session.commit()
+        _agregar_log(
+            ts["estado"],
+            f"[FIGURAS] {nombre_cat} — {len(comps)} competidor(es) cargado(s)",
+            "arb",
+        )
+        return None
+
+    def _cerrar_grupo_figuras(self, ts, terminada):
+        """
+        Cierra el vínculo con el grupo de figuras activo: si terminada=True la
+        llave queda 'terminada'; si no (cambio de categoría, reset), vuelve a
+        'pendiente' para no dejarla bloqueada como 'activa'.
+        """
+        from ..models.llave import Llave
+
+        grupo = ts.pop("grupo_figuras", None)
+        if not grupo:
+            return
+        try:
+            llave = Llave.query.get(grupo["llave_id"])
+            if llave and llave.tipo_norm == "figuras" and llave.estado_norm != "terminada":
+                llave.estado = "terminada" if terminada else "pendiente"
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"  [ERR] Error cerrando grupo de figuras: {e}")
 
     def _obtener_sesion_categoria(self, tatami_id, slug):
         from ..models.categoria import Categoria
@@ -999,6 +1127,7 @@ class CombateNamespace(Namespace):
             jueces_detalle = {
                 "tipo": "figuras",
                 "nombre_categoria": snapshot.get("nombre_categoria", "Figuras"),
+                "descripcion": snapshot.get("descripcion", ""),
                 "ranking": ranking,
                 "competidores": snapshot.get("competidores", []),
                 "criterios": snapshot.get("criterios", []),

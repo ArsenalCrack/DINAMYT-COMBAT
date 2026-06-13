@@ -1,14 +1,27 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api, { getCampeonatoAPI, listTatamisAPI } from "@/lib/api";
 import AvisoSinInternet from "@/components/AvisoSinInternet";
+import PodioLlave from "@/components/PodioLlave";
+import type { PodioItem } from "@/lib/llaves";
+
+interface RankingItem {
+  id?: number;
+  nombre: string;
+  club?: string;
+  total: number;
+  puesto?: number;
+  empate?: boolean;
+  especial?: boolean;
+}
 
 interface Combate {
   id: number;
   tipo?: "combate" | "figuras" | string;
   nombre_categoria?: string;
+  descripcion?: string;
   nombre_hong: string;
   nombre_chung: string;
   marcador_hong: number;
@@ -23,7 +36,8 @@ interface Combate {
   tatami_numero: number;
   created_at: string;
   jueces?: JuezReporte[];
-  ranking?: { nombre: string; total: number }[];
+  ranking?: RankingItem[];
+  podio_llave?: PodioItem[];
 }
 
 interface JuezReporte {
@@ -108,6 +122,7 @@ export default function ReportesCampeonatoPage() {
   const [tatamis, setTatamis] = useState<TatamiOption[]>([]);
   const [splitZip, setSplitZip] = useState(false);
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
+  const [podioAbierto, setPodioAbierto] = useState<Set<number>>(new Set());
   const [filters, setFilters] = useState({
     tatami_id: "",
     tipo: "",
@@ -258,6 +273,15 @@ export default function ReportesCampeonatoPage() {
     const url = `${apiUrl}/api/reportes/combates/export/${type}?${qp}`;
     const fallback = `dinamyt_${slugArchivo(campNombre, "campeonato")}_seleccion-${seleccion.size}_${fechaArchivo()}.${type === "pdf" ? "pdf" : "xlsx"}`;
     void descargar(url, fallback, `seleccion-${type}`);
+  }
+
+  function togglePodio(id: number) {
+    setPodioAbierto((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function ganadorNombre(c: Combate) {
@@ -557,7 +581,8 @@ export default function ReportesCampeonatoPage() {
               </thead>
               <tbody>
                 {data.combates.map((c) => (
-                  <tr key={c.id} style={{
+                  <Fragment key={c.id}>
+                  <tr style={{
                     background: seleccion.has(c.id) ? "rgba(240,184,0,0.05)" : undefined,
                   }}>
                     <td>
@@ -586,7 +611,14 @@ export default function ReportesCampeonatoPage() {
                           </span>
                         </div>
                       ) : (
-                        c.nombre_categoria || (c.tipo === "figuras" ? "Figuras" : "Combate")
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span>{c.nombre_categoria || (c.tipo === "figuras" ? "Figuras" : "Combate")}</span>
+                          {c.descripcion && (
+                            <span style={{ fontWeight: 500, fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                              {c.descripcion}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="text-center font-mono" style={{ fontSize: "1.05rem" }}>
@@ -612,7 +644,7 @@ export default function ReportesCampeonatoPage() {
                     <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
                         <span className={`badge ${ganadorColor(c)}`}>
-                          {ganadorNombre(c)}
+                          {c.tipo === "figuras" ? `🥇 ${ganadorNombre(c)}` : ganadorNombre(c)}
                         </span>
                         {c.tipo !== "figuras" && c.ganador !== "empate" && (
                           <span style={{
@@ -622,6 +654,26 @@ export default function ReportesCampeonatoPage() {
                           }}>
                             {c.ganador === "hong" ? "Rojo" : "Azul"}
                           </span>
+                        )}
+                        {c.tipo === "figuras" && (c.ranking?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => togglePodio(c.id)}
+                            style={{ padding: "2px 8px", minHeight: 26, fontSize: "0.72rem" }}
+                          >
+                            {podioAbierto.has(c.id) ? "▲ Ocultar podio" : `▾ Ver podio (${c.ranking?.length})`}
+                          </button>
+                        )}
+                        {c.tipo !== "figuras" && (c.podio_llave?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => togglePodio(c.id)}
+                            style={{ padding: "2px 8px", minHeight: 26, fontSize: "0.72rem" }}
+                          >
+                            {podioAbierto.has(c.id) ? "▲ Ocultar podio" : "🏆 Ver podio de la llave"}
+                          </button>
                         )}
                       </div>
                     </td>
@@ -674,6 +726,16 @@ export default function ReportesCampeonatoPage() {
                         : "—"}
                     </td>
                   </tr>
+                  {podioAbierto.has(c.id) && (c.tipo === "figuras" || (c.podio_llave?.length || 0) > 0) && (
+                    <tr className="animate-fade">
+                      <td colSpan={10} style={{ background: "rgba(255,255,255,0.02)", padding: "10px 16px" }}>
+                        {c.tipo === "figuras"
+                          ? <PodioFiguras ranking={c.ranking || []} />
+                          : <PodioLlave podio={c.podio_llave || []} titulo="Podio de la llave" />}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -737,6 +799,46 @@ export default function ReportesCampeonatoPage() {
           .reportes-header > div:last-child { align-items: flex-start; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// Podio completo de una categoría de figuras (no solo el ganador).
+function PodioFiguras({ ranking }: { ranking: RankingItem[] }) {
+  if (ranking.length === 0) return null;
+  const medalla = (puesto?: number) =>
+    puesto === 1 ? "🥇" : puesto === 2 ? "🥈" : puesto === 3 ? "🥉" : `${puesto ?? "-"}°`;
+  return (
+    <div>
+      <div style={{
+        fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase",
+        letterSpacing: "0.1em", color: "var(--text-muted)", marginBottom: 8,
+      }}>
+        Podio de la categoría
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {ranking.map((r, i) => (
+          <div key={r.id ?? `${r.nombre}-${i}`} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "6px 12px", borderRadius: "var(--radius-sm)",
+            background: r.puesto === 1 ? "var(--gold-bg)" : "var(--bg-elevated)",
+            border: `1px solid ${r.puesto === 1 ? "var(--gold-border)" : "var(--border)"}`,
+          }}>
+            <span style={{ fontSize: "1.1rem", minWidth: 32, textAlign: "center" }}>
+              {medalla(r.puesto)}
+            </span>
+            <span style={{ flex: 1, fontWeight: 700, overflowWrap: "anywhere" }}>
+              {r.nombre}
+              {r.club && <span style={{ color: "var(--text-muted)", fontWeight: 500, marginLeft: 8, fontSize: "0.8rem" }}>{r.club}</span>}
+              {r.especial && <span className="badge badge-chung" style={{ marginLeft: 8 }}>Especial</span>}
+              {r.empate && <span className="badge badge-gray" style={{ marginLeft: 8 }}>Empate</span>}
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, color: "var(--gold)" }}>
+              {Number(r.total ?? 0).toFixed(2)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

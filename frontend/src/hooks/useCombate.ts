@@ -61,6 +61,8 @@ export interface CombateState {
     nombre: string;
     estructura: import("../lib/api").LlaveEstructura;
   } | null;
+  // Grupo de figuras de la cola actualmente activo en el tatami
+  _grupo_figuras?: { llave_id: number; nombre: string } | null;
 }
 
 export interface HistorialEntry {

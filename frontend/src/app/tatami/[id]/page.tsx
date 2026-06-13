@@ -17,8 +17,12 @@ import AlertSystem, {
   type DerrotaData,
 } from "@/components/AlertSystem";
 import LlavePanel from "@/components/LlavePanel";
+import GrupoFigurasPanel from "@/components/GrupoFigurasPanel";
+import PanelColapsable from "@/components/PanelColapsable";
 import BracketTree from "@/components/BracketTree";
+import PodioLlave from "@/components/PodioLlave";
 import Logo from "@/components/Logo";
+import { CATEGORIAS_FIGURAS } from "@/lib/categorias";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
 interface Criterio { id: string; nombre: string; max_pts: number; }
@@ -39,6 +43,7 @@ interface FigurasState {
   competidor_activo_id: number | null;
   puntuacion_abierta: boolean;
   nombre_categoria: string;
+  descripcion?: string;
   num_jueces: number;
   nombres_jueces: Record<string, string>;
   finalizado: boolean;
@@ -50,6 +55,7 @@ interface FigurasState {
   _tatami_numero?: number | null;
   _campeonato_nombre?: string | null;
   _campeonato_id?: number | null;
+  _grupo_figuras?: { llave_id: number; nombre: string } | null;
 }
 
 type AnyState = (CombateState & { _categoria?: string }) | (FigurasState & { _categoria?: string });
@@ -104,7 +110,9 @@ function isValidScore(raw: string) {
 const CATEGORIA_NOMBRE_MAX = 40;
 
 function sanitizeCategoryName(raw: string) {
-  return raw.replace(/[^\p{L} ]/gu, "").slice(0, CATEGORIA_NOMBRE_MAX);
+  // Solo letras y espacios, siempre en MAYÚSCULAS: así "Defensa" y "defensa"
+  // no quedan como categorías distintas en el registro.
+  return raw.replace(/[^\p{L} ]/gu, "").toUpperCase().slice(0, CATEGORIA_NOMBRE_MAX);
 }
 
 function categoriaNombreValido(raw?: string) {
@@ -249,11 +257,12 @@ function CronoDisplay({ segundos, activo, big = false }: {
 // FIGURAS — Juez Central (Arbitro)
 // ══════════════════════════════════════════════════════════════════════════════
 function FigurasArbitro({
-  state, enviarEvento, tatamiId, onShowConfirm,
+  state, enviarEvento, tatamiId, tatamiDbId, onShowConfirm,
 }: {
   state: FigurasState;
   enviarEvento: (accion: string, datos?: Record<string, unknown>) => void;
   tatamiId: string;
+  tatamiDbId: string;
   onShowConfirm: (data: import("@/components/AlertSystem").ConfirmData) => void;
 }) {
   const [newComp, setNewComp] = useState({ nombre: "", club: "", especial: false });
@@ -263,6 +272,16 @@ function FigurasArbitro({
   const [categoriaFocused, setCategoriaFocused] = useState(false);
   const [categoriaPendiente, setCategoriaPendiente] = useState(false);
   const nombreCategoriaValido = categoriaNombreValido(categoriaDraft);
+  const [descDraft, setDescDraft] = useState(state.descripcion ?? "");
+  const [descFocused, setDescFocused] = useState(false);
+
+  // La descripción del servidor se adopta cuando el JC no la está editando.
+  useEffect(() => {
+    if (!descFocused && (state.descripcion ?? "") !== descDraft) {
+      setDescDraft(state.descripcion ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.descripcion, descFocused]);
 
   useEffect(() => {
     let cancelled = false;
@@ -343,13 +362,41 @@ function FigurasArbitro({
 
   return (
     <div style={{ padding: 16, maxWidth: 800, margin: "0 auto" }}>
-      {/* Nombre de la categoría: input en su propia línea, centrado y
-          ocupando el espacio; debajo, el rol y el tatami */}
+      {/* Grupos de figuras encolados para este tatami (activación rápida) */}
+      <GrupoFigurasPanel
+        tatamiDbId={tatamiDbId}
+        grupoActivo={state._grupo_figuras ?? null}
+        enviarEvento={enviarEvento}
+        onShowConfirm={onShowConfirm}
+      />
+
+      {/* Nombre de la categoría: desplegable canónico para evitar duplicados
+          (figura con armas / defensa personal / etc.) y un campo libre debajo;
+          luego el rol y el tatami */}
       <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        <select
+          className="input"
+          value=""
+          aria-label="Elegir categoría predefinida"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) return;
+            setCategoriaDraft(v);
+            setCategoriaPendiente(true);
+            setCategoriaError("");
+            enviarEvento("cambiar_nombre_categoria", { nombre: v });
+          }}
+          style={{ width: "100%", textAlign: "center", fontWeight: 700 }}
+        >
+          <option value="">Elegir categoría predefinida…</option>
+          {CATEGORIAS_FIGURAS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <input
           className="input"
           value={categoriaDraft}
-          placeholder="Nombre de la categoría"
+          placeholder="O escribe la categoría (solo letras)"
           maxLength={CATEGORIA_NOMBRE_MAX}
           onChange={(e) => {
             const nombre = sanitizeCategoryName(e.target.value);
@@ -373,6 +420,19 @@ function FigurasArbitro({
             fontSize: "1.05rem",
             borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
           }}
+        />
+        <input
+          className="input"
+          value={descDraft}
+          placeholder="Descripción pública (opc.) — ej: Intermedios 15-17 años"
+          maxLength={120}
+          onChange={(e) => {
+            setDescDraft(e.target.value);
+            enviarEvento("cambiar_descripcion", { descripcion: e.target.value });
+          }}
+          onFocus={() => setDescFocused(true)}
+          onBlur={() => setDescFocused(false)}
+          style={{ width: "100%", textAlign: "center", fontSize: "0.85rem" }}
         />
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1018,6 +1078,12 @@ function FigurasPantalla({ state, tatamiId }: { state: FigurasState; tatamiId: s
           color: "var(--gold)", fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.15em", marginTop: 2,
         }}>{nombreCategoria}</div>
+        {state.descripcion && (
+          <div style={{
+            fontSize: "clamp(0.8rem, 1.6vw, 1.05rem)", color: "var(--text-muted)",
+            fontWeight: 600, marginTop: 4,
+          }}>{state.descripcion}</div>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px" }}>
@@ -1296,6 +1362,11 @@ function CombatePantalla({
           )}
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "clamp(10px,2vh,24px) clamp(12px,2vw,28px)" }}>
+          {state._llave_arbol.estructura.campeon && (
+            <div style={{ marginBottom: "clamp(14px,3vh,28px)" }}>
+              <PodioLlave estructura={state._llave_arbol.estructura} grande titulo="🏆 Podio final" />
+            </div>
+          )}
           <BracketTree
             estructura={state._llave_arbol.estructura}
             variant="pantalla"
@@ -1491,10 +1562,10 @@ function CombateJuez({
   ];
 
   function anotar(color: "hong" | "chung", pts: number, label: string) {
-    // Sin conexión: el punto se guarda en el teléfono, no se pierde
+    // Sin conexión: el punto se guarda en el teléfono, no se pierde.
+    // Sin flash: el marcador local del panel superior ya refleja el cambio.
     if (!connected) {
       offline.agregar({ etiqueta: `+${pts} ${label}`, color, pts });
-      onFlash("📴", `+${pts} GUARDADO LOCAL`);
       return;
     }
     if (!nombresListos) {
@@ -1612,7 +1683,7 @@ function CombateJuez({
             style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
             disabled={(connected && state.oroResuelto) || juezBloqueado}
             onClick={() => {
-              if (!connected) { offline.deshacer(); onFlash("📴", "DESHECHO LOCAL"); return; }
+              if (!connected) { offline.deshacer(); return; }
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "hong");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "hong" });
               else onFlash("⚠️", "NADA QUE DESHACER");
@@ -1644,7 +1715,7 @@ function CombateJuez({
             style={{ marginTop: 4, padding: "10px 6px", fontSize: "0.82rem", opacity: (connected && state.oroResuelto) || juezBloqueado ? 0.5 : 1 }}
             disabled={(connected && state.oroResuelto) || juezBloqueado}
             onClick={() => {
-              if (!connected) { offline.deshacer(); onFlash("📴", "DESHECHO LOCAL"); return; }
+              if (!connected) { offline.deshacer(); return; }
               const hay = state.historial?.some((h) => h.juez === rol && h.color === "chung");
               if (hay) enviarEvento("deshacer_juez", { juez: rol, color: "chung" });
               else onFlash("⚠️", "NADA QUE DESHACER");
@@ -1968,8 +2039,8 @@ function CombateArbitro({
 
   function handleEspecial(color: "hong" | "chung", pts: number, nombre: string) {
     if (!connected) {
+      // Sin flash: el marcador del panel de registro local ya refleja el cambio.
       offline.agregar({ etiqueta: `⭐ ${nombre} +${pts}`, color, pts });
-      onFlash("📴", `+${pts} GUARDADO LOCAL`);
       return;
     }
     if (!nombresListos) {
@@ -1994,7 +2065,6 @@ function CombateArbitro({
   function handleKyonggo(color: "hong" | "chung") {
     if (!connected) {
       offline.agregar({ etiqueta: "KyongGo −0.5", color, pts: -0.5 });
-      onFlash("📴", "KYONGGO LOCAL");
       return;
     }
     if (!nombresListos) {
@@ -2016,7 +2086,6 @@ function CombateArbitro({
   function handleGamjeum(color: "hong" | "chung") {
     if (!connected) {
       offline.agregar({ etiqueta: "GamJeum −1", color, pts: -1 });
-      onFlash("📴", "GAMJEUM LOCAL");
       return;
     }
     if (!nombresListos) {
@@ -2241,8 +2310,15 @@ function CombateArbitro({
         </div>
       </div>
 
-      {/* Ronda + Duración */}
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+      {/* Configuración (ronda, duración, jueces): se fija al inicio, por eso
+          va colapsada con un resumen en el badge para no estorbar en vivo */}
+      <PanelColapsable
+        titulo="Configuración del combate"
+        icono="⚙"
+        acento="oro"
+        badge={`${RONDAS_BTN.find((r) => r.id === state.ronda)?.label || "Round 1"} · ${state.segundosMax}s · ${state.numJueces}J`}
+      >
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
         {RONDAS_BTN.map((r) => (
           <button key={r.id} className="btn btn-sm"
             onClick={() => enviarEvento("ronda", { ronda: r.id })}
@@ -2280,6 +2356,7 @@ function CombateArbitro({
             }}>{n}</button>
         ))}
       </div>
+      </PanelColapsable>
 
       {/* Puntos árbitro */}
       <div className="card-title">Puntos del Juez Central</div>
@@ -2325,8 +2402,10 @@ function CombateArbitro({
         </button>
       </div>
 
-      {/* Decisiones */}
-      <div className="card-title">Decisión del Juez Central</div>
+      {/* Finalizar: decisión y descalificación — solo se usan al cerrar el
+          combate, así que van colapsadas para no saturar la vista en vivo */}
+      <PanelColapsable titulo="Finalizar combate · decisión / descalificación" icono="🏁" acento="rojo">
+      <div className="card-title" style={{ marginTop: 4 }}>Decisión del Juez Central</div>
       <div className="grid-2" style={{ marginBottom: 8 }}>
         <button
           className="combat-btn hong"
@@ -2393,6 +2472,7 @@ function CombateArbitro({
           <span className="pts">🚫</span><span className="label">Descalificar CHUNG</span>
         </button>
       </div>
+      </PanelColapsable>
 
       {/* Deshacer + Guardar */}
       <div className="grid-2" style={{ marginBottom: 8 }}>
@@ -2421,16 +2501,15 @@ function CombateArbitro({
 
       {/* Log */}
       {state.log && state.log.length > 0 && (
-        <div className="card" style={{ padding: "8px 14px" }}>
-          <div className="card-title" style={{ marginBottom: 4, fontSize: "0.72rem" }}>Log reciente</div>
-          <div style={{ maxHeight: 140, overflowY: "auto", fontSize: "0.76rem" }}>
+        <PanelColapsable titulo="Log reciente" icono="📜" badge={String(state.log.length)}>
+          <div style={{ maxHeight: 160, overflowY: "auto", fontSize: "0.76rem", marginTop: 6 }}>
             {state.log.map((l, i) => (
               <div key={i} style={{ padding: "3px 0", borderBottom: "1px solid var(--border)", color: "var(--text-muted)" }}>
                 {l.txt}
               </div>
             ))}
           </div>
-        </div>
+        </PanelColapsable>
       )}
 
       {/* Detalle del registro local del JC: al final para no estorbar */}
@@ -2908,6 +2987,7 @@ function TatamiContent() {
                 state={anyState as FigurasState}
                 enviarEvento={enviarEvento}
                 tatamiId={tatamiLabel}
+                tatamiDbId={tatamiId}
                 onShowConfirm={alertSystem.showConfirm}
               />
             : <FigurasJuez state={anyState as FigurasState} enviarEvento={enviarEvento} juezId={rol} connected={!offline} />

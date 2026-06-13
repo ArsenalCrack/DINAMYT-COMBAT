@@ -15,8 +15,9 @@ interface BracketTreeProps {
   estructura: LlaveEstructura;
   /** "admin": compacto e interactivo · "pantalla": grande, solo lectura */
   variant?: "admin" | "pantalla";
-  /** Marcar ganador (solo admin). Si no se pasa, el árbol es de solo lectura. */
-  onGanador?: (ronda: number, partido: number, lado: 1 | 2) => void;
+  /** Marcar ganador (solo admin). Si no se pasa, el árbol es de solo lectura.
+   *  ronda puede ser "bronce" (partido por el 3er puesto). */
+  onGanador?: (ronda: number | "bronce", partido: number, lado: 1 | 2) => void;
   /** Partido a resaltar (el que está por disputarse en el tatami). */
   destacar?: { ronda: number; partido: number } | null;
 }
@@ -72,13 +73,16 @@ export default function BracketTree({
   const campeon = estructura.campeon;
   const grande = variant === "pantalla";
   const anchoCol = grande ? 240 : 200;
+  const bronce = estructura.bronce;
+  const hayBronce = Boolean(bronce && (bronce.comp1 || bronce.comp2));
+  const bronceJugable = Boolean(bronce && bronce.comp1 && bronce.comp2);
 
   return (
     <div style={{ overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
       <div style={{
         display: "flex",
         gap: grande ? "clamp(14px,2vw,28px)" : 18,
-        minWidth: (totalRondas + 1) * (anchoCol + 18),
+        minWidth: (totalRondas + 1 + (hayBronce ? 1 : 0)) * (anchoCol + 18),
       }}>
         {estructura.rondas.map((ronda, rIdx) => (
           <div key={rIdx} style={{
@@ -166,6 +170,40 @@ export default function BracketTree({
           }}>
             {campeon ? `🏆 ${campeon.nombre}` : "Por definir"}
           </div>
+
+          {/* Partido por el 3er puesto (bronce) */}
+          {hayBronce && bronce && (
+            <div style={{ marginTop: grande ? 22 : 16 }}>
+              <div style={{
+                textAlign: "center",
+                fontSize: grande ? "clamp(0.75rem,1.4vw,1rem)" : "0.7rem",
+                fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em",
+                color: "var(--gold)", marginBottom: 8,
+              }}>🥉 3er puesto</div>
+              <div style={{
+                background: "var(--bg-elevated)", border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)", overflow: "hidden",
+              }}>
+                <LadoPartido
+                  comp={bronce.comp1}
+                  esGanador={bronce.ganador === 1}
+                  esBye={false}
+                  grande={grande}
+                  interactivo={Boolean(onGanador) && bronceJugable}
+                  onClick={onGanador ? () => onGanador("bronce", 0, 1) : undefined}
+                />
+                <div style={{ height: 1, background: "var(--border)" }} />
+                <LadoPartido
+                  comp={bronce.comp2}
+                  esGanador={bronce.ganador === 2}
+                  esBye={!bronce.comp2}
+                  grande={grande}
+                  interactivo={Boolean(onGanador) && bronceJugable}
+                  onClick={onGanador ? () => onGanador("bronce", 0, 2) : undefined}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

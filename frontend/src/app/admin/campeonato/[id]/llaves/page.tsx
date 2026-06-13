@@ -38,11 +38,13 @@ export default function LlavesCampeonatoPage() {
           ← Volver al campeonato
         </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, overflowWrap: "anywhere" }}>
-          Llaves de Eliminación — {campNombre || "..."}
+          Llaves y Grupos — {campNombre || "..."}
         </h1>
         <p className="text-muted" style={{ fontSize: "0.88rem" }}>
-          Crea las llaves, asígnalas a un tatami y los combates se activan
-          desde el panel del Juez Central de ese tatami.
+          Crea llaves de combate (eliminación) o grupos de figuras, asígnalos a
+          un tatami —o déjalos en el pool para asignar después— y actívalos desde
+          el panel del Juez Central. Cada llave muestra su estado: pendiente,
+          activa o terminada.
         </p>
       </div>
 

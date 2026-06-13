@@ -144,13 +144,20 @@ export default function PantallaAccess() {
           </div>
         )}
 
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 12 }}>
           <button onClick={() => router.push("/login")}
             style={{
               background: "none", border: "none", color: "var(--gold)",
               cursor: "pointer", fontSize: "0.85rem", fontFamily: "var(--font-body)"
             }}>
             Iniciar sesion como juez
+          </button>
+          <button onClick={() => router.push("/tablero")}
+            style={{
+              background: "none", border: "none", color: "var(--text-muted)",
+              cursor: "pointer", fontSize: "0.82rem", fontFamily: "var(--font-body)"
+            }}>
+            🖥️ Tablero local del Juez Central (sin conexion)
           </button>
         </div>
       </div>

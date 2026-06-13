@@ -130,7 +130,8 @@ export default function LlavePanel({
         /* ── Llaves con combates pendientes: solo UNA a la vez para no
               saturar al JC; las demás esperan en cola ── */
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {llaves.filter((l) => l.campeon).map((llave) => (
+          {/* Terminadas: con campeón y sin partidos pendientes (incluido el bronce) */}
+          {llaves.filter((l) => l.campeon && l.pendientes === 0).map((llave) => (
             <div key={llave.id} style={{
               padding: "8px 12px", background: "var(--bg-elevated)",
               border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
@@ -143,7 +144,9 @@ export default function LlavePanel({
           ))}
 
           {(() => {
-            const pendientes = llaves.filter((l) => !l.campeon && l.siguiente);
+            // Activable mientras quede un partido por jugar (final o bronce),
+            // aunque el campeón ya esté definido.
+            const pendientes = llaves.filter((l) => l.siguiente && l.pendientes > 0);
             const llave = pendientes[0];
             if (!llave) return null;
             const enCola = pendientes.length - 1;

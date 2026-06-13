@@ -165,17 +165,27 @@ export interface LlavePartido {
 }
 
 export interface LlaveEstructura {
+  tipo?: TipoLlave;
   competidores: LlaveCompetidor[];
+  // Figuras no tiene cuadro: rondas vacías y campeón null.
   rondas: LlavePartido[][];
   campeon: LlaveCompetidor | null;
+  // Partido por el 3er puesto (bronce): perdedores de semifinal.
+  bronce?: LlavePartido | null;
 }
+
+export type TipoLlave = "combate" | "figuras";
+export type EstadoLlave = "pendiente" | "activa" | "terminada";
 
 export interface LlaveData {
   id: number;
   campeonato_id: number;
   tatami_id?: number | null;
   tatami_numero?: number | null;
+  tipo: TipoLlave;
   nombre: string;
+  descripcion: string;
+  estado: EstadoLlave;
   estructura: LlaveEstructura;
   created_at: string;
 }
@@ -190,9 +200,13 @@ export interface LlaveSiguiente {
 
 export interface LlaveTatamiInfo {
   id: number;
+  tipo: TipoLlave;
   nombre: string;
+  descripcion: string;
+  estado: EstadoLlave;
   tatami_id?: number | null;
   tatami_numero?: number | null;
+  num_competidores: number;
   pendientes: number;
   siguiente: LlaveSiguiente | null;
   campeon: LlaveCompetidor | null;
@@ -201,10 +215,25 @@ export interface LlaveTatamiInfo {
 export async function createLlaveAPI(data: {
   campeonato_id: number;
   tatami_id?: number | null;
+  tipo?: TipoLlave;
   nombre: string;
+  descripcion?: string;
   competidores: { nombre: string; club?: string }[];
 }) {
   const res = await api.post("/llaves", data);
+  return res.data as { message: string; llave: LlaveData };
+}
+
+export async function updateLlaveAPI(
+  llaveId: number,
+  data: {
+    nombre?: string;
+    descripcion?: string;
+    tatami_id?: number | null;
+    competidores?: { nombre: string; club?: string }[];
+  }
+) {
+  const res = await api.put(`/llaves/${llaveId}`, data);
   return res.data as { message: string; llave: LlaveData };
 }
 
@@ -221,7 +250,7 @@ export async function listLlavesTatamiAPI(tatamiId: number | string) {
 
 export async function marcarGanadorLlaveAPI(
   llaveId: number,
-  data: { ronda: number; partido: number; ganador: 1 | 2 | null }
+  data: { ronda: number | "bronce"; partido: number; ganador: 1 | 2 | null }
 ) {
   const res = await api.put(`/llaves/${llaveId}/partido`, data);
   return res.data as { message: string; llave: LlaveData };

@@ -15,6 +15,9 @@ OPTIONAL_COLUMNS = {
     },
     "llaves": {
         "tatami_id": "INTEGER",
+        "tipo": "VARCHAR(20)",
+        "descripcion": "TEXT",
+        "estado": "VARCHAR(20)",
     },
 }
 

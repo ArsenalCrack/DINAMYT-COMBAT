@@ -36,6 +36,9 @@ CATEGORIA_NOMBRE_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+$")
 def _normalizar_nombre_categoria(nombre):
     raw = str(nombre or "")
     limpio = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]", "", raw)
+    # Colapsar espacios y unificar en MAYÚSCULAS para que "Defensa" y
+    # "defensa" no aparezcan como categorías distintas en el registro.
+    limpio = re.sub(r"\s+", " ", limpio).strip().upper()
     return limpio[:CATEGORIA_NOMBRE_MAX]
 
 
@@ -68,6 +71,8 @@ def estado_inicial_figuras(config=None):
         "num_jueces": 4,
         # Nombre personalizable de la categoría
         "nombre_categoria": "Figuras",
+        # Descripción pública (ej: "Intermedios 15-17 años"). Solo informativa.
+        "descripcion": "",
         "nombres_jueces": {"j1": "", "j2": "", "j3": "", "j4": ""},
         # Competidores
         "competidores": [],       # [{id, nombre, club}]
@@ -245,6 +250,10 @@ def aplicar_evento_figuras(estado, ev):
     # ── Nombre de categoría ──────────────────────────────────────────────────
     if accion == "cambiar_nombre_categoria":
         estado["nombre_categoria"] = _normalizar_nombre_categoria(ev.get("nombre", ""))
+
+    # ── Descripción pública (admite números: "Intermedios 15-17 años") ───────
+    elif accion == "cambiar_descripcion":
+        estado["descripcion"] = str(ev.get("descripcion", "")).strip()[:120]
 
     # ── Número de jueces (máximo 4 de esquina) ──────────────────────────────
     elif accion == "set_num_jueces":
@@ -514,6 +523,7 @@ def guardar_figuras_snapshot(estado):
     return {
         "tipo": "figuras",
         "nombre_categoria": estado.get("nombre_categoria", "Figuras"),
+        "descripcion": estado.get("descripcion", ""),
         "competidores": copy.deepcopy(estado["competidores"]),
         "criterios": copy.deepcopy(estado["criterios"]),
         "puntuaciones": copy.deepcopy(estado["puntuaciones"]),
