@@ -269,7 +269,6 @@ function FigurasArbitro({
   const [showAddComp, setShowAddComp] = useState(false);
   const [categoriaError, setCategoriaError] = useState("");
   const [categoriaDraft, setCategoriaDraft] = useState(state.nombre_categoria ?? "");
-  const [categoriaFocused, setCategoriaFocused] = useState(false);
   const [categoriaPendiente, setCategoriaPendiente] = useState(false);
   const nombreCategoriaValido = categoriaNombreValido(categoriaDraft);
   const [descDraft, setDescDraft] = useState(state.descripcion ?? "");
@@ -292,12 +291,12 @@ function FigurasArbitro({
         setCategoriaPendiente(false);
         return;
       }
-      if (!categoriaFocused && !categoriaPendiente) {
+      if (!categoriaPendiente) {
         setCategoriaDraft(serverName);
       }
     });
     return () => { cancelled = true; };
-  }, [categoriaDraft, categoriaFocused, categoriaPendiente, state.nombre_categoria]);
+  }, [categoriaDraft, categoriaPendiente, state.nombre_categoria]);
 
   function commitNombreCategoria() {
     const nombre = sanitizeCategoryName(categoriaDraft);
@@ -370,57 +369,36 @@ function FigurasArbitro({
         onShowConfirm={onShowConfirm}
       />
 
-      {/* Nombre de la categoría: desplegable canónico para evitar duplicados
-          (figura con armas / defensa personal / etc.) y un campo libre debajo;
-          luego el rol y el tatami */}
+      {/* Categoría de figuras: SOLO selección de las predefinidas (sin escribir)
+          para no fragmentar el registro. Es obligatorio elegir una antes de
+          agregar competidores o empezar. */}
       <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
         <select
           className="input"
-          value=""
-          aria-label="Elegir categoría predefinida"
+          value={(CATEGORIAS_FIGURAS as readonly string[]).includes(categoriaDraft) ? categoriaDraft : ""}
+          aria-label="Categoría de figuras"
           onChange={(e) => {
             const v = e.target.value;
-            if (!v) return;
             setCategoriaDraft(v);
             setCategoriaPendiente(true);
             setCategoriaError("");
             enviarEvento("cambiar_nombre_categoria", { nombre: v });
           }}
-          style={{ width: "100%", textAlign: "center", fontWeight: 700 }}
+          style={{
+            width: "100%", textAlign: "center", fontWeight: 800, fontSize: "1.05rem",
+            borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
+          }}
         >
-          <option value="">Elegir categoría predefinida…</option>
+          <option value="">— Selecciona la categoría —</option>
           {CATEGORIAS_FIGURAS.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <input
-          className="input"
-          value={categoriaDraft}
-          placeholder="O escribe la categoría (solo letras)"
-          maxLength={CATEGORIA_NOMBRE_MAX}
-          onChange={(e) => {
-            const nombre = sanitizeCategoryName(e.target.value);
-            setCategoriaDraft(nombre);
-            setCategoriaPendiente(true);
-            setCategoriaError("");
-            enviarEvento("cambiar_nombre_categoria", { nombre });
-          }}
-          onFocus={() => setCategoriaFocused(true)}
-          onBlur={() => {
-            setCategoriaFocused(false);
-            const nombre = commitNombreCategoria();
-            if (nombre && !categoriaNombreValido(nombre)) {
-              setCategoriaError("Usa solo letras y espacios.");
-            }
-          }}
-          style={{
-            width: "100%",
-            textAlign: "center",
-            fontWeight: 800,
-            fontSize: "1.05rem",
-            borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
-          }}
-        />
+        {!nombreCategoriaValido && (
+          <p style={{ color: "var(--orange)", fontSize: "0.78rem", textAlign: "center", margin: 0 }}>
+            ⚠️ Elige una categoría para agregar competidores y comenzar.
+          </p>
+        )}
         <input
           className="input"
           value={descDraft}
@@ -2008,6 +1986,10 @@ function CombateArbitro({
   const combateCerrado = Boolean(state.ganadorManualColor);
   const cierreBloqueado = !nombresListos || Boolean(state.ganadorPendienteCierre);
   const accionesBloqueadas = cierreBloqueado || combateCerrado || Boolean(state.alerta12Data);
+  // La configuración (ronda, duración, jueces) NO requiere nombres: se puede
+  // preparar antes de ingresarlos. Solo se bloquea con el combate cerrado, en
+  // pausa por alerta, o con un ganador por confirmar.
+  const configBloqueada = combateCerrado || Boolean(state.alerta12Data) || Boolean(state.ganadorPendienteCierre);
   // Sin conexión, los puntos y faltas del JC van al registro local
   const puntosArbBloqueados = connected && (state.oroResuelto || accionesBloqueadas);
   const faltasBloqueadas = connected && accionesBloqueadas;
@@ -2322,9 +2304,9 @@ function CombateArbitro({
         {RONDAS_BTN.map((r) => (
           <button key={r.id} className="btn btn-sm"
             onClick={() => enviarEvento("ronda", { ronda: r.id })}
-            disabled={accionesBloqueadas}
+            disabled={configBloqueada}
             style={{
-              opacity: accionesBloqueadas ? 0.45 : 1,
+              opacity: configBloqueada ? 0.45 : 1,
               background: state.ronda === r.id ? "var(--gold-bg)" : undefined,
               borderColor: state.ronda === r.id ? "var(--gold-border)" : undefined,
               color: state.ronda === r.id ? "var(--gold)" : undefined,
@@ -2335,9 +2317,9 @@ function CombateArbitro({
         {DURACIONES.map((d) => (
           <button key={d} className="btn btn-sm"
             onClick={() => enviarEvento("crono_reset", { segundosMax: d })}
-            disabled={accionesBloqueadas}
+            disabled={configBloqueada}
             style={{
-              opacity: accionesBloqueadas ? 0.45 : 1,
+              opacity: configBloqueada ? 0.45 : 1,
               background: state.segundosMax === d ? "var(--chung-bg)" : undefined,
               borderColor: state.segundosMax === d ? "var(--chung-border)" : undefined,
             }}>{d}s</button>
@@ -2347,9 +2329,9 @@ function CombateArbitro({
         {[2, 3, 4].map((n) => (
           <button key={n} className="btn btn-sm"
             onClick={() => enviarEvento("set_num_jueces", { numJueces: n })}
-            disabled={accionesBloqueadas}
+            disabled={configBloqueada}
             style={{
-              opacity: accionesBloqueadas ? 0.45 : 1,
+              opacity: configBloqueada ? 0.45 : 1,
               background: state.numJueces === n ? "var(--gold-bg)" : undefined,
               borderColor: state.numJueces === n ? "var(--gold-border)" : undefined,
               color: state.numJueces === n ? "var(--gold)" : undefined,
@@ -2976,6 +2958,19 @@ function TatamiContent() {
                 Figuras
               </button>
             </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.72rem", textAlign: "center", margin: 0, maxWidth: 420 }}>
+              Aquí apuntas tus puntos en una libreta local.
+              {isArbitro && " Para cronómetro local y pantalla al público, usa el Tablero local."}
+            </p>
+            {isArbitro && (
+              <button
+                className="btn btn-sm"
+                onClick={() => window.open("/tablero", "dinamyt_tablero")}
+                style={{ borderColor: "var(--gold-border)", color: "var(--gold)" }}
+              >
+                🖥️ Abrir Tablero local (cronómetro + pantalla pública)
+              </button>
+            )}
           </div>
         )}
 

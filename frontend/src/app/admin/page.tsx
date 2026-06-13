@@ -40,6 +40,8 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<{ texto: string; tipo: "ok" | "error" } | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [rolFiltro, setRolFiltro] = useState<"todos" | "admin" | "juez">("todos");
+  const [campSearch, setCampSearch] = useState("");
   const [creandoCamp, setCreandoCamp] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [editUserData, setEditUserData] = useState({ nombre: "", email: "", password: "", rol: "juez" });
@@ -239,6 +241,14 @@ export default function AdminPage() {
             </button>
           </div>
 
+          <input
+            className="input"
+            placeholder="Buscar campeonato por nombre..."
+            value={campSearch}
+            onChange={(e) => setCampSearch(e.target.value)}
+            style={{ marginBottom: 14, maxWidth: 380 }}
+          />
+
           {showNewCamp && (
             <div className="card animate-slide" style={{ marginBottom: 16 }}>
               <div className="card-title">Crear Campeonato</div>
@@ -263,13 +273,17 @@ export default function AdminPage() {
             </div>
           )}
 
-          {campeonatos.length === 0 ? (
+          {campeonatos.filter((c) => c.nombre.toLowerCase().includes(campSearch.trim().toLowerCase())).length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>
-              No hay campeonatos creados. Crea uno para empezar.
+              {campeonatos.length === 0
+                ? "No hay campeonatos creados. Crea uno para empezar."
+                : "Ningún campeonato coincide con la búsqueda."}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {campeonatos.map((c) => (
+              {campeonatos
+                .filter((c) => c.nombre.toLowerCase().includes(campSearch.trim().toLowerCase()))
+                .map((c) => (
                 <div key={c.id} className="card" style={{ cursor: "pointer" }}
                   onClick={() => router.push(`/admin/campeonato/${c.id}`)}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
@@ -341,15 +355,26 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Buscador y filtro de inactivos */}
+          {/* Buscador, filtro por tipo y filtro de inactivos */}
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
             <input
               className="input"
               placeholder="Buscar por nombre o correo..."
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
-              style={{ flex: "1 1 220px", maxWidth: 380 }}
+              style={{ flex: "1 1 200px", maxWidth: 380 }}
             />
+            <select
+              className="input"
+              value={rolFiltro}
+              onChange={(e) => setRolFiltro(e.target.value as "todos" | "admin" | "juez")}
+              aria-label="Filtrar por tipo de usuario"
+              style={{ width: "auto", minWidth: 150, padding: "8px 30px 8px 12px", minHeight: 38 }}
+            >
+              <option value="todos">Todos los tipos</option>
+              <option value="admin">Administradores</option>
+              <option value="juez">Jueces</option>
+            </select>
             <label style={{
               display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
               fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 700,
@@ -367,6 +392,7 @@ export default function AdminPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {users
+              .filter((u) => rolFiltro === "todos" || u.rol === rolFiltro)
               .filter((u) => {
                 const q = userSearch.trim().toLowerCase();
                 if (!q) return true;

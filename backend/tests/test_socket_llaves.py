@@ -505,3 +505,46 @@ def test_partido_bronce_via_api(entorno):
     from app.api.llaves import podio_llave
     podio = podio_llave(llave_json["estructura"])
     assert sorted(p["puesto"] for p in podio) == [1, 2, 3]
+
+
+def test_configurar_combate_sin_activar(entorno):
+    """Con el tatami desactivado se puede CONFIGURAR (jueces, nombres) pero NO
+    iniciar el cronómetro."""
+    app, tatami_id, _ = entorno
+    cliente = socketio.test_client(
+        app, namespace="/combate",
+        query_string=f"tatami_id={tatami_id}&rol=arbitro",
+    )
+    # SIN activar el tatami: la configuración debe aplicar
+    _emitir(cliente, "set_num_jueces", numJueces=2)   # sin nombres aún
+    _emitir(cliente, "nombres", nombreHong="Pedro", nombreChung="Juan")
+    estado = _ultimo_estado(cliente)
+    assert estado["_tatami_activo"] is False
+    assert estado["numJueces"] == 2
+    assert estado["nombreHong"] == "Pedro"
+
+    # El cronómetro NO arranca sin activar el tatami (acción ignorada)
+    cliente.get_received("/combate")
+    _emitir(cliente, "crono_start")
+    cliente.emit("pedir", namespace="/combate")
+    estado = _ultimo_estado(cliente)
+    assert estado is not None
+    assert estado["activo"] is False
+    cliente.disconnect(namespace="/combate")
+
+
+def test_activar_grupo_figuras_sin_activar(entorno):
+    """El grupo de figuras se carga aunque el tatami esté desactivado."""
+    app, tatami_id, _ = entorno
+    fig_id = _crear_llave_figuras(app, tatami_id)
+    cliente = socketio.test_client(
+        app, namespace="/combate",
+        query_string=f"tatami_id={tatami_id}&rol=arbitro",
+    )
+    # SIN activar el tatami
+    _emitir(cliente, "activar_grupo_figuras", llave_id=fig_id)
+    estado = _ultimo_estado(cliente)
+    assert estado["_categoria"] == "figuras"
+    assert estado["_tatami_activo"] is False
+    assert len(estado["competidores"]) == 3
+    cliente.disconnect(namespace="/combate")

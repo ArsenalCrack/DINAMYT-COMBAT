@@ -126,16 +126,37 @@ def _cargar_estados():
     except Exception as e:
         print(f"  [WARN] No se pudo restaurar estado de tatamis: {e}")
 
-# Acciones permitidas cuando tatami ESTÁ DESACTIVADO
+# Acciones permitidas cuando tatami ESTÁ DESACTIVADO.
+# Se puede CONFIGURAR el combate/figuras con el tatami aún desactivado (nombres,
+# jueces, ronda, duración, competidores, cargar de la cola) para dejarlo listo y
+# luego activar. Lo único que NO se permite sin activar es iniciar el cronómetro
+# y puntuar.
 ACCIONES_SIN_ACTIVACION = {
     "activar_tatami",
     "desactivar_tatami",
     "cambiar_categoria",
     "cambiar_nombre_categoria",
+    "cambiar_descripcion",
+    "nombres",
+    "set_num_jueces",
+    "set_nombre_juez",
+    "ronda",
+    "crono_reset",
+    "agregar_competidor",
+    "eliminar_competidor",
+    "reset",
+    "reset_figuras",
+    "activar_combate_llave",
+    "soltar_combate_llave",
+    "activar_grupo_figuras",
+    "mostrar_arbol",
 }
 
 ACCIONES_DURANTE_GANADOR_PENDIENTE = {"cerrar_ganador", "cerrar_alerta12"}
 
+# Acciones que SÍ requieren los nombres de ambos competidores: puntuar, iniciar
+# el cronómetro y decidir el resultado. La configuración (jueces, ronda,
+# duración, reset) NO los requiere, para poder prepararla antes de los nombres.
 ACCIONES_REQUIEREN_COMPETIDORES = {
     "punto_juez",
     "deshacer_juez",
@@ -143,13 +164,7 @@ ACCIONES_REQUIEREN_COMPETIDORES = {
     "deshacer_arbitro",
     "kyonggo",
     "gamjeum",
-    "ronda",
-    "set_num_jueces",
-    "crono_reset",
     "crono_start",
-    "crono_pause",
-    "nuevo_combate",
-    "reset",
     "aprobar_oro",
     "rechazar_oro",
     "declarar_ganador",

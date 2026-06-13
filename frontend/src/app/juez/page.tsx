@@ -27,12 +27,28 @@ export default function JuezPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [tatamis, setTatamis] = useState<MiTatami[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [sinConexion, setSinConexion] = useState(false);
+
+  const CACHE_KEY = "dinamyt_mis_tatamis";
 
   const loadTatamis = useCallback(async () => {
     try {
       const data = await misTatamisAPI();
       setTatamis(data);
-    } catch { /* */ } finally {
+      setSinConexion(false);
+      // Guardar la última lista conocida: sin conexión el juez debe poder
+      // volver a su tatami (si no, queda bloqueado fuera del software).
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* */ }
+    } catch {
+      // Sin servidor: usar la última lista cacheada para no bloquear al juez.
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          setTatamis(JSON.parse(cached));
+          setSinConexion(true);
+        }
+      } catch { /* */ }
+    } finally {
       setCargando(false);
     }
   }, []);
@@ -69,6 +85,16 @@ export default function JuezPage() {
       </div>
 
       {/* My tatamis */}
+      {sinConexion && (
+        <div style={{
+          marginBottom: 12, padding: "8px 12px", borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--red-alert)", background: "rgba(232,0,42,0.08)",
+          color: "var(--red-alert)", fontSize: "0.82rem", fontWeight: 700, textAlign: "center",
+        }}>
+          📴 Sin conexión — mostrando tus tatamis guardados. Toca el tuyo para
+          volver a tu pantalla de registro local.
+        </div>
+      )}
       <div className="card-title">Mis Tatamis Asignados</div>
       {tatamis.length > 0 ? (
         <>
