@@ -150,7 +150,13 @@ function rankingFiguras(state: FigurasState): CompetidorRankeado[] {
   const jueces = juecesActivosFiguras(state);
 
   function totalDe(comp: Competidor): number {
-    const puntajes = Object.values(state.puntuaciones[String(comp.id)] || {}).map(Number);
+    // Solo suman los jueces activos: la nota de un juez de más (ej: j3 con la
+    // categoría a 2 jueces) no cuenta en el total, igual que en el backend.
+    const notas = state.puntuaciones[String(comp.id)] || {};
+    const puntajes = jueces
+      .map((j) => notas[j])
+      .filter((v) => v !== undefined && v !== null)
+      .map(Number);
     return Math.round(puntajes.reduce((s, v) => s + v, 0) * 100) / 100;
   }
 
@@ -877,6 +883,24 @@ function FigurasJuez({
   // Optional chaining: en offline este componente puede montarse con estado
   // de combate (el juez cambió a "Figuras" con el selector local).
   const miCriterio = idxCriterio !== undefined ? state.criterios?.[idxCriterio] : undefined;
+
+  // Rol fuera de la configuración actual (ej: j3 con la categoría a 2 jueces):
+  // su nota no se sumaría al total, así que no puntúa (espejo de CombateJuez).
+  const numJueces = state.num_jueces || 4;
+  const rolInactivo = idxCriterio === undefined || idxCriterio >= numJueces;
+  if (rolInactivo) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+        <p style={{ fontSize: "1.4rem", marginBottom: 8 }}>
+          {juezId.toUpperCase()} no participa en esta categoría
+        </p>
+        <p style={{ fontSize: "0.85rem" }}>
+          El Juez Central configuró las figuras con {numJueces} jueces de esquina.
+          Tu nota no contaría en el total.
+        </p>
+      </div>
+    );
+  }
 
   // Sin conexión el servidor no puede activar competidores: el juez anota
   // sus notas en una libreta local y las reingresa (o dicta a la mesa) después.

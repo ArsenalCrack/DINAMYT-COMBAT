@@ -18,6 +18,7 @@ from app.engine.figuras_engine import (  # noqa: E402
     aplicar_evento_figuras,
     puntuaciones_completas,
     calcular_ranking,
+    calcular_total_competidor,
     empates_en_ranking,
     _parse_puntuacion,
 )
@@ -306,6 +307,27 @@ class TestFiguras:
         _puntuar_completo(e, 1, ["j1"])
         aplicar_evento_figuras(e, {"accion": "puntuar", "juez_id": "j1", "competidor_id": 1, "valor": "1.00"})
         assert e["puntuaciones"]["1"]["j1"] == 8.00
+
+    def test_juez_fuera_de_configuracion_no_puntua(self):
+        # Tatami con un juez de más (j3) y la categoría a 2 jueces: la nota de
+        # j3 no se registra ni contamina el total del competidor.
+        e = _figuras_listas(num_jueces=2)
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 1})
+        aplicar_evento_figuras(e, {"accion": "puntuar", "juez_id": "j3", "competidor_id": 1, "valor": "9.99"})
+        aplicar_evento_figuras(e, {"accion": "confirmar_puntuacion", "juez_id": "j3", "competidor_id": 1})
+        _puntuar_completo(e, 1, ["j1", "j2"])
+        assert "j3" not in e["puntuaciones"]["1"]
+        assert calcular_total_competidor(e, 1) == 16.00
+
+    def test_total_excluye_notas_de_juez_retirado(self):
+        # Si se puntuó con 3 jueces y luego se baja a 2, la nota del j3 que
+        # quedó registrada deja de contar en el total.
+        e = _figuras_listas(num_jueces=3)
+        aplicar_evento_figuras(e, {"accion": "activar_competidor", "competidor_id": 1})
+        _puntuar_completo(e, 1, ["j1", "j2", "j3"])
+        assert calcular_total_competidor(e, 1) == 24.00
+        aplicar_evento_figuras(e, {"accion": "set_num_jueces", "num_jueces": 2})
+        assert calcular_total_competidor(e, 1) == 16.00
 
 
 # ══════════════════════════════════════════════════════════════════

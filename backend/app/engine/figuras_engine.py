@@ -144,13 +144,16 @@ def _juez_log_label(ev, juez_fallback):
 
 def calcular_total_competidor(estado, competidor_id):
     """
-    Total = suma de todas las notas de todos los jueces para ese competidor.
-    Cada juez aporta un solo número.
+    Total = suma de las notas de los JUECES ACTIVOS para ese competidor.
+    Cada juez activo aporta un solo número. Las notas de un juez fuera de la
+    configuración (ej: j3 con la categoría a 2 jueces) NO cuentan en el total,
+    aunque hayan quedado registradas antes de bajar el número de jueces.
     """
     puntajes = estado["puntuaciones"].get(str(competidor_id), {})
     if not puntajes:
         return 0.0
-    return round(sum(puntajes.values()), 2)
+    activos = _jueces_activos_figuras(estado)
+    return round(sum(puntajes.get(j, 0) for j in activos), 2)
 
 
 def _ordenar_con_puestos(estado, comps, todos_primer_puesto=False):
@@ -363,7 +366,10 @@ def aplicar_evento_figuras(estado, ev):
         if confirmadas.get(comp_id, {}).get(juez_id):
             return estado
 
-        if not criterio_para_juez(estado, juez_id):
+        # Solo puntúan los jueces activos según num_jueces: un juez de más
+        # asignado al tatami (ej: j3 con la categoría a 2 jueces) no puntúa,
+        # para que su nota no se sume al total del competidor.
+        if juez_id not in _jueces_activos_figuras(estado):
             return estado
 
         # Validar y formatear valor (0.00 - 9.99, 2 decimales obligatorios)
@@ -392,6 +398,11 @@ def aplicar_evento_figuras(estado, ev):
     elif accion == "confirmar_puntuacion":
         juez_id = ev.get("juez_id")
         comp_id = str(ev.get("competidor_id", ""))
+
+        # Solo confirman los jueces activos según num_jueces (mismo criterio
+        # que puntuar): un juez de más no debe cerrar ninguna nota.
+        if juez_id not in _jueces_activos_figuras(estado):
+            return estado
 
         # Solo se confirma durante la ventana abierta para el competidor activo.
         if not estado.get("puntuacion_abierta"):
