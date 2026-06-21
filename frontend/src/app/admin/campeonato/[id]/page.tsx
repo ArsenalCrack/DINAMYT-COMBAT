@@ -185,8 +185,8 @@ export default function CampeonatoDetailPage() {
       {/* Header */}
       <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
         <div style={{ minWidth: 0 }}>
-          <button className="btn btn-sm" onClick={() => router.push("/admin")}
-            style={{ marginBottom: 8, fontSize: "0.8rem" }}>&larr; Volver</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => router.push("/admin")}
+            style={{ marginBottom: 8, fontSize: "0.8rem" }}>← Volver</button>
           <h1 style={{ fontWeight: 700, fontSize: "clamp(1.6rem, 3vw, 2.1rem)", overflowWrap: "anywhere" }}>{camp.nombre}</h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
             {camp.tatamis?.length || 0} tatamis &middot;{" "}
@@ -435,10 +435,6 @@ export default function CampeonatoDetailPage() {
       </div>
 
       <style>{`
-        .campeonato-admin-header {
-          /* Hueco para el menú hamburguesa fijo (arriba a la derecha) */
-          padding-right: 56px;
-        }
         .campeonato-admin-grid {
           align-items: start;
         }

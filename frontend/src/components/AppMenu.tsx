@@ -10,21 +10,22 @@ interface SesionUser {
 }
 
 /**
- * Menú hamburguesa global. Va montado en el layout, así que acompaña al usuario
- * en TODA la app (fijo arriba a la derecha, también en móvil): desde cualquier
- * página puede volver al inicio o cerrar sesión sin tener que devolverse hasta
- * el panel principal. Solo aparece con sesión iniciada; en /login y en las
- * pantallas públicas (sin sesión) no se muestra.
+ * Barra superior global con menú hamburguesa. Va montada en el layout, así que
+ * acompaña al usuario en casi toda la app (fija arriba, también en móvil): desde
+ * cualquier página puede volver al inicio o cerrar sesión sin devolverse hasta
+ * el panel principal. Es una BARRA (no un botón flotante) para que el contenido
+ * pase por debajo sin chocar con los botones de cada página.
+ *
+ * Se OCULTA en: /login y en las pantallas inmersivas que ya tienen su propia
+ * barra superior (el tatami del Juez Central/jueces, con "Volver" y
+ * "Activar/Desactivar"; y la proyección del tablero). Ahí no aporta y chocaría.
  */
 export default function AppMenu() {
   const pathname = usePathname();
   const router = useRouter();
-  const [montado, setMontado] = useState(false);
   const [user, setUser] = useState<SesionUser | null>(null);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => { setMontado(true); }, []);
 
   // Releer la sesión en cada cambio de ruta (tras login/logout) y cerrar el panel
   useEffect(() => {
@@ -56,8 +57,20 @@ export default function AppMenu() {
     };
   }, [open]);
 
-  // Sin sesión, en login o antes de hidratar: no se muestra
-  if (!montado || pathname === "/login" || !user) return null;
+  const oculta =
+    pathname === "/login" ||
+    pathname.startsWith("/tatami") ||
+    pathname.startsWith("/tablero/pantalla");
+  const visible = !!user && !oculta;
+
+  // Reservar el alto de la barra en el body para que el contenido no quede
+  // tapado (la barra es fija). Solo cuando la barra se muestra.
+  useEffect(() => {
+    document.body.classList.toggle("has-appmenu", visible);
+    return () => document.body.classList.remove("has-appmenu");
+  }, [visible]);
+
+  if (!visible || !user) return null;
 
   const inicio = user.rol === "admin" ? "/admin" : "/juez";
   const rolLabel = user.rol === "admin" ? "Administrador" : "Juez";
@@ -68,7 +81,7 @@ export default function AppMenu() {
   }
 
   return (
-    <div ref={ref} className="appmenu">
+    <header ref={ref} className="appmenu">
       <button
         type="button"
         className="appmenu-toggle"
@@ -80,6 +93,7 @@ export default function AppMenu() {
         <span className="appmenu-bars" data-open={open} aria-hidden="true">
           <span /><span /><span />
         </span>
+        <span className="appmenu-toggle-label">Menú</span>
       </button>
 
       {open && (
@@ -98,6 +112,6 @@ export default function AppMenu() {
           <LogoutButton />
         </div>
       )}
-    </div>
+    </header>
   );
 }

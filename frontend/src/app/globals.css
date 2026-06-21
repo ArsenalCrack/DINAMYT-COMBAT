@@ -429,15 +429,75 @@ input[type="date"].input::-webkit-datetime-edit-year-field:focus {
   outline: none;
 }
 
-/* ── Menú desplegado del select ──
-   Los `<select>` simples usan el desplegable NATIVO del navegador (estilado
-   arriba: flecha dorada y opciones en tema oscuro). NO se activa
-   `appearance: base-select` (`::picker(select)`): esa función es muy nueva y en
-   las versiones actuales de Chrome/Edge el panel queda como popover del DOM que
-   a veces no se cierra al volver a tocarlo o al hacer clic fuera —el menú "se
-   traba" abierto—. Para los menús de categoría (Defensa Personal, etc.) se usa
-   el componente <SelectMenu>, que recrea ese panel dorado con estado de React
-   puro, así que siempre se pliega de forma fiable. */
+/* ── Menú desplegado del select con el diseño del software ──
+   Chrome y Edge soportan selects personalizables (appearance: base-select):
+   el panel desplegado toma borde curvo dorado, fondo oscuro y sombra, igual que
+   el resto de la app. Firefox/Safari degradan al menú nativo (las opciones
+   conservan el fondo oscuro de arriba).
+   NOTA: los menús de CATEGORÍA de figuras NO usan esto: usan <SelectMenu>
+   (mismo look, pero abrir/cerrar con estado de React) porque ahí el panel de
+   base-select se trababa abierto al re-renderizar el formulario. */
+@supports selector(::picker(select)) {
+  select.input,
+  select.input::picker(select) {
+    appearance: base-select;
+  }
+
+  select.input {
+    /* La flecha ahora la dibuja ::picker-icon, no la imagen de fondo */
+    background-image: none;
+    padding-right: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  select.input::picker-icon {
+    color: var(--gold);
+    transition: rotate 0.18s ease-out;
+  }
+
+  select.input:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  /* El panel desplegado: borde curvo y acorde al tema */
+  select.input::picker(select) {
+    background: var(--bg-card);
+    border: 1.5px solid var(--gold-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    margin-top: 6px;
+    max-height: 320px;
+  }
+
+  select.input option {
+    padding: 9px 12px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.12s ease-out;
+  }
+
+  select.input option:hover,
+  select.input option:focus-visible {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  select.input option:checked {
+    background: var(--gold-bg);
+    color: var(--gold);
+    font-weight: 800;
+  }
+
+  select.input option::checkmark {
+    color: var(--gold);
+  }
+}
 
 /* ── <SelectMenu>: desplegable propio con el panel dorado del software ── */
 .selectmenu-btn {
@@ -515,35 +575,66 @@ input[type="date"].input::-webkit-datetime-edit-year-field:focus {
   font-weight: 800;
 }
 
-/* ═══════════════════ MENÚ HAMBURGUESA GLOBAL ═══════════════════ */
-/* Fijo arriba a la derecha en TODA la app (incluye safe-area del notch). */
+/* ═══════════════════ BARRA / MENÚ HAMBURGUESA GLOBAL ═══════════════════ */
+/* Barra fija arriba (full-width). El contenido pasa por debajo: por eso el body
+   reserva su alto con .has-appmenu, en vez de un botón flotante que choca con
+   los botones de cada página. Incluye safe-area del notch. */
+:root {
+  --appmenu-h: 0px;
+}
+
+body.has-appmenu {
+  --appmenu-h: calc(52px + env(safe-area-inset-top, 0px));
+  padding-top: var(--appmenu-h);
+}
+
 .appmenu {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 10px);
-  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
+  height: var(--appmenu-h);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: env(safe-area-inset-top, 0px) calc(env(safe-area-inset-right, 0px) + 12px) 0 16px;
+  /* Fondo sólido (no backdrop-filter): además de tapar limpio el contenido al
+     hacer scroll, evita crear un bloque contenedor que confinaría el diálogo
+     de confirmación de cierre de sesión (position: fixed) dentro de la barra. */
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 .appmenu-toggle {
-  width: 44px;
-  height: 44px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  background: var(--bg-card);
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  background: var(--bg-elevated);
   border: 1.5px solid var(--gold-border);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
   color: var(--gold);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.82rem;
   cursor: pointer;
   transition: var(--transition);
 }
 
 .appmenu-toggle:hover,
 .appmenu-toggle:focus-visible {
-  background: var(--bg-elevated);
+  background: var(--bg-hover);
   border-color: var(--gold);
   outline: none;
+}
+
+.appmenu-toggle-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .appmenu-bars {
@@ -642,16 +733,9 @@ input[type="date"].input::-webkit-datetime-edit-year-field:focus {
   justify-content: flex-start;
 }
 
-/* Holgura superior en la pantalla de figuras del Juez Central para que el
-   menú hamburguesa (fijo arriba a la derecha) no tape la categoría en móvil. */
+/* Pantalla de figuras del Juez Central (la barra global no se muestra aquí). */
 .tatami-fig-root {
   padding: 16px;
-}
-
-@media (max-width: 840px) {
-  .tatami-fig-root {
-    padding-top: 62px;
-  }
 }
 
 /* ═══════════════════ BADGES / TAGS ═══════════════════ */
