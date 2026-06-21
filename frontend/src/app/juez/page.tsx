@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { misTatamisAPI, type UserData } from "@/lib/api";
-import LogoutButton from "@/components/LogoutButton";
 import Logo from "@/components/Logo";
 
 interface MiTatami {
@@ -81,7 +80,6 @@ export default function JuezPage() {
             Bienvenido, {user.nombre}
           </p>
         </div>
-        <LogoutButton label="Salir" />
       </div>
 
       {/* My tatamis */}

@@ -11,7 +11,6 @@ import {
   updateUserAPI,
   type UserData,
 } from "@/lib/api";
-import LogoutButton from "@/components/LogoutButton";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 import AvisoSinInternet, { useSinInternet } from "@/components/AvisoSinInternet";
 import Logo from "@/components/Logo";
@@ -198,9 +197,6 @@ export default function AdminPage() {
             Panel de Administracion &middot; {user.nombre}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <LogoutButton />
-        </div>
       </div>
 
       {/* Mensajes: verde = satisfactorio, rojo = no se pudo realizar */}
@@ -277,9 +273,13 @@ export default function AdminPage() {
                   onChange={(e) => setNewCamp({ ...newCamp, descripcion: e.target.value })} />
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <label style={{ color: "var(--text-muted)", fontSize: "0.85rem", whiteSpace: "nowrap" }}>Tatamis:</label>
-                  <input className="input" type="number" min={1} max={20} value={newCamp.num_tatamis}
-                    onChange={(e) => setNewCamp({ ...newCamp, num_tatamis: parseInt(e.target.value) || 6 })}
+                  <input className="input" type="number" min={1} max={10} value={newCamp.num_tatamis}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value) || 1;
+                      setNewCamp({ ...newCamp, num_tatamis: Math.min(10, Math.max(1, n)) });
+                    }}
                     style={{ width: 80 }} />
+                  <span style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>máximo 10</span>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button type="submit" className="btn btn-primary" disabled={creandoCamp}>

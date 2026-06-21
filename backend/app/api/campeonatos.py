@@ -94,8 +94,12 @@ def crear():
     db.session.add(camp)
     db.session.flush()  # Para obtener el ID
 
-    # Crear tatamis
-    num_tatamis = data.get("num_tatamis", 6)
+    # Crear tatamis (máximo 10 por campeonato; mínimo 1)
+    try:
+        num_tatamis = int(data.get("num_tatamis", 6))
+    except (TypeError, ValueError):
+        num_tatamis = 6
+    num_tatamis = max(1, min(10, num_tatamis))
     for i in range(1, num_tatamis + 1):
         tatami = Tatami(
             campeonato_id=camp.id,

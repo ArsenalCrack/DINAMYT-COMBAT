@@ -16,6 +16,7 @@ import {
   type TableroState,
   type HistorialItem,
 } from "@/lib/tablero";
+import SelectMenu from "@/components/SelectMenu";
 
 const OTRA = "__otra__";
 
@@ -230,11 +231,16 @@ export default function TableroControl() {
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {/* Categoría + descripción + jueces */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <select className="input" value={selCategoria} style={{ flex: "2 1 220px" }}
-              onChange={(e) => setFig({ categoria: e.target.value === OTRA ? "" : e.target.value })}>
-              {CATEGORIAS_FIGURAS.map((c) => <option key={c} value={c}>{c}</option>)}
-              <option value={OTRA}>Otra categoría…</option>
-            </select>
+            <SelectMenu
+              ariaLabel="Categoría de figuras"
+              value={selCategoria}
+              onChange={(v) => setFig({ categoria: v === OTRA ? "" : v })}
+              options={[
+                ...CATEGORIAS_FIGURAS.map((c) => ({ value: c, label: c })),
+                { value: OTRA, label: "Otra categoría…" },
+              ]}
+              style={{ flex: "2 1 220px" }}
+            />
             <select className="input" value={fig.numJueces} style={{ flex: "1 1 120px" }}
               onChange={(e) => {
                 const n = Number(e.target.value);

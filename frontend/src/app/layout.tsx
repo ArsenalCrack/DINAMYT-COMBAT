@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Barlow_Condensed, Bebas_Neue, Inter, Share_Tech_Mono } from "next/font/google";
 import RegistrarSW from "@/components/RegistrarSW";
+import AppMenu from "@/components/AppMenu";
 import "./globals.css";
 
 // Fuentes auto-hospedadas: next/font las descarga en el build y las sirve
@@ -62,6 +63,7 @@ export default function RootLayout({
       </head>
       <body>
         <RegistrarSW />
+        <AppMenu />
         {children}
       </body>
     </html>

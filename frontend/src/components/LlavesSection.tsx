@@ -15,6 +15,7 @@ import {
 import { CATEGORIAS_FIGURAS, CATEGORIA_NOMBRE_MAX, normalizarCategoria } from "@/lib/categorias";
 import BracketTree from "@/components/BracketTree";
 import PodioLlave from "@/components/PodioLlave";
+import SelectMenu from "@/components/SelectMenu";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 interface NuevoCompetidor {
@@ -358,17 +359,16 @@ export default function LlavesSection({ campeonatoId }: { campeonatoId: number }
           {/* Nombre / categoría + tatami */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {tipoForm === "figuras" ? (
-              <select
-                className="input"
+              <SelectMenu
+                ariaLabel="Categoría de figuras"
                 value={categoriaSel}
-                onChange={(e) => setCategoriaSel(e.target.value)}
+                onChange={setCategoriaSel}
+                options={[
+                  ...CATEGORIAS_FIGURAS.map((c) => ({ value: c, label: c })),
+                  { value: OTRA, label: "Otra categoría…" },
+                ]}
                 style={{ flex: "2 1 220px" }}
-              >
-                {CATEGORIAS_FIGURAS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-                <option value={OTRA}>Otra categoría…</option>
-              </select>
+              />
             ) : (
               <input
                 className="input"

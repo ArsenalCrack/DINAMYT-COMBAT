@@ -430,13 +430,229 @@ input[type="date"].input::-webkit-datetime-edit-year-field:focus {
 }
 
 /* ── Menú desplegado del select ──
-   Se usa el desplegable NATIVO del navegador (estilado arriba: flecha dorada,
-   fondo oscuro y opciones temáticas). NO se activa `appearance: base-select`
-   (`::picker(select)`): esa función es muy nueva y en las versiones actuales de
-   Chrome/Edge el panel queda como popover del DOM que a veces no se cierra al
-   volver a tocarlo o al hacer clic fuera —el menú "se traba" abierto—. El menú
-   nativo del sistema operativo siempre se pliega de forma fiable, que es lo que
-   necesita una herramienta usada en vivo durante el campeonato. */
+   Los `<select>` simples usan el desplegable NATIVO del navegador (estilado
+   arriba: flecha dorada y opciones en tema oscuro). NO se activa
+   `appearance: base-select` (`::picker(select)`): esa función es muy nueva y en
+   las versiones actuales de Chrome/Edge el panel queda como popover del DOM que
+   a veces no se cierra al volver a tocarlo o al hacer clic fuera —el menú "se
+   traba" abierto—. Para los menús de categoría (Defensa Personal, etc.) se usa
+   el componente <SelectMenu>, que recrea ese panel dorado con estado de React
+   puro, así que siempre se pliega de forma fiable. */
+
+/* ── <SelectMenu>: desplegable propio con el panel dorado del software ── */
+.selectmenu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  border-color: var(--border-light);
+}
+
+.selectmenu-btn:hover {
+  border-color: var(--gold-border);
+  background-color: var(--bg-elevated);
+}
+
+.selectmenu-btn[aria-expanded="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-bg);
+}
+
+.selectmenu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectmenu-arrow {
+  color: var(--gold);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  transition: rotate 0.18s ease-out;
+}
+
+.selectmenu-arrow[data-open="true"] {
+  rotate: 180deg;
+}
+
+/* El panel desplegado: borde curvo, fondo oscuro y sombra */
+.selectmenu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1.5px solid var(--gold-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.selectmenu-option {
+  padding: 9px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  transition: background 0.12s ease-out;
+}
+
+.selectmenu-option[data-activa="true"] {
+  background: var(--bg-hover);
+}
+
+.selectmenu-option[aria-selected="true"] {
+  background: var(--gold-bg);
+  color: var(--gold);
+  font-weight: 800;
+}
+
+/* ═══════════════════ MENÚ HAMBURGUESA GLOBAL ═══════════════════ */
+/* Fijo arriba a la derecha en TODA la app (incluye safe-area del notch). */
+.appmenu {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  z-index: 1000;
+}
+
+.appmenu-toggle {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--gold-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--gold);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.appmenu-toggle:hover,
+.appmenu-toggle:focus-visible {
+  background: var(--bg-elevated);
+  border-color: var(--gold);
+  outline: none;
+}
+
+.appmenu-bars {
+  position: relative;
+  width: 20px;
+  height: 14px;
+}
+
+.appmenu-bars span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease, top 0.2s ease;
+}
+
+.appmenu-bars span:nth-child(1) { top: 0; }
+.appmenu-bars span:nth-child(2) { top: 6px; }
+.appmenu-bars span:nth-child(3) { top: 12px; }
+
+.appmenu-bars[data-open="true"] span:nth-child(1) { top: 6px; transform: rotate(45deg); }
+.appmenu-bars[data-open="true"] span:nth-child(2) { opacity: 0; }
+.appmenu-bars[data-open="true"] span:nth-child(3) { top: 6px; transform: rotate(-45deg); }
+
+.appmenu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--gold-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.appmenu-user {
+  padding: 4px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.appmenu-user-name {
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.appmenu-user-role {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.appmenu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.appmenu-item:hover,
+.appmenu-item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.appmenu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+/* El botón de cerrar sesión, dentro del menú, ocupa todo el ancho */
+.appmenu-panel .logout-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Holgura superior en la pantalla de figuras del Juez Central para que el
+   menú hamburguesa (fijo arriba a la derecha) no tape la categoría en móvil. */
+.tatami-fig-root {
+  padding: 16px;
+}
+
+@media (max-width: 840px) {
+  .tatami-fig-root {
+    padding-top: 62px;
+  }
+}
 
 /* ═══════════════════ BADGES / TAGS ═══════════════════ */
 

@@ -22,6 +22,7 @@ import PanelColapsable from "@/components/PanelColapsable";
 import BracketTree from "@/components/BracketTree";
 import PodioLlave from "@/components/PodioLlave";
 import Logo from "@/components/Logo";
+import SelectMenu from "@/components/SelectMenu";
 import { CATEGORIAS_FIGURAS } from "@/lib/categorias";
 
 // ─── Figuras Types ───────────────────────────────────────────────────────────
@@ -366,7 +367,7 @@ function FigurasArbitro({
   );
 
   return (
-    <div style={{ padding: 16, maxWidth: 800, margin: "0 auto" }}>
+    <div className="tatami-fig-root" style={{ maxWidth: 800, margin: "0 auto" }}>
       {/* Grupos de figuras encolados para este tatami (activación rápida) */}
       <GrupoFigurasPanel
         tatamiDbId={tatamiDbId}
@@ -379,27 +380,24 @@ function FigurasArbitro({
           para no fragmentar el registro. Es obligatorio elegir una antes de
           agregar competidores o empezar. */}
       <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-        <select
-          className="input"
+        <SelectMenu
+          ariaLabel="Categoría de figuras"
           value={(CATEGORIAS_FIGURAS as readonly string[]).includes(categoriaDraft) ? categoriaDraft : ""}
-          aria-label="Categoría de figuras"
-          onChange={(e) => {
-            const v = e.target.value;
+          placeholder="— Selecciona la categoría —"
+          onChange={(v) => {
             setCategoriaDraft(v);
             setCategoriaPendiente(true);
             setCategoriaError("");
             enviarEvento("cambiar_nombre_categoria", { nombre: v });
           }}
-          style={{
-            width: "100%", textAlign: "center", fontWeight: 800, fontSize: "1.05rem",
+          options={CATEGORIAS_FIGURAS.map((c) => ({ value: c, label: c }))}
+          centerLabel
+          style={{ width: "100%" }}
+          buttonStyle={{
+            fontWeight: 800, fontSize: "1.05rem",
             borderColor: nombreCategoriaValido ? "var(--green-border)" : "var(--hong-border)",
           }}
-        >
-          <option value="">— Selecciona la categoría —</option>
-          {CATEGORIAS_FIGURAS.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        />
         {!nombreCategoriaValido && (
           <p style={{ color: "var(--orange)", fontSize: "0.78rem", textAlign: "center", margin: 0 }}>
             ⚠️ Elige una categoría para agregar competidores y comenzar.

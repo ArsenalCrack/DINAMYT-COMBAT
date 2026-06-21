@@ -180,15 +180,15 @@ export default function CampeonatoDetailPage() {
   );
 
   return (
-    <div className="campeonato-admin-page" style={{ maxWidth: 960, margin: "0 auto", padding: "20px" }}>
+    <div className="campeonato-admin-page" style={{ maxWidth: 1200, margin: "0 auto", padding: "24px clamp(20px, 4vw, 40px)" }}>
       <AvisoSinInternet />
       {/* Header */}
       <div className="campeonato-admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
         <div style={{ minWidth: 0 }}>
           <button className="btn btn-sm" onClick={() => router.push("/admin")}
             style={{ marginBottom: 8, fontSize: "0.8rem" }}>&larr; Volver</button>
-          <h1 style={{ fontWeight: 700, fontSize: "1.4rem", overflowWrap: "anywhere" }}>{camp.nombre}</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+          <h1 style={{ fontWeight: 700, fontSize: "clamp(1.6rem, 3vw, 2.1rem)", overflowWrap: "anywhere" }}>{camp.nombre}</h1>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
             {camp.tatamis?.length || 0} tatamis &middot;{" "}
             <span style={{ color: camp.activo ? "var(--green)" : "var(--orange)", fontWeight: 700 }}>
               {camp.activo ? "Activo (visible al público)" : "Inactivo (oculto al público)"}
@@ -265,7 +265,7 @@ export default function CampeonatoDetailPage() {
       )}
       {dialogo}
 
-      <div className="campeonato-admin-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="campeonato-admin-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         {/* Tatamis list */}
         <div>
           <div className="card-title">Tatamis</div>
@@ -288,8 +288,8 @@ export default function CampeonatoDetailPage() {
                 aria-pressed={selectedTatami?.id === t.id}
               >
                 <div className="tatami-card-row">
-                  <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>Tatami {t.numero}</span>
-                  <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                  <span style={{ fontWeight: 700, fontSize: "1.2rem" }}>Tatami {t.numero}</span>
+                  <span style={{ color: "var(--text-dim)", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
                     {t.num_asignaciones} jueces
                   </span>
                 </div>
@@ -435,17 +435,21 @@ export default function CampeonatoDetailPage() {
       </div>
 
       <style>{`
+        .campeonato-admin-header {
+          /* Hueco para el menú hamburguesa fijo (arriba a la derecha) */
+          padding-right: 56px;
+        }
         .campeonato-admin-grid {
           align-items: start;
         }
         .tatami-list {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-          gap: 8px;
+          grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+          gap: 12px;
         }
         .tatami-card {
-          padding: 12px 14px;
-          min-height: var(--touch-min);
+          padding: 16px 18px;
+          min-height: 64px;
         }
         .tatami-card:hover {
           border-color: var(--gold-border);
