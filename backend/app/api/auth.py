@@ -63,6 +63,13 @@ def login():
     if not user.activo:
         return jsonify({"error": "Usuario desactivado"}), 403
 
+    # Migración transparente del costo de bcrypt: si el hash se creó con más
+    # rondas de las configuradas (p. ej. el admin sembrado con 12), se vuelve a
+    # hashear con BCRYPT_ROUNDS para que los siguientes logins sean más rápidos.
+    if user.necesita_rehash():
+        user.set_password(password)
+        db.session.commit()
+
     # Crear token JWT con identity como string del user ID
     token = create_access_token(
         identity=str(user.id),

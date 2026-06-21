@@ -429,72 +429,14 @@ input[type="date"].input::-webkit-datetime-edit-year-field:focus {
   outline: none;
 }
 
-/* ── Menú desplegado del select con el diseño del software ──
-   Chrome y Edge soportan selects personalizables (appearance: base-select):
-   el panel desplegado toma borde curvo dorado, fondo oscuro y sombra.
-   Firefox y Safari degradan con elegancia al menú nativo (las opciones
-   conservan el fondo oscuro definido arriba). */
-@supports selector(::picker(select)) {
-  select.input,
-  select.input::picker(select) {
-    appearance: base-select;
-  }
-
-  select.input {
-    /* La flecha ahora la dibuja ::picker-icon, no la imagen de fondo */
-    background-image: none;
-    padding-right: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  select.input::picker-icon {
-    color: var(--gold);
-    transition: rotate 0.18s ease-out;
-  }
-
-  select.input:open::picker-icon {
-    rotate: 180deg;
-  }
-
-  /* El panel desplegado: borde curvo y acorde al tema */
-  select.input::picker(select) {
-    background: var(--bg-card);
-    border: 1.5px solid var(--gold-border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-lg);
-    padding: 6px;
-    margin-top: 6px;
-    max-height: 320px;
-  }
-
-  select.input option {
-    padding: 9px 12px;
-    border-radius: var(--radius-xs);
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.95rem;
-    transition: background 0.12s ease-out;
-  }
-
-  select.input option:hover,
-  select.input option:focus-visible {
-    background: var(--bg-hover);
-    color: var(--text);
-  }
-
-  select.input option:checked {
-    background: var(--gold-bg);
-    color: var(--gold);
-    font-weight: 800;
-  }
-
-  select.input option::checkmark {
-    color: var(--gold);
-  }
-}
+/* ── Menú desplegado del select ──
+   Se usa el desplegable NATIVO del navegador (estilado arriba: flecha dorada,
+   fondo oscuro y opciones temáticas). NO se activa `appearance: base-select`
+   (`::picker(select)`): esa función es muy nueva y en las versiones actuales de
+   Chrome/Edge el panel queda como popover del DOM que a veces no se cierra al
+   volver a tocarlo o al hacer clic fuera —el menú "se traba" abierto—. El menú
+   nativo del sistema operativo siempre se pliega de forma fiable, que es lo que
+   necesita una herramienta usada en vivo durante el campeonato. */
 
 /* ═══════════════════ BADGES / TAGS ═══════════════════ */
 

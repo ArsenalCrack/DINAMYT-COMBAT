@@ -3,9 +3,17 @@ Modelo: Usuario
 Roles: admin (gestiona campeonatos, tatamis, jueces) | juez (puntúa combates)
 """
 
+import os
 from datetime import datetime, timezone
 from ..extensions import db
 import bcrypt
+
+# Costo (rondas) de bcrypt al hashear contraseñas. 12 (el default de la
+# librería) tarda ~0.5 s en un PC y 1.5–3 s en la CPU compartida del plan
+# gratis de Render: cada login se siente lento y, bajo eventlet de un solo
+# worker, bloquea TODO el proceso mientras calcula. 10 rondas siguen siendo
+# seguras y son ~4× más rápidas. Ajustable por entorno si se quiere más costo.
+BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "10"))
 
 
 class Usuario(db.Model):
@@ -63,7 +71,7 @@ class Usuario(db.Model):
 
     def set_password(self, password: str):
         """Hashea y almacena la contraseña."""
-        salt = bcrypt.gensalt()
+        salt = bcrypt.gensalt(BCRYPT_ROUNDS)
         self.password_hash = bcrypt.hashpw(
             password.encode("utf-8"), salt
         ).decode("utf-8")
@@ -74,6 +82,19 @@ class Usuario(db.Model):
             password.encode("utf-8"),
             self.password_hash.encode("utf-8"),
         )
+
+    def necesita_rehash(self) -> bool:
+        """True si el hash guardado usa más rondas que las configuradas.
+
+        Permite migrar de forma transparente a un costo menor: tras un login
+        correcto, el endpoint vuelve a hashear la contraseña con BCRYPT_ROUNDS,
+        así los usuarios creados con 12 rondas pasan a 10 en su próximo ingreso.
+        """
+        try:
+            rondas = int(self.password_hash.split("$")[2])
+        except (AttributeError, IndexError, ValueError):
+            return True
+        return rondas > BCRYPT_ROUNDS
 
     def to_dict(self, include_asignaciones=False):
         data = {
